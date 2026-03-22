@@ -1,0 +1,11 @@
+Excel 旧 Note 转右侧面板批注（365 可用）
+
+Sub ToSideComment()
+Dim c As Comment,n As CommentThreaded
+On Error Resume Next
+For Each c In ActiveSheet.Comments
+Set n=c.Parent.AddCommentThreaded(c.Text)
+c.Delete
+Next
+MsgBox "OK"
+End Sub
