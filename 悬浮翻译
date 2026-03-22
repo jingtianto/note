@@ -1,0 +1,91 @@
+pip install pyperclip requests pynput tk
+
+import pyperclip
+import requests
+import tkinter as tk
+from pynput import keyboard
+
+# ========== 配置区（请修改为你的实际信息） ==========
+API_URL = "https://translator-api.bmwgroup.net/api/internal/Translations/text"
+BEARER_TOKEN = "这里替换成你浏览器里的完整Token"
+# ===================================================
+
+def translate_text(text):
+    """调用公司内网翻译接口"""
+    if not text.strip():
+        return "请先选中文本"
+    
+    payload = {
+        "text": text,
+        "to": "ZH-HANS",
+        "type": "text",
+        "filename": "",
+        "filetype": "",
+        "filesize": 0,
+        "formality": None,
+        "glossaryid": 0
+    }
+    
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        "Authorization": f"Bearer {BEARER_TOKEN}"
+    }
+    
+    try:
+        response = requests.post(API_URL, json=payload, headers=headers, timeout=10)
+        response.raise_for_status()
+        result = response.json()
+        # 这里根据实际返回字段修改，示例：
+        return result.get("translation", result.get("data", "翻译失败"))
+    except Exception as e:
+        return f"翻译出错: {str(e)}"
+
+def show_translation_popup(translation):
+    """显示悬浮翻译窗口"""
+    root = tk.Tk()
+    root.overrideredirect(True)  # 无边框
+    root.attributes("-topmost", True)  # 置顶
+    root.attributes("-alpha", 0.95)  # 半透明
+    
+    # 窗口位置：鼠标当前位置
+    x = root.winfo_pointerx() + 10
+    y = root.winfo_pointery() + 10
+    root.geometry(f"+{x}+{y}")
+    
+    # 样式
+    frame = tk.Frame(root, bg="white", padx=10, pady=8, relief="solid", borderwidth=1)
+    frame.pack()
+    label = tk.Label(frame, text=translation, bg="white", fg="#333", font=("微软雅黑", 12), wraplength=380)
+    label.pack()
+    
+    # 点击任意位置关闭窗口
+    def close_popup(event):
+        root.destroy()
+    root.bind("<Button-1>", close_popup)
+    root.after(8000, root.destroy)  # 8秒后自动关闭
+    root.mainloop()
+
+def on_hotkey():
+    """热键触发：复制选中文本并翻译"""
+    # 先复制选中的文本
+    with keyboard.Controller() as controller:
+        controller.press(keyboard.Key.ctrl)
+        controller.press('c')
+        controller.release('c')
+        controller.release(keyboard.Key.ctrl)
+    
+    # 等待复制完成
+    import time
+    time.sleep(0.2)
+    selected_text = pyperclip.paste()
+    translation = translate_text(selected_text)
+    show_translation_popup(translation)
+
+# ========== 启动热键监听 ==========
+if __name__ == "__main__":
+    # 注册热键：Ctrl+Alt+T 触发翻译
+    with keyboard.GlobalHotKeys({
+        '<ctrl>+<alt>+t': on_hotkey
+    }) as listener:
+        print("翻译工具已启动，按 Ctrl+Alt+T 翻译选中文本")
+        listener.join()
