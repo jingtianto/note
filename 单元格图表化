@@ -1,6 +1,5 @@
 Option Explicit
 
-' 通用化：为选中单元格生成期望vs实际对比图，仅嵌入批注，不修改原表格
 Sub GenerateChartInComment_Universal()
     Dim rng As Range, cell As Range
     Dim cm As Comment
@@ -10,18 +9,15 @@ Sub GenerateChartInComment_Universal()
     Dim expectVal As Double, actMin As Double, actMax As Double
     Dim commentText As String
     
-    ' 关闭屏幕刷新，提升运行速度
     Application.ScreenUpdating = False
     Application.EnableEvents = False
     
-    ' 1. 选择处理范围：仅处理选中的单元格
     If TypeName(Selection) <> "Range" Then
-        MsgBox "请先选择需要处理的单元格区域！", vbExclamation
+        MsgBox "Please select a range of cells first!", vbExclamation
         GoTo Cleanup
     End If
     Set rng = Selection
     
-    ' 2. 新建临时工作表（自动清理旧表，不影响原文件）
     On Error Resume Next
     Application.DisplayAlerts = False
     ThisWorkbook.Worksheets("Temp_Chart_Generator").Delete
@@ -29,14 +25,11 @@ Sub GenerateChartInComment_Universal()
     On Error GoTo 0
     Set wsTemp = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
     wsTemp.Name = "Temp_Chart_Generator"
-    wsTemp.Visible = xlSheetHidden ' 隐藏临时表，完全后台运行
+    wsTemp.Visible = xlSheetHidden
     
-    ' 3. 遍历每个选中的单元格
     For Each cell In rng
-        ' 跳过合并单元格
         If cell.MergeCells Then GoTo NextCell
         
-        ' 4. 检查单元格是否有批注
         On Error Resume Next
         Set cm = cell.Comment
         If Err.Number <> 0 Or cm Is Nothing Then
@@ -47,66 +40,58 @@ Sub GenerateChartInComment_Universal()
         
         commentText = cm.Text
         
-        ' 5. 从批注中自动解析数据（完全通用，适配你的格式）
         If Not ParseCommentData(commentText, startTime, endTime, expectVal, actMin, actMax) Then
-            Debug.Print "单元格 " & cell.Address & " 批注格式不匹配，跳过"
+            Debug.Print "Cell " & cell.Address & " comment format mismatch, skipped"
             GoTo NextCell
         End If
         
-        ' 6. 清空临时表，写入当前单元格的专属数据
         wsTemp.Cells.Clear
-        wsTemp.Range("A1:D1") = Array("时间(s)", "期望值", "实际最小值", "实际最大值")
+        wsTemp.Range("A1:D1") = Array("Time(s)", "Expected", "Actual Min", "Actual Max")
         wsTemp.Range("A2") = startTime
         wsTemp.Range("A3") = endTime
-        wsTemp.Range("B2:B3") = expectVal ' 期望值贯穿整个时间区间
-        wsTemp.Range("C2:C3") = actMin     ' 实际最小值
-        wsTemp.Range("D2:D3") = actMax     ' 实际最大值
+        wsTemp.Range("B2:B3") = expectVal
+        wsTemp.Range("C2:C3") = actMin
+        wsTemp.Range("D2:D3") = actMax
         
-        ' 7. 动态生成组合图表（绿线=期望，红块=实际区间）
         Set cht = wsTemp.ChartObjects.Add(Left:=10, Top:=10, Width:=240, Height:=160)
         With cht.Chart
             .ChartType = xlCombo
             .HasTitle = True
-            .ChartTitle.Text = "期望vs实际 (" & startTime & "-" & endTime & "s)"
+            .ChartTitle.Text = "Expected vs Actual (" & startTime & "-" & endTime & "s)"
             .ChartTitle.Font.Size = 9
             .ChartTitle.Font.Bold = True
             
-            ' 系列1：期望值（绿色加粗水平线）
             .SeriesCollection.NewSeries
             With .SeriesCollection(1)
-                .Name = "期望值"
+                .Name = "Expected"
                 .Values = wsTemp.Range("B2:B3")
                 .XValues = wsTemp.Range("A2:A3")
                 .ChartType = xlLine
-                .Format.Line.ForeColor.RGB = RGB(0, 176, 80) ' 标准绿色
+                .Format.Line.ForeColor.RGB = RGB(0, 176, 80)
                 .Format.Line.Weight = 2.5
                 .MarkerStyle = xlMarkerStyleCircle
                 .MarkerSize = 5
                 .MarkerForegroundColor = RGB(0, 176, 80)
             End With
             
-            ' 系列2：实际值区间（红色半透明柱形）
             .SeriesCollection.NewSeries
             With .SeriesCollection(2)
-                .Name = "实际值区间"
+                .Name = "Actual Range"
                 .Values = wsTemp.Range("D2:D3")
                 .XValues = wsTemp.Range("A2:A3")
                 .ChartType = xlColumnClustered
-                .Format.Fill.ForeColor.RGB = RGB(255, 0, 0) ' 标准红色
+                .Format.Fill.ForeColor.RGB = RGB(255, 0, 0)
                 .Format.Fill.Transparency = 0.3
                 .Format.Stroke.Visible = msoFalse
-                .GapWidth = 50 ' 调整柱形宽度
+                .GapWidth = 50
             End With
             
-            ' 8. 图表美化（自动适配数据，统一样式）
-            ' 横轴设置
             .Axes(xlCategory).CategoryNames = Array(startTime & "s", endTime & "s")
             .Axes(xlCategory).Font.Size = 8
-            ' 纵轴自动适配范围（保证期望和实际都完整显示）
             .Axes(xlValue).MinimumScale = WorksheetFunction.Min(expectVal, actMin) - 1
             .Axes(xlValue).MaximumScale = WorksheetFunction.Max(expectVal, actMax) + 1
             .Axes(xlValue).Font.Size = 8
-            ' 隐藏多余元素，让图表更简洁
+            
             .HasLegend = False
             .Axes(xlValue).HasMajorGridlines = False
             .Axes(xlCategory).HasMajorGridlines = False
@@ -115,38 +100,31 @@ Sub GenerateChartInComment_Universal()
             .ChartArea.Border.LineStyle = xlLineStyleNone
         End With
         
-        ' 9. 复制图表到剪贴板
-        cht.Copy
+        cht.Chart.CopyPicture Appearance:=xlScreen, Format:=xlPicture
         
-        ' 10. 将图表嵌入批注（保留原文本，图表作为背景，不遮挡文字）
         With cm
-            ' 【可选】如果需要文本+图表上下排列，取消下面一行注释，注释掉Fill.UserPicture
-            ' .Text = commentText & vbCrLf & vbCrLf
-            .Shape.Fill.UserPicture Picture:=Application.Clipboard.GetText
-            .Shape.TextFrame.AutoSize = True ' 自动适配图表大小
+            .Shape.Fill.UserPicture Picture:=Clipboard.GetImage()
+            .Shape.TextFrame.AutoSize = True
             .Shape.TextFrame.WordWrap = msoTrue
         End With
         
-        ' 11. 删除当前图表，为下一个单元格做准备
         cht.Delete
         
 NextCell:
+        DoEvents
     Next cell
     
-    ' 12. 清理临时表
     Application.DisplayAlerts = False
     wsTemp.Delete
     Application.DisplayAlerts = True
     
 Cleanup:
-    ' 恢复Excel设置
     Application.ScreenUpdating = True
     Application.EnableEvents = True
     
-    MsgBox "✅ 图表生成完成！所有图表已嵌入对应单元格的批注中，原表格无任何修改。", vbInformation
+    MsgBox "Chart generation completed! All charts are embedded in cell comments, original worksheet unchanged.", vbInformation
 End Sub
 
-' 辅助函数：从批注文本中自动解析时间、期望值、实际值区间
 Private Function ParseCommentData(commentText As String, _
                                 ByRef startTime As Double, _
                                 ByRef endTime As Double, _
@@ -154,29 +132,24 @@ Private Function ParseCommentData(commentText As String, _
                                 ByRef actMin As Double, _
                                 ByRef actMax As Double) As Boolean
     Dim regEx As Object, matches As Object
-    Dim minStr As String, maxStr As String
     
     On Error GoTo ErrorHandler
     
-    ' 创建正则表达式对象
     Set regEx = CreateObject("VBScript.RegExp")
     regEx.Global = True
     regEx.IgnoreCase = True
     
-    ' 1. 提取期望值：匹配 "== Xd =>" 格式（支持正负、整数/小数）
     regEx.Pattern = "==\s*([-+]?\d+\.?\d*)d"
     If Not regEx.Test(commentText) Then GoTo ErrorHandler
     Set matches = regEx.Execute(commentText)
     expectVal = CDbl(matches(0).SubMatches(0))
     
-    ' 2. 提取时间区间：匹配 "t1=[start,end]" 格式
     regEx.Pattern = "t\d*=\[([-+]?\d+\.?\d*),\s*([-+]?\d+\.?\d*)\]"
     If Not regEx.Test(commentText) Then GoTo ErrorHandler
     Set matches = regEx.Execute(commentText)
     startTime = CDbl(matches(0).SubMatches(0))
     endTime = CDbl(matches(0).SubMatches(1))
     
-    ' 3. 提取实际值区间（优先从Minimum/Maximum读取，兼容FAILEDLIST）
     regEx.Pattern = "Minimum value:\s*([-+]?\d+\.?\d*)"
     If regEx.Test(commentText) Then
         Set matches = regEx.Execute(commentText)
@@ -187,7 +160,7 @@ Private Function ParseCommentData(commentText As String, _
             Set matches = regEx.Execute(commentText)
             actMin = CDbl(matches(0).SubMatches(0))
         Else
-            actMin = 0 ' 默认值
+            actMin = 0
         End If
     End If
     
@@ -196,7 +169,7 @@ Private Function ParseCommentData(commentText As String, _
         Set matches = regEx.Execute(commentText)
         actMax = CDbl(matches(0).SubMatches(0))
     Else
-        actMax = actMin ' 若只有一个值，max=min
+        actMax = actMin
     End If
     
     Set regEx = Nothing
