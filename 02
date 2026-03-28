@@ -1,0 +1,187 @@
+Option Explicit
+
+Sub GenerateChartInComment_Universal()
+    Dim rng As Range, cell As Range
+    Dim cm As Comment
+    Dim wsTemp As Worksheet
+    Dim cht As ChartObject
+    Dim startTime As Double, endTime As Double
+    Dim expectVal As Double, actMin As Double, actMax As Double
+    Dim commentText As String
+    Dim dataObj As Object
+    
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    
+    If TypeName(Selection) <> "Range" Then
+        MsgBox "Please select a range of cells first!", vbExclamation
+        GoTo Cleanup
+    End If
+    Set rng = Selection
+    
+    On Error Resume Next
+    Application.DisplayAlerts = False
+    ThisWorkbook.Worksheets("Temp_Chart_Generator").Delete
+    Application.DisplayAlerts = True
+    On Error GoTo 0
+    Set wsTemp = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+    wsTemp.Name = "Temp_Chart_Generator"
+    wsTemp.Visible = xlSheetHidden
+    
+    Set dataObj = CreateObject("new:{1C3B4210-F441-11CE-B9EA-00AA006B1A69}")
+    
+    For Each cell In rng
+        If cell.MergeCells Then GoTo NextCell
+        
+        On Error Resume Next
+        Set cm = cell.Comment
+        If Err.Number <> 0 Or cm Is Nothing Then
+            Err.Clear
+            GoTo NextCell
+        End If
+        On Error GoTo 0
+        
+        commentText = cm.Text
+        
+        If Not ParseCommentData(commentText, startTime, endTime, expectVal, actMin, actMax) Then
+            Debug.Print "Cell " & cell.Address & " comment format mismatch, skipped"
+            GoTo NextCell
+        End If
+        
+        wsTemp.Cells.Clear
+        wsTemp.Range("A1:D1") = Array("Time(s)", "Expected", "Actual Min", "Actual Max")
+        wsTemp.Range("A2") = startTime
+        wsTemp.Range("A3") = endTime
+        wsTemp.Range("B2:B3") = expectVal
+        wsTemp.Range("C2:C3") = actMin
+        wsTemp.Range("D2:D3") = actMax
+        
+        Set cht = wsTemp.ChartObjects.Add(Left:=10, Top:=10, Width:=240, Height:=160)
+        With cht.Chart
+            .ChartType = xlCombo
+            .HasTitle = True
+            .ChartTitle.Text = "Expected vs Actual (" & startTime & "-" & endTime & "s)"
+            .ChartTitle.Font.Size = 9
+            .ChartTitle.Font.Bold = True
+            
+            .SeriesCollection.NewSeries
+            With .SeriesCollection(1)
+                .Name = "Expected"
+                .Values = wsTemp.Range("B2:B3")
+                .XValues = wsTemp.Range("A2:A3")
+                .ChartType = xlLine
+                .Format.Line.ForeColor.RGB = RGB(0, 176, 80)
+                .Format.Line.Weight = 2.5
+                .MarkerStyle = xlMarkerStyleCircle
+                .MarkerSize = 5
+                .MarkerForegroundColor = RGB(0, 176, 80)
+            End With
+            
+            .SeriesCollection.NewSeries
+            With .SeriesCollection(2)
+                .Name = "Actual Range"
+                .Values = wsTemp.Range("D2:D3")
+                .XValues = wsTemp.Range("A2:A3")
+                .ChartType = xlColumnClustered
+                .Format.Fill.ForeColor.RGB = RGB(255, 0, 0)
+                .Format.Fill.Transparency = 0.3
+                .Format.Stroke.Visible = msoFalse
+                .GapWidth = 50
+            End With
+            
+            .Axes(xlCategory).CategoryNames = Array(startTime & "s", endTime & "s")
+            .Axes(xlCategory).Font.Size = 8
+            .Axes(xlValue).MinimumScale = WorksheetFunction.Min(expectVal, actMin) - 1
+            .Axes(xlValue).MaximumScale = WorksheetFunction.Max(expectVal, actMax) + 1
+            .Axes(xlValue).Font.Size = 8
+            
+            .HasLegend = False
+            .Axes(xlValue).HasMajorGridlines = False
+            .Axes(xlCategory).HasMajorGridlines = False
+            .PlotArea.Format.Fill.Visible = msoFalse
+            .ChartArea.Format.Fill.Visible = msoFalse
+            .ChartArea.Border.LineStyle = xlLineStyleNone
+        End With
+        
+        cht.Chart.CopyPicture Appearance:=xlScreen, Format:=xlPicture
+        dataObj.GetFromClipboard
+        
+        With cm
+            .Shape.Fill.UserPicture dataObj.GetText
+            .Shape.TextFrame.AutoSize = True
+            .Shape.TextFrame.WordWrap = msoTrue
+        End With
+        
+        cht.Delete
+        
+NextCell:
+        DoEvents
+    Next cell
+    
+    Application.DisplayAlerts = False
+    wsTemp.Delete
+    Application.DisplayAlerts = True
+    
+Cleanup:
+    Set dataObj = Nothing
+    Application.ScreenUpdating = True
+    Application.EnableEvents = True
+    
+    MsgBox "Chart generation completed! All charts are embedded in cell comments, original worksheet unchanged.", vbInformation
+End Sub
+
+Private Function ParseCommentData(commentText As String, _
+                                ByRef startTime As Double, _
+                                ByRef endTime As Double, _
+                                ByRef expectVal As Double, _
+                                ByRef actMin As Double, _
+                                ByRef actMax As Double) As Boolean
+    Dim regEx As Object, matches As Object
+    
+    On Error GoTo ErrorHandler
+    
+    Set regEx = CreateObject("VBScript.RegExp")
+    regEx.Global = True
+    regEx.IgnoreCase = True
+    
+    regEx.Pattern = "==\s*([-+]?\d+\.?\d*)d"
+    If Not regEx.Test(commentText) Then GoTo ErrorHandler
+    Set matches = regEx.Execute(commentText)
+    expectVal = CDbl(matches(0).SubMatches(0))
+    
+    regEx.Pattern = "t\d*=\[([-+]?\d+\.?\d*),\s*([-+]?\d+\.?\d*)\]"
+    If Not regEx.Test(commentText) Then GoTo ErrorHandler
+    Set matches = regEx.Execute(commentText)
+    startTime = CDbl(matches(0).SubMatches(0))
+    endTime = CDbl(matches(0).SubMatches(1))
+    
+    regEx.Pattern = "Minimum value:\s*([-+]?\d+\.?\d*)"
+    If regEx.Test(commentText) Then
+        Set matches = regEx.Execute(commentText)
+        actMin = CDbl(matches(0).SubMatches(0))
+    Else
+        regEx.Pattern = "FAILEDLIST:\s*\[\s*([-+]?\d+\.?\d*)\s*,"
+        If regEx.Test(commentText) Then
+            Set matches = regEx.Execute(commentText)
+            actMin = CDbl(matches(0).SubMatches(0))
+        Else
+            actMin = 0
+        End If
+    End If
+    
+    regEx.Pattern = "Maximum value:\s*([-+]?\d+\.?\d*)"
+    If regEx.Test(commentText) Then
+        Set matches = regEx.Execute(commentText)
+        actMax = CDbl(matches(0).SubMatches(0))
+    Else
+        actMax = actMin
+    End If
+    
+    Set regEx = Nothing
+    ParseCommentData = True
+    Exit Function
+    
+ErrorHandler:
+    Set regEx = Nothing
+    ParseCommentData = False
+End Function
