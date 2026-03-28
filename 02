@@ -8,7 +8,7 @@ Sub GenerateChartInComment_Universal()
     Dim startTime As Double, endTime As Double
     Dim expectVal As Double, actMin As Double, actMax As Double
     Dim commentText As String
-    Dim shp As Shape
+    Dim tempPic As Object
     
     Application.ScreenUpdating = False
     Application.EnableEvents = False
@@ -27,6 +27,8 @@ Sub GenerateChartInComment_Universal()
     Set wsTemp = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
     wsTemp.Name = "Temp_Chart_Generator"
     wsTemp.Visible = xlSheetHidden
+    
+    Set tempPic = CreateObject("Scripting.FileSystemObject")
     
     For Each cell In rng
         If cell.MergeCells Then GoTo NextCell
@@ -54,11 +56,10 @@ Sub GenerateChartInComment_Universal()
         wsTemp.Range("C2:C3") = actMin
         wsTemp.Range("D2:D3") = actMax
         
-        ' Create chart with separate series (no xlCombo, compatible with all Excel versions)
+        ' Create chart with correct series order (compatible with all Excel versions)
         Set cht = wsTemp.ChartObjects.Add(Left:=10, Top:=10, Width:=240, Height:=160)
         With cht.Chart
-            ' Set base chart type to Line first
-            .ChartType = xlLine
+            .ChartType = xlColumnClustered
             .HasTitle = True
             .ChartTitle.Text = "Expected vs Actual (" & startTime & "-" & endTime & "s)"
             .ChartTitle.Font.Size = 9
@@ -107,10 +108,10 @@ Sub GenerateChartInComment_Universal()
             .ChartArea.Border.LineStyle = xlLineStyleNone
         End With
         
-        ' Copy chart directly to comment (stable method, no DataObject)
+        ' Copy chart to clipboard and paste to comment (correct parameter method)
         cht.Chart.CopyPicture Appearance:=xlScreen, Format:=xlPicture
         With cm
-            .Shape.Fill.UserPicture
+            .Shape.Fill.UserPicture Picture:=cht.Chart
             .Shape.TextFrame.AutoSize = True
             .Shape.TextFrame.WordWrap = msoTrue
         End With
@@ -126,6 +127,7 @@ NextCell:
     Application.DisplayAlerts = True
     
 Cleanup:
+    Set tempPic = Nothing
     Application.ScreenUpdating = True
     Application.EnableEvents = True
     
