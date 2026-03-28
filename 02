@@ -132,57 +132,58 @@ Cleanup:
     MsgBox "Chart generation completed! All charts are embedded in cell comments, original worksheet unchanged.", vbInformation
 End Sub
 
-rivate Function ParseCommentData(commentText As String, _
-                                 ByRef startTime As Double, _
-                                 ByRef endTime As Double, _
-                                 ByRef expectVal As Double, _
-                                 ByRef actMin As Double, _
-                                 ByRef actMax As Double) As Boolean
-     Dim regEx As Object, matches As Object
-     
-     On Error GoTo ErrorHandler
-     
-     Set regEx = CreateObject("VBScript.RegExp")
-     regEx.Global = True
-     regEx.IgnoreCase = True
-     
-     regEx.Pattern = "==\s*([-+]?\d+\.?\d*)d"
-     If Not regEx.Test(commentText) Then GoTo ErrorHandler
-     Set matches = regEx.Execute(commentText)
-     expectVal = CDbl(matches(0).SubMatches(0))
-     
-     regEx.Pattern = "t\d*=\[([-+]?\d+\.?\d*),\s*([-+]?\d+\.?\d*)\]"
-     If Not regEx.Test(commentText) Then GoTo ErrorHandler
-     Set matches = regEx.Execute(commentText)
-     startTime = CDbl(matches(0).SubMatches(0))
-     endTime = CDbl(matches(0).SubMatches(1))
-     
-     regEx.Pattern = "Minimum value:\s*([-+]?\d+\.?\d*)"
-     If regEx.Test(commentText) Then
-         Set matches = regEx.Execute(commentText)
-         actMin = CDbl(matches(0).SubMatches(0))
-     Else
-         regEx.Pattern = "FAILEDLIST:\s*\[\s*([-+]?\d+\.?\d*)\s*,"
-         If regEx.Test(commentText) Then
-             Set matches = regEx.Execute(commentText)
-             actMin = CDbl(matches(0).SubMatches(0))
-         Else
-             actMin = 0
-         End If
-     End If
-     
-     regEx.Pattern = "Maximum value:\s*([-+]?\d+\.?\d*)"
-     If regEx.Test(commentText) Then
-         Set matches = regEx.Execute(commentText)
-         actMax = CDbl(matches(0).SubMatches(0))
-     Else
-         actMax = actMin
-     End If
-     
-     Set regEx = Nothing
-     ParseCommentData = True
-     Exit Function
-     
- ErrorHandler:
-     Set regEx = Nothing
-     ParseCommentData = False
+Private Function ParseCommentData(commentText As String, _
+                                ByRef startTime As Double, _
+                                ByRef endTime As Double, _
+                                ByRef expectVal As Double, _
+                                ByRef actMin As Double, _
+                                ByRef actMax As Double) As Boolean
+    Dim regEx As Object, matches As Object
+    
+    On Error GoTo ErrorHandler
+    
+    Set regEx = CreateObject("VBScript.RegExp")
+    regEx.Global = True
+    regEx.IgnoreCase = True
+    
+    regEx.Pattern = "==\s*([-+]?\d+\.?\d*)d"
+    If Not regEx.Test(commentText) Then GoTo ErrorHandler
+    Set matches = regEx.Execute(commentText)
+    expectVal = CDbl(matches(0).SubMatches(0))
+    
+    regEx.Pattern = "t\d*=\[([-+]?\d+\.?\d*),\s*([-+]?\d+\.?\d*)\]"
+    If Not regEx.Test(commentText) Then GoTo ErrorHandler
+    Set matches = regEx.Execute(commentText)
+    startTime = CDbl(matches(0).SubMatches(0))
+    endTime = CDbl(matches(0).SubMatches(1))
+    
+    regEx.Pattern = "Minimum value:\s*([-+]?\d+\.?\d*)"
+    If regEx.Test(commentText) Then
+        Set matches = regEx.Execute(commentText)
+        actMin = CDbl(matches(0).SubMatches(0))
+    Else
+        regEx.Pattern = "FAILEDLIST:\s*\[\s*([-+]?\d+\.?\d*)\s*,"
+        If regEx.Test(commentText) Then
+            Set matches = regEx.Execute(commentText)
+            actMin = CDbl(matches(0).SubMatches(0))
+        Else
+            actMin = 0
+        End If
+    End If
+    
+    regEx.Pattern = "Maximum value:\s*([-+]?\d+\.?\d*)"
+    If regEx.Test(commentText) Then
+        Set matches = regEx.Execute(commentText)
+        actMax = CDbl(matches(0).SubMatches(0))
+    Else
+        actMax = actMin
+    End If
+    
+    Set regEx = Nothing
+    ParseCommentData = True
+    Exit Function
+    
+ErrorHandler:
+    Set regEx = Nothing
+    ParseCommentData = False
+End Function
