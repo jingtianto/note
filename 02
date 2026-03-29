@@ -1,191 +1,82 @@
-Option Explicit
+import openpyxl
+from openpyxl.drawing.image import Image
+import matplotlib.pyplot as plt
+import re
+import io
 
-Sub GenerateChartInComment_Universal()
-    Dim rng As Range, cell As Range
-    Dim cm As Comment
-    Dim wsTemp As Worksheet
-    Dim cht As ChartObject
-    Dim startTime As Double, endTime As Double
-    Dim expectVal As Double, actMin As Double, actMax As Double
-    Dim commentText As String
-    Dim tempPic As Object
-    
-    Application.ScreenUpdating = False
-    Application.EnableEvents = False
-    
-    If TypeName(Selection) <> "Range" Then
-        MsgBox "Please select a range of cells first!", vbExclamation
-        GoTo Cleanup
-    End If
-    Set rng = Selection
-    
-    On Error Resume Next
-    Application.DisplayAlerts = False
-    ThisWorkbook.Worksheets("Temp_Chart_Generator").Delete
-    Application.DisplayAlerts = True
-    On Error GoTo 0
-    Set wsTemp = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
-    wsTemp.Name = "Temp_Chart_Generator"
-    wsTemp.Visible = xlSheetHidden
-    
-    Set tempPic = CreateObject("Scripting.FileSystemObject")
-    
-    For Each cell In rng
-        If cell.MergeCells Then GoTo NextCell
-        
-        On Error Resume Next
-        Set cm = cell.Comment
-        If Err.Number <> 0 Or cm Is Nothing Then
-            Err.Clear
-            GoTo NextCell
-        End If
-        On Error GoTo 0
-        
-        commentText = cm.Text
-        
-        If Not ParseCommentData(commentText, startTime, endTime, expectVal, actMin, actMax) Then
-            Debug.Print "Cell " & cell.Address & " comment format mismatch, skipped"
-            GoTo NextCell
-        End If
-        
-        wsTemp.Cells.Clear
-        wsTemp.Range("A1:D1") = Array("Time(s)", "Expected", "Actual Min", "Actual Max")
-        wsTemp.Range("A2") = startTime
-        wsTemp.Range("A3") = endTime
-        wsTemp.Range("B2:B3") = expectVal
-        wsTemp.Range("C2:C3") = actMin
-        wsTemp.Range("D2:D3") = actMax
-        
-        ' Create chart with correct series order (compatible with all Excel versions)
-        Set cht = wsTemp.ChartObjects.Add(Left:=10, Top:=10, Width:=240, Height:=160)
-        With cht.Chart
-            .ChartType = xlColumnClustered
-            .HasTitle = True
-            .ChartTitle.Text = "Expected vs Actual (" & startTime & "-" & endTime & "s)"
-            .ChartTitle.Font.Size = 9
-            .ChartTitle.Font.Bold = True
-            
-            ' Series 1: Expected (Green Line)
-            .SeriesCollection.NewSeries
-            With .SeriesCollection(1)
-                .Name = "Expected"
-                .Values = wsTemp.Range("B2:B3")
-                .XValues = wsTemp.Range("A2:A3")
-                .ChartType = xlLine
-                .Format.Line.ForeColor.RGB = RGB(0, 176, 80)
-                .Format.Line.Weight = 2.5
-                .MarkerStyle = xlMarkerStyleCircle
-                .MarkerSize = 5
-                .MarkerForegroundColor = RGB(0, 176, 80)
-            End With
-            
-            ' Series 2: Actual Range (Red Column)
-            .SeriesCollection.NewSeries
-            With .SeriesCollection(2)
-                .Name = "Actual Range"
-                .Values = wsTemp.Range("D2:D3")
-                .XValues = wsTemp.Range("A2:A3")
-                .ChartType = xlColumnClustered
-                .Format.Fill.ForeColor.RGB = RGB(255, 0, 0)
-                .Format.Fill.Transparency = 0.3
-                .Format.Stroke.Visible = msoFalse
-                .GapWidth = 50
-            End With
-            
-            ' Axes Settings
-            .Axes(xlCategory).CategoryNames = Array(startTime & "s", endTime & "s")
-            .Axes(xlCategory).Font.Size = 8
-            .Axes(xlValue).MinimumScale = WorksheetFunction.Min(expectVal, actMin) - 1
-            .Axes(xlValue).MaximumScale = WorksheetFunction.Max(expectVal, actMax) + 1
-            .Axes(xlValue).Font.Size = 8
-            
-            ' Hide unnecessary elements
-            .HasLegend = False
-            .Axes(xlValue).HasMajorGridlines = False
-            .Axes(xlCategory).HasMajorGridlines = False
-            .PlotArea.Format.Fill.Visible = msoFalse
-            .ChartArea.Format.Fill.Visible = msoFalse
-            .ChartArea.Border.LineStyle = xlLineStyleNone
-        End With
-        
-        ' Copy chart to clipboard and paste to comment (correct parameter method)
-        cht.Chart.CopyPicture Appearance:=xlScreen, Format:=xlPicture
-        With cm
-            .Shape.Fill.UserPicture Picture:=cht.Chart
-            .Shape.TextFrame.AutoSize = True
-            .Shape.TextFrame.WordWrap = msoTrue
-        End With
-        
-        cht.Delete
-        
-NextCell:
-        DoEvents
-    Next cell
-    
-    Application.DisplayAlerts = False
-    wsTemp.Delete
-    Application.DisplayAlerts = True
-    
-Cleanup:
-    Set tempPic = Nothing
-    Application.ScreenUpdating = True
-    Application.EnableEvents = True
-    
-    MsgBox "Chart generation completed! All charts are embedded in cell comments, original worksheet unchanged.", vbInformation
-End Sub
+# ---------------------- 配置区 ----------------------
+INPUT_FILE = "你的测试报告.xlsx"  # 原始报告路径
+OUTPUT_FILE = "测试用例图表报告.xlsx"  # 输出报告路径
+TIME_PATTERN = re.compile(r't\d+=\[(\d+\.\d+),(\d+\.\d+)\]')  # 匹配时间区间
+VALUE_PATTERN = re.compile(r'~==\s*(-?\d+\.?\d*)[dD]')  # 匹配期望值
 
-Private Function ParseCommentData(commentText As String, _
-                                ByRef startTime As Double, _
-                                ByRef endTime As Double, _
-                                ByRef expectVal As Double, _
-                                ByRef actMin As Double, _
-                                ByRef actMax As Double) As Boolean
-    Dim regEx As Object, matches As Object
+def extract_note_data(note_text):
+    """从批注文本中提取时间区间和对应值"""
+    if not note_text:
+        return []
+    time_matches = TIME_PATTERN.findall(note_text)
+    value_match = VALUE_PATTERN.search(note_text)
+    target_value = float(value_match.group(1)) if value_match else None
+    data_points = []
+    for t_start, t_end in time_matches:
+        t_start = float(t_start)
+        t_end = float(t_end)
+        data_points.append((t_start, target_value))
+        data_points.append((t_end, target_value))
+    return data_points
+
+# ---------------------- 主逻辑 ----------------------
+wb_in = openpyxl.load_workbook(INPUT_FILE)
+ws_in = wb_in.active
+wb_out = openpyxl.Workbook()
+
+# 遍历每一行（跳过表头，从第2行开始）
+for row_idx in range(2, ws_in.max_row + 1):
+    test_id = ws_in.cell(row=row_idx, column=1).value
+    if not test_id or test_id == "UNGUELTIG":
+        continue  # 跳过无ID或无效行
     
-    On Error GoTo ErrorHandler
+    # 创建新Sheet，以测试用例ID命名
+    ws_out = wb_out.create_sheet(title=f"TC_{test_id}")
+    signal_data = {}  # key: 信号名, value: [(t1, v1), (t2, v2)...]
     
-    Set regEx = CreateObject("VBScript.RegExp")
-    regEx.Global = True
-    regEx.IgnoreCase = True
+    # 遍历每一列（从第3列开始，跳过ID/Kategorie列）
+    for col_idx in range(3, ws_in.max_column + 1):
+        signal_name = ws_in.cell(row=1, column=col_idx).value
+        if not signal_name:
+            continue
+        
+        # 提取批注中的实际值和时间
+        cell = ws_in.cell(row=row_idx, column=col_idx)
+        note = cell.comment.text if cell.comment else ""
+        data_points = extract_note_data(note)
+        if data_points:
+            signal_data[signal_name] = data_points
     
-    regEx.Pattern = "==\s*([-+]?\d+\.?\d*)d"
-    If Not regEx.Test(commentText) Then GoTo ErrorHandler
-    Set matches = regEx.Execute(commentText)
-    expectVal = CDbl(matches(0).SubMatches(0))
-    
-    regEx.Pattern = "t\d*=\[([-+]?\d+\.?\d*),\s*([-+]?\d+\.?\d*)\]"
-    If Not regEx.Test(commentText) Then GoTo ErrorHandler
-    Set matches = regEx.Execute(commentText)
-    startTime = CDbl(matches(0).SubMatches(0))
-    endTime = CDbl(matches(0).SubMatches(1))
-    
-    regEx.Pattern = "Minimum value:\s*([-+]?\d+\.?\d*)"
-    If regEx.Test(commentText) Then
-        Set matches = regEx.Execute(commentText)
-        actMin = CDbl(matches(0).SubMatches(0))
-    Else
-        regEx.Pattern = "FAILEDLIST:\s*\[\s*([-+]?\d+\.?\d*)\s*,"
-        If regEx.Test(commentText) Then
-            Set matches = regEx.Execute(commentText)
-            actMin = CDbl(matches(0).SubMatches(0))
-        Else
-            actMin = 0
-        End If
-    End If
-    
-    regEx.Pattern = "Maximum value:\s*([-+]?\d+\.?\d*)"
-    If regEx.Test(commentText) Then
-        Set matches = regEx.Execute(commentText)
-        actMax = CDbl(matches(0).SubMatches(0))
-    Else
-        actMax = actMin
-    End If
-    
-    Set regEx = Nothing
-    ParseCommentData = True
-    Exit Function
-    
-ErrorHandler:
-    Set regEx = Nothing
-    ParseCommentData = False
-End Function
+    # 生成折线图
+    if signal_data:
+        plt.figure(figsize=(10, 6))
+        for sig_name, points in signal_data.items():
+            times = [p[0] for p in points]
+            values = [p[1] for p in points]
+            plt.plot(times, values, marker='o', label=sig_name)
+        
+        plt.xlabel("Time (s)")
+        plt.ylabel("Signal Value")
+        plt.title(f"Test Case {test_id} - Signal Time Series")
+        plt.legend(loc="best")
+        plt.grid(True)
+        
+        # 保存为内存图片并插入Sheet
+        img_buf = io.BytesIO()
+        plt.savefig(img_buf, format='png', bbox_inches='tight')
+        img_buf.seek(0)
+        img = Image(img_buf)
+        ws_out.add_image(img, 'A1')
+        plt.close()
+
+# 删除默认Sheet并保存
+if "Sheet" in wb_out.sheetnames:
+    del wb_out["Sheet"]
+wb_out.save(OUTPUT_FILE)
+print(f"✅ 图表报告已生成：{OUTPUT_FILE}")
