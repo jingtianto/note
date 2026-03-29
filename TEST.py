@@ -8,184 +8,211 @@ warnings.filterwarnings('ignore')
 
 # ---------------------- 配置区 ----------------------
 INPUT_FILE = r"D:\PythonProject\自动分析测试结果\1.xlsx"
-OUTPUT_FILE = r"D:\PythonProject\自动分析测试结果\2.xlsx"  # 输出文件路径
+OUTPUT_FILE = r"D:\PythonProject\自动分析测试结果\2.xlsx"
 TARGET_SHEET_NAME = "IPN"
 
-# 正则表达式
-CELL_VALUE_PATTERN = re.compile(r'(~?)==?\s*(-?\d+\.?\d*)[dD]', re.DOTALL)
+# 🔥 修复正则：匹配 ==/~== 同时兼容数值（可选）
+CELL_VALUE_PATTERN = re.compile(r'(~?)==\s*(-?\d+\.?\d*)?[dD]?', re.DOTALL)
 NOTE_MIN_PATTERN = re.compile(r'Minimum value:\s*(-?\d+\.?\d*)', re.DOTALL)
-NOTE_MAX_PATTERN = re.compile(r'Maximum value:\s*(-?\d+\.?\d*)', re.DOTALL)  # 修复：之前写错成Minimum
+NOTE_MAX_PATTERN = re.compile(r'Maximum value:\s*(-?\d+\.?\d*)', re.DOTALL)
 NOTE_AVG_PATTERN = re.compile(r'Average:\s*(-?\d+\.?\d*)', re.DOTALL)
-TIME_FAILED_PATTERN = re.compile(r't=\[(\d+\.\d+),(\d+\.\d+)\]', re.DOTALL)
+TIME_FAILED_PATTERN = re.compile(r't=\[(\d+\.\d+),(\d+\.\d+)\]|LL\+(\d+\.\d+)s', re.DOTALL)
 
-def get_cell_fill_color(cell):
-    """获取单元格填充色（处理Excel ARGB格式）"""
+def get_cell_fill_color_hex(cell):
+    """精准获取单元格填充色（十六进制）"""
     fill = cell.fill
     if fill.patternType is None or fill.patternType == 'none':
         return '#000000'
+    
     if hasattr(fill.fgColor, 'rgb') and fill.fgColor.rgb:
-        rgb_str = fill.fgColor.rgb
-        if isinstance(rgb_str, str) and len(rgb_str) == 8:
-            return f'#{rgb_str[2:]}'
+        rgb_val = fill.fgColor.rgb
+        if isinstance(rgb_val, str):
+            if len(rgb_val) == 8:
+                return f'#{rgb_val[2:]}'
+            elif len(rgb_val) == 6:
+                return f'#{rgb_val}'
+        elif isinstance(rgb_val, tuple):
+            return f'#{rgb_val[0]:02x}{rgb_val[1]:02x}{rgb_val[2]:02x}'
+    
     return '#000000'
 
 def parse_cell_value(cell_text):
-    """解析单元格期望值"""
+    """
+    🔥 修复：兼容只有 ==/~== 无数值的情况
+    返回：(期望值, 是否虚线)，无期望值返回 (None, False)
+    """
     if not cell_text:
         return None, False
+    
     s = str(cell_text).strip().replace('\n', '').replace('\r', '')
     if s in ('me', 'None', ''):
         return None, False
+    
     m = CELL_VALUE_PATTERN.search(s)
-    if m:
-        return float(m.group(2)), bool(m.group(1))
-    return None, False
+    if not m:
+        return None, False  # 没有 ==/~==，直接跳过
+    
+    # 处理分组：group1=~（可选），group2=数值（可选）
+    is_dashed = bool(m.group(1))  # 有~就是虚线
+    value_str = m.group(2)        # 数值部分
+    
+    # 兼容无数值/数值为空的情况
+    if not value_str or not value_str.replace('.','').isdigit():
+        target_value = 0.0  # 兜底为0
+    else:
+        target_value = float(value_str)
+    
+    return target_value, is_dashed
 
 def parse_note_data(note_text):
-    """解析批注中的min/max/avg/时间"""
+    """解析批注中的Min/Max/Average/Time"""
     if not note_text:
         return 0.0, 0.0, 0.0, [(0.0, 1.0)]
+    
     s = note_text.replace('\n', ' ').replace('\r', ' ').strip()
     min_val = float(m.group(1)) if (m := NOTE_MIN_PATTERN.search(s)) else 0.0
     max_val = float(m.group(1)) if (m := NOTE_MAX_PATTERN.search(s)) else 0.0
     avg_val = float(m.group(1)) if (m := NOTE_AVG_PATTERN.search(s)) else 0.0
 
     times = []
-    for t1, t2 in TIME_FAILED_PATTERN.findall(s):
-        times.append((round(float(t1),3), round(float(t2),3)))
+    # 解析 t=[7.001,7.110]
+    for match in TIME_FAILED_PATTERN.findall(s):
+        if match[0] and match[1]:  # t=[x,y] 格式
+            times.append((round(float(match[0]), 3), round(float(match[1]), 3)))
+        elif match[2]:  # LL+0.11s 格式
+            times.append((0.0, round(float(match[2]), 3)))
+    
     if not times:
         times = [(0.0, 1.0)]
     return min_val, max_val, avg_val, times
 
 def process_one_case(ws_in, row_idx, wb_out):
     """处理单个测试用例"""
-    test_id = ws_in.cell(row_idx,1).value
+    test_id = ws_in.cell(row_idx, 1).value
     if not test_id:
         return
+    
     test_id = str(test_id).strip()
     sheet_name = f"TC_{test_id}"
-
-    # 删除已存在的Sheet（避免重复）
     if sheet_name in wb_out.sheetnames:
         del wb_out[sheet_name]
     ws_out = wb_out.create_sheet(sheet_name)
 
     signals = []
-    # 限制最大列数，避免卡死
     max_col = min(ws_in.max_column, 1000)
 
     for col in range(3, max_col+1):
-        header = ws_in.cell(1, col).value
-        if not header:  # 跳过空表头列
+        signal_name = ws_in.cell(1, col).value
+        if not signal_name:
             continue
-        cell = ws_in.cell(row_idx, col)
-        color = get_cell_fill_color(cell)
-        val = cell.value
-        note = cell.comment.text if (cell.comment and cell.comment.text) else ""
-
-        if val is None:
+        
+        data_cell = ws_in.cell(row_idx, col)
+        cell_val = data_cell.value
+        
+        # 只处理有期望值（==/~==）的信号
+        target_value, is_dashed = parse_cell_value(cell_val)
+        if target_value is None:
             continue
-        s_val = str(val).strip()
-        if s_val in ('me', 'None', ''):
-            continue
-
-        target, dashed = parse_cell_value(val)
-        mn, mx, avg, ts = parse_note_data(note)
-
-        if target is None:
-            target = 0.0
+        
+        # 获取单元格填充色
+        signal_color = get_cell_fill_color_hex(data_cell)
+        
+        # 解析批注
+        note_text = data_cell.comment.text if (data_cell.comment and data_cell.comment.text) else ""
+        min_val, max_val, avg_val, time_intervals = parse_note_data(note_text)
 
         signals.append({
-            'name': header,
-            'color': color,
-            'target': target,
-            'dashed': dashed,
-            'min': mn,
-            'max': mx,
-            'avg': avg,
-            'times': ts
+            'name': signal_name,
+            'color': signal_color,
+            'target': target_value,
+            'dashed': is_dashed,
+            'min': min_val,
+            'max': max_val,
+            'avg': avg_val,
+            'times': time_intervals
         })
 
     if not signals:
-        print(f"⚠️  测试用例{test_id}无有效信号")
+        print(f"⚠️  用例 {test_id} 无有效信号（无==/~==列）")
         return
 
-    # 绘图（简化版，更快）
+    # 绘图
     n = len(signals)
-    fig, axes = plt.subplots(n, 1, figsize=(16, 3*n), sharex=True)
+    fig, axes = plt.subplots(n, 1, figsize=(18, 3*n), sharex=True)
     if n == 1:
         axes = [axes]
 
     for ax, sig in zip(axes, signals):
         ax.set_title(sig['name'], fontsize=9, loc='left', color=sig['color'], weight='bold')
         ax.grid(True, alpha=0.3)
+        ax.set_ylabel("Value", fontsize=10)
 
         # Y轴自适应
         ys = [sig['min'], sig['max'], sig['avg'], sig['target']]
-        y0, y1 = min(ys)-0.2, max(ys)+0.2
-        ax.set_ylim(y0, y1)
+        y_min, y_max = min(ys) - 0.2, max(ys) + 0.2
+        ax.set_ylim(y_min, y_max)
 
         # 绘制Actual/Expected/Average
         for t1, t2 in sig['times']:
-            ax.hlines(sig['min'], t1, t2, color='gold', lw=2, label='Actual Min')
-            ax.hlines(sig['max'], t1, t2, color='gold', lw=2, label='Actual Max')
-            ax.fill_between([t1,t2], sig['min'], sig['max'], color='gold', alpha=0.4, label='Actual Range')
+            ax.hlines(sig['min'], t1, t2, color='gold', lw=2, zorder=1)
+            ax.hlines(sig['max'], t1, t2, color='gold', lw=2, zorder=1)
+            ax.fill_between([t1, t2], sig['min'], sig['max'], color='gold', alpha=0.4, zorder=1)
             ax.hlines(sig['target'], t1, t2, color='blue',
-                      linestyle='--' if sig['dashed'] else '-', lw=1.5, label=f'Expected: {sig["target"]}')
-            ax.plot((t1+t2)/2, sig['avg'], 'o', c='gold', ms=8, label=f'Average: {sig["avg"]}')
+                      linestyle='--' if sig['dashed'] else '-', lw=1.8, zorder=2)
+            ax.plot((t1+t2)/2, sig['avg'], 'o', color='gold', ms=9, zorder=3)
 
-        # 去重图例
-        handles, labels = ax.get_legend_handles_labels()
-        by_label = dict(zip(labels, handles))
-        ax.legend(by_label.values(), by_label.keys(), loc='upper left', fontsize=7)
+        # 图例
+        ax.legend([f"Exp: {sig['target']}", f"Actual: {sig['min']}-{sig['max']}"],
+                  loc='upper left', fontsize=7, frameon=False)
+        ax.set_position([ax.get_position().x0, ax.get_position().y0, 0.85, ax.get_position().height])
 
-    plt.tight_layout(pad=1.0)
-    # 保存图片（低dpi加快速度）
+    axes[-1].set_xlabel("Time (s)", fontsize=12)
+    fig.suptitle(f"Test Case {test_id} - Signal Analysis", fontsize=16, y=0.98)
+    
+    # 保存图片
     buf = io.BytesIO()
     plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
     buf.seek(0)
     ws_out.add_image(Image(buf), 'A1')
-    plt.close()  # 及时关闭画布，释放内存
+    plt.close('all')
 
 # ---------------------- 主程序 ----------------------
 if __name__ == "__main__":
     try:
-        # 加载Excel（保留格式）
         wb_in = openpyxl.load_workbook(INPUT_FILE, data_only=False)
         if TARGET_SHEET_NAME not in wb_in.sheetnames:
             print(f"❌ 错误：未找到Sheet页「{TARGET_SHEET_NAME}」")
             print(f"   可用Sheet：{wb_in.sheetnames}")
             exit(1)
+        
         ws_in = wb_in[TARGET_SHEET_NAME]
         wb_out = openpyxl.Workbook()
 
-        done = set()
-        # 限制最大行数，避免卡死
+        processed = set()
         max_row = min(ws_in.max_row, 200)
 
-        # 遍历测试用例
         for r in range(2, max_row+1):
-            cid = ws_in.cell(r,1).value
+            cid = ws_in.cell(r, 1).value
             if not cid:
                 continue
+            
             cid = str(cid).strip()
-            if cid in done:
+            if cid in processed:
                 continue
-            print(f"✅ 正在处理用例：{cid}")
+            
+            print(f"🚀 处理中: {cid}")
             process_one_case(ws_in, r, wb_out)
-            done.add(cid)
+            processed.add(cid)
 
-        # 清理默认Sheet
         if 'Sheet' in wb_out.sheetnames:
             del wb_out['Sheet']
         
-        # 🔥 修复：使用正确的变量名 OUTPUT_FILE
         wb_out.save(OUTPUT_FILE)
-        print(f"\n🎉 处理完成！文件已保存到：{OUTPUT_FILE}")
-        print(f"📋 共处理 {len(done)} 个测试用例：{list(done)}")
-        
+        print(f"\n✅ 全部完成！输出文件：{OUTPUT_FILE}")
+        print(f"📋 共处理 {len(processed)} 个用例：{list(processed)}")
+    
     except Exception as e:
         print(f"\n❌ 运行出错：{type(e).__name__} - {e}")
-        # 出错时也保存已处理的内容
+        # 出错时保存已处理内容
         wb_out.save(OUTPUT_FILE)
         print(f"⚠️  已保存部分结果到：{OUTPUT_FILE}")
