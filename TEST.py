@@ -19,23 +19,17 @@ NOTE_AVG_PATTERN = re.compile(r'Average:\s*(-?\d+\.?\d*)', re.DOTALL)
 TIME_FAILED_PATTERN = re.compile(r't=\[(\d+\.\d+),(\d+\.\d+)\]|LL\+(\d+\.\d+)s', re.DOTALL)
 
 def get_color_from_indexed(cell):
-    """
-    🔥 基于 Excel indexed 颜色识别红绿
-    indexed=10 → 绿色
-    indexed=11 → 红色
-    其他 → 黑色
-    """
+    """indexed=10→红，indexed=11→绿"""
     fill = cell.fill
     if fill.patternType is None or fill.patternType == 'none':
         return 'black'
-    
     fg_color = fill.fgColor
     if hasattr(fg_color, 'indexed'):
         idx = fg_color.indexed
         if idx == 10:
-            return 'green'   # 绿色
+            return 'red'
         elif idx == 11:
-            return 'red'     # 红色
+            return 'green'
     return 'black'
 
 def parse_cell_value(cell_text):
@@ -120,14 +114,21 @@ def process_one_case(ws_in, row_idx, wb_out):
         ys = [sig["min"], sig["max"], sig["avg"], sig["target"]]
         y_min, y_max = min(ys) - 0.5, max(ys) + 0.5
         ax.set_ylim(y_min, y_max)
+        
+        # ========== 核心修改：给每条线加标签，让图例自动绑定颜色 ==========
         for t1, t2 in sig["times"]:
-            ax.hlines(sig["min"], t1, t2, color='gold', lw=2)
+            # 实际值（金色）：加label，只在第一次循环显示
+            ax.hlines(sig["min"], t1, t2, color='gold', lw=2, label=f"Actual: {sig['min']}~{sig['max']}" if t1==0 else "")
             ax.hlines(sig["max"], t1, t2, color='gold', lw=2)
             ax.fill_between([t1, t2], sig["min"], sig["max"], color='gold', alpha=0.4)
+            # 期望值（蓝色）：加label，只在第一次循环显示
             ax.hlines(sig["target"], t1, t2, color='blue',
-                      linestyle='--' if sig["dashed"] else '-', lw=1.8)
+                      linestyle='--' if sig["dashed"] else '-', lw=1.8, label=f"Exp: {sig['target']}" if t1==0 else "")
             ax.plot((t1+t2)/2, sig["avg"], 'o', color='gold', ms=9)
-        ax.legend([f"Exp:{sig['target']}", f"Actual:{sig['min']}~{sig['max']}"], fontsize=7, loc='upper left')
+
+        # ========== 只显示一次图例，自动匹配颜色 ==========
+        ax.legend(fontsize=7, loc='upper left')
+        
     axes[-1].set_xlabel("Time (s)")
     buf = io.BytesIO()
     plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
@@ -143,14 +144,21 @@ if __name__ == "__main__":
     ws_in = wb_in[TARGET_SHEET_NAME]
     wb_out = openpyxl.Workbook()
     processed = set()
-    max_row = min(ws_in.max_row, 200)
+    max_row = ws_in.max_row  # 处理全部行
+    
     for r in range(2, max_row+1):
+        # 跳过隐藏行
+        if ws_in.row_dimensions[r].hidden:
+            continue
+        
         cid = str(ws_in.cell(r, 1).value or '').strip()
         if not cid or cid in processed:
             continue
+        
         process_one_case(ws_in, r, wb_out)
         processed.add(cid)
+    
     if 'Sheet' in wb_out.sheetnames:
         del wb_out['Sheet']
     wb_out.save(OUTPUT_FILE)
-    print("✅ 处理完成！")
+    print("✅ 处理完成！图例颜色+文字完全匹配（Actual=金色，Exp=蓝色）")
