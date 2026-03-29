@@ -5,9 +5,10 @@ import re
 import io
 from openpyxl.styles import PatternFill
 
-# ---------------------- 配置区 ----------------------
+# ---------------------- 配置区（新增：指定Sheet名） ----------------------
 INPUT_FILE = r"D:\PythonProject\自动分析测试结果\1.xlsx"
 OUTPUT_FILE = r"D:\PythonProject\自动分析测试结果\2.xlsx"
+TARGET_SHEET_NAME = "IPN"  # 🔥 关键：指定要读取的Sheet名
 
 # 精准匹配批注格式 + 保留小数精度
 CELL_VALUE_PATTERN = re.compile(r'(~?)==?\s*(-?\d+\.?\d*)[dD]', re.DOTALL)
@@ -28,7 +29,7 @@ def rgb_to_hex(rgb):
 def get_cell_fill_color(cell):
     """获取单元格填充颜色（返回十六进制），无填充返回黑色"""
     fill = cell.fill
-    # 🔥 修复：兼容openpyxl不同版本的填充格式
+    # 兼容openpyxl不同版本的填充格式
     if fill.patternType is None or fill.patternType == 'none' or fill.fgColor.rgb is None:
         return '#000000'  # 无填充→黑色
     
@@ -116,9 +117,9 @@ def process_test_case(ws_in, row_idx, wb_out):
         signal_name_cell_header = ws_in.cell(1, col_idx)
         signal_name = signal_name_cell_header.value or f"Signal_Col{col_idx}"
         
-        # 获取数据单元格（当前行对应列，🔥 核心修复：读取数据行的填充色）
+        # 获取数据单元格（当前行对应列，读取数据行的填充色）
         data_cell = ws_in.cell(row_idx, col_idx)
-        # 🔥 关键修改：读取数据行单元格的填充色（而非表头行）
+        # 读取数据行单元格的填充色（而非表头行）
         signal_color = get_cell_fill_color(data_cell)
         print(f"🎨 信号 {signal_name[:30]} (列{col_idx}, 行{row_idx}) 颜色: {signal_color}")
         
@@ -171,7 +172,7 @@ def process_test_case(ws_in, row_idx, wb_out):
     for i, sig in enumerate(valid_signals):
         ax = axes[i]
         
-        # 🔥 应用数据行的填充色到信号名
+        # 应用数据行的填充色到信号名
         ax.set_title(sig["name"], 
                      fontweight='bold', 
                      fontsize=9,  # 加大字号，颜色更醒目
@@ -253,11 +254,20 @@ def process_test_case(ws_in, row_idx, wb_out):
     ws_out.add_image(Image(buf), "A1")
     plt.close()
 
-# ---------------------- 主程序：批量处理所有ID ----------------------
+# ---------------------- 主程序：指定IPN Sheet页处理 ----------------------
 if __name__ == "__main__":
-    # 加载输入文件（🔥 修复：保留单元格格式）
-    wb_in = openpyxl.load_workbook(INPUT_FILE, data_only=False)  # 关键：data_only=False 保留格式
-    ws_in = wb_in.active
+    # 加载输入文件（保留单元格格式）
+    wb_in = openpyxl.load_workbook(INPUT_FILE, data_only=False)
+    
+    # 🔥 核心修改：强制读取指定的IPN Sheet页
+    if TARGET_SHEET_NAME not in wb_in.sheetnames:
+        print(f"❌ 错误：输入文件中未找到名为「{TARGET_SHEET_NAME}」的Sheet页！")
+        print(f"   可用的Sheet页：{wb_in.sheetnames}")
+        exit(1)  # 终止程序，避免报错
+    
+    ws_in = wb_in[TARGET_SHEET_NAME]
+    print(f"✅ 成功加载Sheet页：{TARGET_SHEET_NAME}")
+    
     wb_out = openpyxl.Workbook()
 
     # 遍历A列所有非空行（从第2行开始，跳过表头）
