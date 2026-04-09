@@ -1,102 +1,48 @@
 import sqlite3
 import pandas as pd
-import json
-import re
 from pathlib import Path
 from openpyxl.styles import Alignment
 
-# -------------------------- 配置区（按需修改） --------------------------
+# -------------------------- 配置区 --------------------------
 DB_PATH = r"C:\Users\QXZ715A\Downloads\BN_EESystem25_Y25CW43.sqlite"
-OUTPUT_PATH = r"C:\Users\QXZ715A\Downloads\enum_data_type_final_ok.xlsx"
-# 格式配置：0=CAN (默认)，如果要 0CAN 请改为 JOIN_SEP = ""
-JOIN_SEP = "="
-# ----------------------------------------------------------------------
+OUTPUT_PATH = r"C:\Users\QXZ715A\Downloads\enum_data_type_RAW.xlsx"
+# -----------------------------------------------------------
 
-def parse_complex_enum(raw_text):
-    """
-    核心修复函数：深度处理截图中的复杂JSON
-    逻辑：
-    1. 移除首尾多余的转义符
-    2. 替换 \" 为 " (解决中文/特殊字符解析失败)
-    3. 提取 enumerations 字段内的数组内容
-    """
-    if not raw_text or str(raw_text).strip() == "":
-        return []
-    
-    try:
-        # 1. 基础清洗：替换转义字符，移除首尾可能包裹的引号
-        text = str(raw_text).replace('\\"', '"').strip('"')
-        
-        # 2. 核心正则：精准匹配 "enumerations" 后面的数组内容
-        # 正则会匹配 [ 开始，直到最后一个 ] 结束，忽略中间所有干扰字符
-        pattern = r'"enumerations"\s*:\s*(\[.*?\])'
-        match = re.search(pattern, text, re.DOTALL)
-        
-        if not match:
-            print(f"⚠️ 未匹配到数组，跳过: {text[:50]}...")
-            return []
-        
-        # 3. 提取核心数组字符串并再次清洗（防漏网之鱼）
-        json_str = match.group(1).strip('"')
-        
-        # 4. 最终解析
-        return json.loads(json_str)
-    except json.JSONDecodeError as e:
-        print(f"❌ JSON解析错误 (已跳过): {str(e)}")
-        return []
-    except Exception as e:
-        print(f"⚠️ 未知错误 (已跳过): {str(e)}")
-        return []
-
-def merge_enum_to_break(raw_text):
-    """合并枚举值，并用换行符\n连接，实现Excel单元格内换行"""
-    enum_list = parse_complex_enum(raw_text)
-    if not enum_list:
-        return ""
-    
-    # 遍历合并，格式如 "0=OPMODE_OPEN_UNLOCKED"
-    merged_items = [f"{item['value']}{JOIN_SEP}{item['synonym']}" for item in enum_list]
-    
-    # \n 是 Excel 识别的换行符
-    return "\n".join(merged_items)
-
-def export_to_excel():
+def export_raw_enum_data():
     # 检查文件是否存在
     if not Path(DB_PATH).exists():
         print(f"❌ 错误：数据库文件不存在 -> {DB_PATH}")
         return
 
-    # 1. 连接数据库并读取数据
+    # 1. 连接数据库并读取全表数据（不做任何修改）
     conn = sqlite3.connect(DB_PATH)
-    # 只读取需要的列，提高效率
-    df = pd.read_sql("SELECT id, short_name, enumerations FROM enum_data_type", conn)
+    # 读取 enum_data_type 表的所有列
+    df = pd.read_sql("SELECT * FROM enum_data_type", conn)
     conn.close()
     
-    print(f"📥 成功读取 {len(df)} 行数据")
+    print(f"📥 成功读取 {len(df)} 行原始数据")
 
-    # 2. 批量处理枚举
-    df["enum_result"] = df["enumerations"].apply(merge_enum_to_break)
-
-    # 3. 准备导出数据（只保留 id, 信号名, 枚举结果）
-    export_df = df[["id", "short_name", "enum_result"]]
-
-    # 4. 写入Excel并设置格式
-    print(f"📤 正在导出 -> {OUTPUT_PATH}")
+    # 2. 直接导出Excel，不处理任何字符串
+    print(f"📤 正在导出原始数据 -> {OUTPUT_PATH}")
     with pd.ExcelWriter(OUTPUT_PATH, engine="openpyxl") as writer:
-        export_df.to_excel(writer, index=False, sheet_name="Enum_Map")
-        ws = writer.sheets["Enum_Map"]
+        df.to_excel(writer, index=False, sheet_name="RAW_Enum_Data")
+        ws = writer.sheets["RAW_Enum_Data"]
         
-        # 设置 C 列（enum_result）自动换行和靠上对齐
+        # 简单设置格式，方便查看
+        # 设置 enumerations 列（通常是最后一列）自动换行
+        enum_col_index = df.columns.get_loc("enumerations") + 1 # Excel列号从1开始
         wrap_style = Alignment(wrap_text=True, vertical="top")
-        for cell in ws["C"]:
+        
+        for cell in ws[chr(64 + enum_col_index)]: # 遍历枚举列
             cell.alignment = wrap_style
         
-        # 设置列宽（A=8, B=35, C=50 适配长文本）
+        # 设置列宽
         ws.column_dimensions["A"].width = 8
-        ws.column_dimensions["B"].width = 35
-        ws.column_dimensions["C"].width = 50
+        ws.column_dimensions["B"].width = 15
+        ws.column_dimensions["C"].width = 40
+        ws.column_dimensions["D"].width = 60 # 给enumerations列留足空间
 
     print("✅ 导出完成！文件已保存到下载文件夹。")
 
 if __name__ == "__main__":
-    export_to_excel()
+    export_raw_enum_data()
