@@ -1,48 +1,60 @@
 import sqlite3
 import pandas as pd
+import json
 from pathlib import Path
-from openpyxl.styles import Alignment
 
 # -------------------------- 配置区 --------------------------
 DB_PATH = r"C:\Users\QXZ715A\Downloads\BN_EESystem25_Y25CW43.sqlite"
-OUTPUT_PATH = r"C:\Users\QXZ715A\Downloads\enum_data_type_RAW.xlsx"
+OUTPUT_PATH = r"C:\Users\QXZ715A\Downloads\enum_data_type_parsed.xlsx"
 # -----------------------------------------------------------
 
-def export_raw_enum_data():
-    # 检查文件是否存在
+def parse_enum(raw_text):
+    """解析enumerations字段，返回键值对文本"""
+    try:
+        # 处理JSON格式，提取枚举数组
+        data = json.loads(raw_text)
+        enum_list = data.get("enumerations", [])
+        
+        # 转换成"value: synonym"格式
+        parsed = []
+        for item in enum_list:
+            value = item.get("value", "")
+            synonym = item.get("synonym", "")
+            parsed.append(f"{value}: {synonym}")
+        
+        # 用换行分隔每个枚举项
+        return "\n".join(parsed)
+    
+    except json.JSONDecodeError:
+        # 解析失败时返回原始文本
+        return raw_text
+
+def export_parsed_data():
+    # 检查数据库文件
     if not Path(DB_PATH).exists():
         print(f"❌ 错误：数据库文件不存在 -> {DB_PATH}")
         return
 
-    # 1. 连接数据库并读取全表数据（不做任何修改）
+    # 1. 读取数据库
     conn = sqlite3.connect(DB_PATH)
-    # 读取 enum_data_type 表的所有列
     df = pd.read_sql("SELECT * FROM enum_data_type", conn)
     conn.close()
-    
-    print(f"📥 成功读取 {len(df)} 行原始数据")
 
-    # 2. 直接导出Excel，不处理任何字符串
-    print(f"📤 正在导出原始数据 -> {OUTPUT_PATH}")
+    # 2. 解析enumerations字段
+    df["parsed_enumerations"] = df["enumerations"].apply(parse_enum)
+
+    # 3. 导出到Excel
     with pd.ExcelWriter(OUTPUT_PATH, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="RAW_Enum_Data")
-        ws = writer.sheets["RAW_Enum_Data"]
+        df.to_excel(writer, index=False, sheet_name="ParsedData")
+        ws = writer.sheets["ParsedData"]
         
-        # 简单设置格式，方便查看
-        # 设置 enumerations 列（通常是最后一列）自动换行
-        enum_col_index = df.columns.get_loc("enumerations") + 1 # Excel列号从1开始
-        wrap_style = Alignment(wrap_text=True, vertical="top")
-        
-        for cell in ws[chr(64 + enum_col_index)]: # 遍历枚举列
-            cell.alignment = wrap_style
-        
-        # 设置列宽
+        # 设置列宽和自动换行
         ws.column_dimensions["A"].width = 8
-        ws.column_dimensions["B"].width = 15
-        ws.column_dimensions["C"].width = 40
-        ws.column_dimensions["D"].width = 60 # 给enumerations列留足空间
+        ws.column_dimensions["B"].width = 30
+        ws.column_dimensions["C"].width = 100
+        ws.column_dimensions["D"].width = 60
 
-    print("✅ 导出完成！文件已保存到下载文件夹。")
+    print("✅ 解析完成！文件已保存到下载文件夹。")
 
 if __name__ == "__main__":
-    export_raw_enum_data()
+    export_parsed_data()
