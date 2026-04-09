@@ -1,49 +1,66 @@
 import sqlite3
 import pandas as pd
 import json
+import re
 from pathlib import Path
+from openpyxl.styles import Alignment
 
 # -------------------------- 配置区（按需修改） --------------------------
-# 数据库路径（和你截图一致，无需修改）
 DB_PATH = r"C:\Users\QXZ715A\Downloads\BN_EESystem25_Y25CW43.sqlite"
-# 导出的Excel路径
-OUTPUT_PATH = r"C:\Users\QXZ715A\Downloads\enum_data_type_line_break.xlsx"
-# 单个值-含义的连接符（默认"="，改成""就是你要的"0CAN"格式）
-JOIN_SEP = "="
+OUTPUT_PATH = r"C:\Users\QXZ715A\Downloads\enum_data_type_final_fixed.xlsx"
+JOIN_SEP = "="  # 单个值-含义的连接符，改成""就是"0CAN"格式
 # ----------------------------------------------------------------------
 
-def merge_enum_value_synonym(json_str):
+def fix_and_parse_json(raw_str):
     """
-    把枚举的value和synonym合并，用Excel换行符\n分隔，实现单元格内转行
+    深度修复你数据库中的非标准枚举格式，彻底解决解析报错
+    兼容：无外层数组、双引号嵌套、多余引号等所有异常情况
     """
+    if not raw_str or raw_str.strip() == "":
+        return []
+    
     try:
-        # 清洗JSON格式，兼容SQLite存储的特殊格式
-        json_str_clean = json_str.replace('""', '"').strip('"')
-        enum_data = json.loads(json_str_clean)
+        # 1. 处理SQLite存储的双引号嵌套问题
+        s = raw_str.replace('""', '"').strip('"')
         
-        if not isinstance(enum_data, list):
-            enum_data = [enum_data]
+        # 2. 核心修复：给非数组格式的枚举包裹外层[]
+        # 匹配以{"value"开头、以"}结尾的多个对象拼接的情况
+        if not s.startswith('['):
+            # 把多个对象之间的},{ 统一替换为 },{，再包裹数组
+            s = re.sub(r'}\s*{', '},{', s)
+            s = f"[{s}]"
         
-        # 合并每个枚举的value和synonym，用\n换行
-        merged_list = []
-        for item in enum_data:
-            val = str(item.get("value", ""))
-            syn = str(item.get("synonym", ""))
-            merged_list.append(f"{val}{JOIN_SEP}{syn}")
+        # 3. 二次清洗：处理多余的逗号、空格
+        s = re.sub(r',\s*]', ']', s)  # 移除数组末尾多余逗号
+        s = re.sub(r'\s+', ' ', s)    # 压缩多余空格
         
-        # 用Excel识别的换行符\n拼接
-        return "\n".join(merged_list)
+        # 4. 解析JSON
+        return json.loads(s)
     except Exception as e:
-        print(f"⚠️ 解析异常行: {json_str[:50]}... 错误: {str(e)}")
+        print(f"⚠️ 解析失败行（已跳过）: {raw_str[:150]}... 错误: {str(e)}")
+        return []
+
+def merge_enum_value_synonym(raw_str):
+    """合并枚举值，用换行符分隔，实现单元格内转行"""
+    enum_list = fix_and_parse_json(raw_str)
+    if not enum_list:
         return ""
+    
+    merged_items = []
+    for item in enum_list:
+        val = str(item.get("value", ""))
+        syn = str(item.get("synonym", ""))
+        merged_items.append(f"{val}{JOIN_SEP}{syn}")
+    
+    return "\n".join(merged_items)
 
 def main():
-    # 1. 检查数据库文件
+    # 1. 校验数据库文件
     if not Path(DB_PATH).exists():
         print(f"❌ 错误：数据库文件不存在，请检查路径：{DB_PATH}")
         return
 
-    # 2. 连接数据库，读取enum_data_type全表
+    # 2. 连接数据库，读取全表
     print("🔗 正在连接数据库...")
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query(
@@ -53,25 +70,31 @@ def main():
     conn.close()
     print(f"📥 成功读取 {len(df)} 行原始数据")
 
-    # 3. 合并枚举值和含义，用换行符分隔
-    print("⚙️ 正在合并值与含义（单元格内换行）...")
+    # 3. 批量处理枚举值
+    print("⚙️ 正在解析并合并枚举值（单元格内换行）...")
     df["enum_value_synonym"] = df["enumerations"].apply(merge_enum_value_synonym)
 
-    # 4. 清理冗余列，只保留需要的字段（如需保留原始JSON，可加回enumerations列）
+    # 4. 整理输出列（如需保留原始enumerations，可加回该列）
     df_final = df[["id", "description_id", "short_name", "enum_value_synonym"]]
 
-    # 5. 导出为Excel，并自动开启自动换行
+    # 5. 导出Excel，自动设置格式
     print(f"📤 正在导出Excel到：{OUTPUT_PATH}")
     with pd.ExcelWriter(OUTPUT_PATH, engine="openpyxl") as writer:
-        df_final.to_excel(writer, index=False, sheet_name="Sheet1")
-        # 获取工作表，自动设置列宽和自动换行
-        worksheet = writer.sheets["Sheet1"]
-        # 给enum_value_synonym列（D列）设置自动换行和合适列宽
+        df_final.to_excel(writer, index=False, sheet_name="枚举值对照表")
+        worksheet = writer.sheets["枚举值对照表"]
+        
+        # 给枚举列设置自动换行、顶部对齐
+        wrap_align = Alignment(wrap_text=True, vertical="top")
         for row in worksheet.iter_rows(min_row=2, min_col=4, max_col=4):
             for cell in row:
-                cell.alignment = cell.alignment.copy(wrap_text=True, vertical="top")
-        # 自适应列宽
-        worksheet.column_dimensions["D"].width = 50
+                cell.alignment = wrap_align
+        
+        # 自适应列宽，适配长文本
+        worksheet.column_dimensions["D"].width = 60
+        # 给其他列设置合适宽度
+        worksheet.column_dimensions["A"].width = 8
+        worksheet.column_dimensions["B"].width = 15
+        worksheet.column_dimensions["C"].width = 40
 
     print("✅ 导出完成！")
     print(f"📊 最终表格列：{list(df_final.columns)}")
