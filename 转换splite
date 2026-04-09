@@ -3,54 +3,80 @@ import pandas as pd
 import json
 from pathlib import Path
 
+# -------------------------- 配置区（按需修改） --------------------------
+# 数据库路径（和你截图一致，无需修改）
 DB_PATH = r"C:\Users\QXZ715A\Downloads\BN_EESystem25_Y25CW43.sqlite"
-OUTPUT_PATH = r"C:\Users\QXZ715A\Downloads\enum_data_type_export_row_split.xlsx"
+# 导出的Excel路径
+OUTPUT_PATH = r"C:\Users\QXZ715A\Downloads\enum_data_type_line_break.xlsx"
+# 单个值-含义的连接符（默认"="，改成""就是你要的"0CAN"格式）
+JOIN_SEP = "="
+# ----------------------------------------------------------------------
 
-def expand_enumerations(row):
-    """把多枚举值拆成多行，一行一个枚举"""
+def merge_enum_value_synonym(json_str):
+    """
+    把枚举的value和synonym合并，用Excel换行符\n分隔，实现单元格内转行
+    """
     try:
-        enum_data = json.loads(row["enumerations"])
+        # 清洗JSON格式，兼容SQLite存储的特殊格式
+        json_str_clean = json_str.replace('""', '"').strip('"')
+        enum_data = json.loads(json_str_clean)
+        
         if not isinstance(enum_data, list):
             enum_data = [enum_data]
-        # 为每个枚举值生成一行
-        return [
-            {
-                "id": row["id"],
-                "description_id": row["description_id"],
-                "short_name": row["short_name"],
-                "enum_value": item.get("value", ""),
-                "enum_synonym": item.get("synonym", "")
-            }
-            for item in enum_data
-        ]
-    except:
-        return [
-            {
-                "id": row["id"],
-                "description_id": row["description_id"],
-                "short_name": row["short_name"],
-                "enum_value": "",
-                "enum_synonym": ""
-            }
-        ]
+        
+        # 合并每个枚举的value和synonym，用\n换行
+        merged_list = []
+        for item in enum_data:
+            val = str(item.get("value", ""))
+            syn = str(item.get("synonym", ""))
+            merged_list.append(f"{val}{JOIN_SEP}{syn}")
+        
+        # 用Excel识别的换行符\n拼接
+        return "\n".join(merged_list)
+    except Exception as e:
+        print(f"⚠️ 解析异常行: {json_str[:50]}... 错误: {str(e)}")
+        return ""
 
 def main():
+    # 1. 检查数据库文件
     if not Path(DB_PATH).exists():
         print(f"❌ 错误：数据库文件不存在，请检查路径：{DB_PATH}")
         return
 
+    # 2. 连接数据库，读取enum_data_type全表
+    print("🔗 正在连接数据库...")
     conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query("SELECT * FROM enum_data_type", conn)
+    df = pd.read_sql_query(
+        "SELECT id, description_id, short_name, enumerations FROM enum_data_type", 
+        conn
+    )
     conn.close()
+    print(f"📥 成功读取 {len(df)} 行原始数据")
 
-    # 拆分成多行
-    expanded_rows = []
-    for _, row in df.iterrows():
-        expanded_rows.extend(expand_enumerations(row))
-    df_expanded = pd.DataFrame(expanded_rows)
+    # 3. 合并枚举值和含义，用换行符分隔
+    print("⚙️ 正在合并值与含义（单元格内换行）...")
+    df["enum_value_synonym"] = df["enumerations"].apply(merge_enum_value_synonym)
 
-    df_expanded.to_excel(OUTPUT_PATH, index=False, engine="openpyxl")
-    print(f"✅ 多行拆分版导出完成！共 {len(df_expanded)} 行")
+    # 4. 清理冗余列，只保留需要的字段（如需保留原始JSON，可加回enumerations列）
+    df_final = df[["id", "description_id", "short_name", "enum_value_synonym"]]
+
+    # 5. 导出为Excel，并自动开启自动换行
+    print(f"📤 正在导出Excel到：{OUTPUT_PATH}")
+    with pd.ExcelWriter(OUTPUT_PATH, engine="openpyxl") as writer:
+        df_final.to_excel(writer, index=False, sheet_name="Sheet1")
+        # 获取工作表，自动设置列宽和自动换行
+        worksheet = writer.sheets["Sheet1"]
+        # 给enum_value_synonym列（D列）设置自动换行和合适列宽
+        for row in worksheet.iter_rows(min_row=2, min_col=4, max_col=4):
+            for cell in row:
+                cell.alignment = cell.alignment.copy(wrap_text=True, vertical="top")
+        # 自适应列宽
+        worksheet.column_dimensions["D"].width = 50
+
+    print("✅ 导出完成！")
+    print(f"📊 最终表格列：{list(df_final.columns)}")
+    print(f"📊 共处理 {len(df_final)} 行数据")
+    print("💡 提示：Excel已自动开启D列自动换行，直接打开即可看到转行效果")
 
 if __name__ == "__main__":
     main()
