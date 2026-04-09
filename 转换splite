@@ -1,0 +1,56 @@
+import sqlite3
+import pandas as pd
+import json
+from pathlib import Path
+
+DB_PATH = r"C:\Users\QXZ715A\Downloads\BN_EESystem25_Y25CW43.sqlite"
+OUTPUT_PATH = r"C:\Users\QXZ715A\Downloads\enum_data_type_export_row_split.xlsx"
+
+def expand_enumerations(row):
+    """把多枚举值拆成多行，一行一个枚举"""
+    try:
+        enum_data = json.loads(row["enumerations"])
+        if not isinstance(enum_data, list):
+            enum_data = [enum_data]
+        # 为每个枚举值生成一行
+        return [
+            {
+                "id": row["id"],
+                "description_id": row["description_id"],
+                "short_name": row["short_name"],
+                "enum_value": item.get("value", ""),
+                "enum_synonym": item.get("synonym", "")
+            }
+            for item in enum_data
+        ]
+    except:
+        return [
+            {
+                "id": row["id"],
+                "description_id": row["description_id"],
+                "short_name": row["short_name"],
+                "enum_value": "",
+                "enum_synonym": ""
+            }
+        ]
+
+def main():
+    if not Path(DB_PATH).exists():
+        print(f"❌ 错误：数据库文件不存在，请检查路径：{DB_PATH}")
+        return
+
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("SELECT * FROM enum_data_type", conn)
+    conn.close()
+
+    # 拆分成多行
+    expanded_rows = []
+    for _, row in df.iterrows():
+        expanded_rows.extend(expand_enumerations(row))
+    df_expanded = pd.DataFrame(expanded_rows)
+
+    df_expanded.to_excel(OUTPUT_PATH, index=False, engine="openpyxl")
+    print(f"✅ 多行拆分版导出完成！共 {len(df_expanded)} 行")
+
+if __name__ == "__main__":
+    main()
