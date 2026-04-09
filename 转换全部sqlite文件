@@ -1,0 +1,25 @@
+import sqlite3
+import pandas as pd
+
+# ===================== 只需要改这里 =====================
+sqlite_file = "你的文件名.sqlite"   # 改成你的 .sqlite 文件
+excel_file = "导出结果.xlsx"         # 导出的 Excel 名字
+# ======================================================
+
+# 连接数据库
+conn = sqlite3.connect(sqlite_file)
+cursor = conn.cursor()
+
+# 获取数据库里所有表的名字
+cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+tables = [t[0] for t in cursor.fetchall()]
+
+# 把所有表导出到 Excel（每个表一个Sheet）
+with pd.ExcelWriter(excel_file, engine="openpyxl") as writer:
+    for table in tables:
+        print(f"正在导出：{table}")
+        df = pd.read_sql(f"SELECT * FROM [{table}]", conn)
+        df.to_excel(writer, sheet_name=table, index=False)
+
+conn.close()
+print(f"\n✅ 导出完成！文件：{excel_file}")
