@@ -2,27 +2,27 @@ let
     // 1. 连接Exchange邮箱
     Source = Exchange.Contents("Yuqian.Li@partner.bmw.com"),
     Mail = Source{[Name="Mail"]}[Data],
-    // 2. 筛选CodeBeamer报告邮件
-    FilterCB = Table.SelectRows(Mail, each Text.Contains([Subject], "CB Report Job Result")),
-    // 3. 展开Body，只取纯文本TextBody
-    ExpandBody = Table.ExpandRecordColumn(FilterCB, "Body", {"TextBody"}, {"Body.TextBody"}),
-    // 4. 筛选今日邮件
-    FilterToday = Table.SelectRows(ExpandBody, each Date.From([DateTimeReceived]) = Date.From(DateTime.LocalNow())),
-    // 5. 按换行拆分用例行（修正后正确公式）
-    SplitRows = Table.ExpandListColumn(Table.TransformColumns(FilterToday, {{"Body.TextBody", each Text.Split(_, "#(lf)")}}), "Body.TextBody"),
-    // 6. 删除空行和表头行
-    RemoveEmpty = Table.SelectRows(SplitRows, each [Body.TextBody] <> null and [Body.TextBody] <> "" and not Text.StartsWith([Body.TextBody], "Name") and not Text.StartsWith([Body.TextBody], "Status")),
-    // 7. 提取用例ID
-    AddID = Table.AddColumn(RemoveEmpty, "用例ID", each try Text.BeforeDelimiter(Text.AfterDelimiter([Body.TextBody], "["), "]") otherwise null),
+    // 2. 筛选你新建的Codebeamer_Job文件夹
+    #"Filtered Rows" = Table.SelectRows(Mail, each ([Folder Path] = "\Codebeamer_Job\")),
+    // 3. 展开Body，只提取纯文本TextBody（解决Body不显示问题）
+    #"Expanded Body" = Table.ExpandRecordColumn(#"Filtered Rows", "Body", {"TextBody"}, {"Body.TextBody"}),
+    // 4. 筛选今日的CodeBeamer报告邮件
+    #"Filtered Today" = Table.SelectRows(#"Expanded Body", each Date.From([DateTimeReceived]) = Date.From(DateTime.LocalNow()) and Text.Contains([Subject], "CB Report Job Result")),
+    // 5. 按换行拆分邮件正文，把每一行用例拆成单独行
+    #"Split Rows" = Table.ExpandListColumn(Table.TransformColumns(#"Filtered Today", {{"Body.TextBody", each Text.Split(_, "#(lf)")}}), "Body.TextBody"),
+    // 6. 删除空行、表头行，只保留有效用例行
+    #"Remove Empty Rows" = Table.SelectRows(#"Split Rows", each [Body.TextBody] <> null and [Body.TextBody] <> "" and not Text.StartsWith([Body.TextBody], "Name") and not Text.StartsWith([Body.TextBody], "Status")),
+    // 7. 提取用例ID（TDS-xxxxxxx）
+    #"Add TDS ID" = Table.AddColumn(#"Remove Empty Rows", "用例ID", each try Text.BeforeDelimiter(Text.AfterDelimiter([Body.TextBody], "["), "]") otherwise null),
     // 8. 提取用例名称
-    AddName = Table.AddColumn(AddID, "用例名称", each try Text.BeforeDelimiter(Text.AfterDelimiter([Body.TextBody], "]_"), " ") otherwise null),
-    // 9. 提取状态
-    AddStatus = Table.AddColumn(AddName, "状态", each try Text.Trim(Text.AfterDelimiter([Body.TextBody], "Status")) otherwise null),
-    // 10. 过滤无效行（用例ID为空的行）
-    FilterValid = Table.SelectRows(AddStatus, each [用例ID] <> null),
-    // 11. 只保留核心列
-    KeepColumns = Table.SelectColumns(FilterValid,{"用例ID", "用例名称", "状态", "DateTimeReceived"}),
-    // 12. 添加日期列
-    AddDate = Table.AddColumn(KeepColumns, "日期", each Date.From([DateTimeReceived]))
+    #"Add Test Case Name" = Table.AddColumn(#"Add TDS ID", "用例名称", each try Text.BeforeDelimiter(Text.AfterDelimiter([Body.TextBody], "]_"), " ") otherwise null),
+    // 9. 提取用例状态（FOR REVIEW/OPEN/ERROR等）
+    #"Add Status" = Table.AddColumn(#"Add Test Case Name", "状态", each try Text.Trim(Text.AfterDelimiter([Body.TextBody], "Status")) otherwise null),
+    // 10. 过滤无效行（用例ID为空的行自动删除）
+    #"Filter Valid Rows" = Table.SelectRows(#"Add Status", each [用例ID] <> null),
+    // 11. 只保留核心列，删除冗余数据
+    #"Keep Core Columns" = Table.SelectColumns(#"Filter Valid Rows",{"用例ID", "用例名称", "状态", "Subject", "DateTimeReceived"}),
+    // 12. 添加日期列，自动记录邮件日期
+    #"Add Date Column" = Table.AddColumn(#"Keep Core Columns", "日期", each Date.From([DateTimeReceived]))
 in
-    AddDate
+    #"Add Date Column"
