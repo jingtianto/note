@@ -37,33 +37,38 @@ let
     // 8. 给状态行索引-1，让它和对应用例行索引对齐
     #"Adjust Status Index" = Table.TransformColumns(#"Filter Status Rows", {{"索引", each _ - 1, Int64.Type}}),
     
-    // 9. 合并两个表，用索引配对用例和状态
+    // 9. 【修复】正确合并两个表，用索引配对用例和状态
     #"Merged Queries" = Table.NestedJoin(
         #"Filter TDS Rows", {"索引"}, 
         #"Adjust Status Index", {"索引"}, 
-        #"Adjust Status Index", 
+        "StatusTable", 
         JoinKind.Inner
     ),
-    #"Expanded Status" = Table.ExpandTableColumn(#"Merged Queries", #"Adjust Status Index", {"Body.TextBody"}, {"状态"}),
     
-    // 10. 提取用例ID（精准匹配[TDS-xxxxxxx]格式）
+    // 10. 展开状态列，提取状态值
+    #"Expanded Status" = Table.ExpandTableColumn(#"Merged Queries", "StatusTable", {"Body.TextBody"}, {"状态"}),
+    
+    // 11. 提取用例ID（精准匹配[TDS-xxxxxxx]格式）
     #"Add 用例ID" = Table.AddColumn(#"Expanded Status", "用例ID", each 
         Text.BeforeDelimiter(Text.AfterDelimiter([Body.TextBody], "["), "]")
     ),
     
-    // 11. 提取用例名称（匹配]_[名称] 格式，到Usecases_前结束）
+    // 12. 提取用例名称（匹配]_[名称] 格式，到Usecases_前结束）
     #"Add 用例名称" = Table.AddColumn(#"Add 用例ID", "用例名称", each 
         let 
             AfterBracket = Text.AfterDelimiter([Body.TextBody], "]_"),
-            BeforeUsecases = Text.BeforeDelimiter(AfterBracket, "Usecases_")
+            // 兼容部分用例无Usecases_的情况，用空格兜底
+            BeforeEnd = if Text.Contains(AfterBracket, "Usecases_") 
+                         then Text.BeforeDelimiter(AfterBracket, "Usecases_") 
+                         else Text.BeforeDelimiter(AfterBracket, " ")
         in 
-            BeforeUsecases
+            BeforeEnd
     ),
     
-    // 12. 清理冗余列，只保留核心字段
+    // 13. 清理冗余列，只保留核心字段
     #"Keep Core Columns" = Table.SelectColumns(#"Add 用例名称",{"用例ID", "用例名称", "状态", "Subject", "DateTimeReceived"}),
     
-    // 13. 添加日期列
+    // 14. 添加日期列
     #"Add 日期" = Table.AddColumn(#"Keep Core Columns", "日期", each Date.From([DateTimeReceived]))
 in
     #"Add 日期"
