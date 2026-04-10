@@ -19,17 +19,39 @@ let
         "Body.TextBody"
     ),
     
-    // 5. 【核心过滤】只保留以 [TDS- 开头的有效用例行，彻底过滤脏数据
-    #"Filter Valid TDS Rows" = Table.SelectRows(#"Split Rows", each 
-        Text.StartsWith([Body.TextBody], "[TDS-")
+    // 5. 【核心】只保留有效行：用例行(以[TDS-开头) + 状态行(以FOR/OPEN/ERROR开头)
+    #"Filter Valid Rows" = Table.SelectRows(#"Split Rows", each 
+        Text.StartsWith([Body.TextBody], "[TDS-") 
+        or Text.StartsWith([Body.TextBody], "FOR") 
+        or Text.StartsWith([Body.TextBody], "OPEN") 
+        or Text.StartsWith([Body.TextBody], "ERROR")
     ),
     
-    // 6. 提取用例ID（精准匹配[TDS-xxxxxxx]格式）
-    #"Add 用例ID" = Table.AddColumn(#"Filter Valid TDS Rows", "用例ID", each 
+    // 6. 【关键】给行加索引，用于配对用例和状态
+    #"Add Index" = Table.AddIndexColumn(#"Filter Valid Rows", "索引", 0, 1, Int64.Type),
+    
+    // 7. 拆分用例行和状态行两个表
+    #"Filter TDS Rows" = Table.SelectRows(#"Add Index", each Text.StartsWith([Body.TextBody], "[TDS-")),
+    #"Filter Status Rows" = Table.SelectRows(#"Add Index", each not Text.StartsWith([Body.TextBody], "[TDS-")),
+    
+    // 8. 给状态行索引-1，让它和对应用例行索引对齐
+    #"Adjust Status Index" = Table.TransformColumns(#"Filter Status Rows", {{"索引", each _ - 1, Int64.Type}}),
+    
+    // 9. 合并两个表，用索引配对用例和状态
+    #"Merged Queries" = Table.NestedJoin(
+        #"Filter TDS Rows", {"索引"}, 
+        #"Adjust Status Index", {"索引"}, 
+        #"Adjust Status Index", 
+        JoinKind.Inner
+    ),
+    #"Expanded Status" = Table.ExpandTableColumn(#"Merged Queries", #"Adjust Status Index", {"Body.TextBody"}, {"状态"}),
+    
+    // 10. 提取用例ID（精准匹配[TDS-xxxxxxx]格式）
+    #"Add 用例ID" = Table.AddColumn(#"Expanded Status", "用例ID", each 
         Text.BeforeDelimiter(Text.AfterDelimiter([Body.TextBody], "["), "]")
     ),
     
-    // 7. 提取用例名称（匹配]_[名称] 格式，到Usecases_前结束）
+    // 11. 提取用例名称（匹配]_[名称] 格式，到Usecases_前结束）
     #"Add 用例名称" = Table.AddColumn(#"Add 用例ID", "用例名称", each 
         let 
             AfterBracket = Text.AfterDelimiter([Body.TextBody], "]_"),
@@ -38,20 +60,10 @@ let
             BeforeUsecases
     ),
     
-    // 8. 提取用例状态（匹配行尾Status字段）
-    #"Add 状态" = Table.AddColumn(#"Add 用例名称", "状态", each 
-        let
-            // 提取行中最后一段，即状态
-            SplitBySpace = Text.Split([Body.TextBody], " "),
-            StatusPart = List.Last(SplitBySpace)
-        in
-            StatusPart
-    ),
+    // 12. 清理冗余列，只保留核心字段
+    #"Keep Core Columns" = Table.SelectColumns(#"Add 用例名称",{"用例ID", "用例名称", "状态", "Subject", "DateTimeReceived"}),
     
-    // 9. 只保留核心列，删除冗余
-    #"Keep Core Columns" = Table.SelectColumns(#"Add 状态",{"用例ID", "用例名称", "状态", "Subject", "DateTimeReceived"}),
-    
-    // 10. 添加日期列
+    // 13. 添加日期列
     #"Add 日期" = Table.AddColumn(#"Keep Core Columns", "日期", each Date.From([DateTimeReceived]))
 in
     #"Add 日期"
