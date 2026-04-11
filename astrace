@@ -1,44 +1,34 @@
-# trace.xplorer basic 版 多关键字搜索自动化脚本（100%生效）
-# 仅需修改关键字列表，自动匹配所有包含任意关键字的信号
-import tracetronic.traceapi as traceapi
+# -*- coding: utf-8 -*-
+# 零依赖版：用asammdf解析.astrace(MDF4)文件，按关键字筛选信号
+import asammdf
 import os
 
 # -------------------------- 配置区（按你的需求修改） --------------------------
-# 你需要的所有关键字（一次性匹配所有包含任意关键字的信号）
 KEYWORDS = ["none", "brake", "AccPedal", "Speed"]
-# 输入文件夹：存放新生成的.astrace文件
-INPUT_FOLDER = r"C:\Onboarding\linshi\Mastlitresult\test_traces"
-# 输出文件夹：存放筛选后的轻量化文件
-OUTPUT_FOLDER = r"C:\Onboarding\linshi\Mastlitresult\filtered_traces"
+INPUT_FOLDER = r"C:\Onboarding\linshi\result\T3\Traces"
+OUTPUT_FOLDER = r"C:\Onboarding\linshi\result\T3\Traces\after"
 # ---------------------------------------------------------------------------
 
-# 构造通配符表达式
-patterns = [f"*{kw}*" for kw in KEYWORDS]
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-# 遍历所有新文件
 for filename in os.listdir(INPUT_FOLDER):
     if filename.endswith(".astrace"):
         input_path = os.path.join(INPUT_FOLDER, filename)
         output_path = os.path.join(OUTPUT_FOLDER, f"filtered_{filename}")
 
         print(f"正在处理: {filename}")
-        with traceapi.open_trace(input_path) as trace:
-            # 1. 隐藏所有信号
-            trace.hide_all_signals()
+        try:
+            mdf = asammdf.MDF(input_path)
+            matched_channels = [ch for ch in mdf.channels_db if any(kw.lower() in ch.lower() for kw in KEYWORDS)]
             
-            # 2. 一次性匹配所有关键字对应的信号
-            matched_signals = set()
-            for pattern in patterns:
-                signals = trace.find_signals(pattern)
-                matched_signals.update(signals)
+            if not matched_channels:
+                print(f"⚠️ 未匹配到任何信号，跳过: {filename}\n")
+                continue
             
-            # 3. 批量显示所有匹配的信号
-            for sig in matched_signals:
-                trace.show_signal(sig)
-            
-            # 4. 保存为轻量化文件
-            trace.save_as(output_path, only_visible=True)
-            print(f"✅ 已生成: {output_path}，共匹配 {len(matched_signals)} 个信号\n")
+            mdf_filtered = mdf.filter(matched_channels)
+            mdf_filtered.save(output_path, overwrite=True)
+            print(f"✅ 已生成: {output_path}，共匹配 {len(matched_channels)} 个信号\n")
+        except Exception as e:
+            print(f"❌ 处理失败 {filename}: {e}\n")
 
-print("所有文件处理完成！")
+print("所有文件处理完成!")
