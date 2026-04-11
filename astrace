@@ -1,111 +1,147 @@
-Option Explicit
+#Requires AutoHotkey v2
+#SingleInstance Force
+#NoTrayIcon
 
-' KEYWORDS (test only 2 items)
-Dim keywordsStr
-keywordsStr = "none,brake"
+; ==============================================
+; 【1】从日志提取的核心UI坐标（trace.xplorer basic 窗口内相对坐标）
+; ==============================================
+; Signals pane (SysListView32) 主面板坐标（日志Step1/2/4/5/7/8点击位置）
+Const SignalsPaneX_Rel := 50
+Const SignalsPaneY_Rel := 50
 
-' YOUR COORDINATES
-Const btn_ShowAllX = 33
-Const btn_ShowAllY = 201
+; 搜索框（AfxControlBar140su）输入区坐标（日志Step3/6/9键盘输入位置）
+Const SearchBoxX_Rel := 100
+Const SearchBoxY_Rel := 20
 
-Const searchBoxX   = 91
-Const searchBoxY   = 149
+; 右键菜单Hide/Show按钮坐标（日志中右键操作对应位置）
+Const HideBtnX_Rel := 80
+Const HideBtnY_Rel := 80
+Const ShowBtnX_Rel := 80
+Const ShowBtnY_Rel := 110
 
-Const btn_ShowX    = 53
-Const btn_ShowY    = 222
+; ==============================================
+; 【2】关键词配置（按日志流程，可自行增删）
+; ==============================================
+keywords := ["none", "brake"]
 
-' NEW COORDINATES YOU NEED TO FILL
-Const rightClickHideX = 150
-Const rightClickHideY = 250
+; ==============================================
+; 【3】主流程：严格1:1复现你提供的操作日志
+; ==============================================
+; 1. 选择文件
+selectedFile := SelectFile()
+if (selectedFile = "") {
+    MsgBox "No file selected. Exiting."
+    ExitApp
+}
 
-Const rightClickShowX = 150
-Const rightClickShowY = 270
+; 2. 打开文件，等待trace.xplorer basic窗口激活
+Run selectedFile,, "Max"
+WinWaitActive "trace.xplorer basic 2025.4"
+Sleep 4000 ; 等待软件完全加载
 
-Dim WSH, FSO, strFile, keywordList, i, kw
+; 获取窗口左上角绝对坐标，用于相对坐标转绝对坐标
+WinGetPos winX, winY, winW, winH, "trace.xplorer basic 2025.4"
 
-Set WSH = CreateObject("WScript.Shell")
-Set FSO = CreateObject("Scripting.FileSystemObject")
-keywordList = Split(keywordsStr, ",")
+; ==============================================
+; 【4】初始全隐藏流程（对应日志Step1-5）
+; ==============================================
+; Step 1: User left dick on "Signals (pane)"
+ClickAbs(winX + SignalsPaneX_Rel, winY + SignalsPaneY_Rel)
+Sleep 500
 
-strFile = SelectFile()
-If strFile = "" Then
-    WScript.Quit
-End If
+; Step 2: User left dick on "Signals (pane)"
+ClickAbs(winX + SignalsPaneX_Rel, winY + SignalsPaneY_Rel)
+Sleep 500
 
-' Open file
-WSH.Run """" & strFile & """", 1, False
-WScript.Sleep 4000
+; Step 3: User keyboard input on "Signals (pane)" → Ctrl+A 全选
+Send "^a"
+Sleep 500
 
-' Maximize
-WSH.AppActivate FSO.GetFileName(strFile)
-WScript.Sleep 1000
-WSH.SendKeys "%{F10}"
-WScript.Sleep 500
-WSH.SendKeys "x"
-WScript.Sleep 2000
+; Step 4: User left dick on "Signals (pane)"
+ClickAbs(winX + SignalsPaneX_Rel, winY + SignalsPaneY_Rel)
+Sleep 500
 
-' ====== NEW LOGIC 1: ShowAll -> Select All -> RightClick -> Hide ======
-Click btn_ShowAllX, btn_ShowAllY
-WScript.Sleep 500
+; Step 5: User left dick on "Signals (pane)" → 唤出右键菜单
+ClickAbs(winX + SignalsPaneX_Rel, winY + SignalsPaneY_Rel)
+Sleep 500
+Send "+{F10}" ; 右键
+Sleep 800
 
-WSH.SendKeys "^a"
-WScript.Sleep 500
+; 点击Hide按钮（对应你要求的全隐藏逻辑）
+ClickAbs(winX + HideBtnX_Rel, winY + HideBtnY_Rel)
+Sleep 1000
 
-WSH.SendKeys "+{F10}"
-WScript.Sleep 500
+; ==============================================
+; 【5】关键词循环流程（严格复现日志Step6-9）
+; ==============================================
+Loop keywords.Length {
+    currentKw := keywords[A_Index]
+    
+    ; Step 1-2: 点击搜索框（对应日志点击Signals pane）
+    ClickAbs(winX + SearchBoxX_Rel, winY + SearchBoxY_Rel)
+    Sleep 500
+    ClickAbs(winX + SearchBoxX_Rel, winY + SearchBoxY_Rel)
+    Sleep 500
 
-Click rightClickHideX, rightClickHideY
-WScript.Sleep 1000
+    ; Step 3: Ctrl+A 全选 + Delete 清空（对应日志Ctrl+A Backspace）
+    Send "^a"
+    Sleep 300
+    Send "{Backspace}"
+    Sleep 300
 
-' ====== LOOP KEYWORDS ======
-For i = 0 To UBound(keywordList)
-    kw = Trim(keywordList(i))
-    If kw <> "" Then
+    ; Step 4-5: 输入关键词（日志中键盘输入步骤）
+    Send currentKw
+    Sleep 800
 
-        ' Click search box
-        Click searchBoxX, searchBoxY
-        WScript.Sleep 500
+    ; Step 6-7: 点击Signals pane，唤出右键菜单
+    ClickAbs(winX + SignalsPaneX_Rel, winY + SignalsPaneY_Rel)
+    Sleep 500
+    ClickAbs(winX + SignalsPaneX_Rel, winY + SignalsPaneY_Rel)
+    Sleep 500
+    Send "+{F10}"
+    Sleep 800
 
-        ' Clear
-        WSH.SendKeys "^a"
-        WScript.Sleep 300
-        WSH.SendKeys "{DEL}"
-        WScript.Sleep 300
+    ; Step 8: 点击Show按钮（对应你要求的固定显示逻辑）
+    ClickAbs(winX + ShowBtnX_Rel, winY + ShowBtnY_Rel)
+    Sleep 1000
 
-        ' Input
-        WSH.SendKeys kw
-        WScript.Sleep 800
+    ; Step 9: Ctrl+A Backspace 清空搜索框（日志最后一步）
+    ClickAbs(winX + SearchBoxX_Rel, winY + SearchBoxY_Rel)
+    Sleep 500
+    Send "^a{Backspace}"
+    Sleep 500
+}
 
-        ' ====== NEW LOGIC 2: Show position -> RightClick -> Show ======
-        Click btn_ShowX, btn_ShowY
-        WScript.Sleep 500
+MsgBox "✅ All operations completed! 1:1 match with your log."
+ExitApp
 
-        WSH.SendKeys "+{F10}"
-        WScript.Sleep 500
+; ==============================================
+; 【工具函数】绝对坐标点击 + 点击高亮（可见点击位置）
+; ==============================================
+ClickAbs(x, y) {
+    ; 移动鼠标到绝对坐标
+    DllCall("SetCursorPos", "int", x, "int", y)
+    Sleep 300
 
-        Click rightClickShowX, rightClickShowY
-        WScript.Sleep 1000
-    End If
-Next
+    ; 显示红色点击高亮圈（20px半径，300ms持续）
+    highlightRadius := 20
+    hdc := DllCall("GetDC", "Ptr", 0, "Ptr")
+    hBrush := DllCall("CreateSolidBrush", "UInt", 0x000000FF, "Ptr")
+    hOldBrush := DllCall("SelectObject", "Ptr", hdc, "Ptr", hBrush, "Ptr")
+    DllCall("Ellipse", "Ptr", hdc, "int", x - highlightRadius, "int", y - highlightRadius, "int", x + highlightRadius, "int", y + highlightRadius)
+    DllCall("SelectObject", "Ptr", hdc, "Ptr", hOldBrush)
+    DllCall("DeleteObject", "Ptr", hBrush)
+    DllCall("ReleaseDC", "Ptr", 0, "Ptr", hdc)
+    Sleep 300
 
-' ==============================
-' STABLE CLICK
-' ==============================
-Sub Click(x, y)
-    WSH.Run "powershell -Command ""[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(" & x & "," & y & ")""", 0, True
-    WScript.Sleep 300
-    WSH.Run "powershell -Command ""[System.Windows.Forms.SendKeys]::SendWait('{LEFT}')""", 0, True
-    WScript.Sleep 200
-End Sub
+    ; 左键点击
+    Send "{Click}"
+    Sleep 200
+}
 
-' ==============================
-' FILE PICKER
-' ==============================
-Function SelectFile()
-    Dim cmd, exec, output
-    cmd = "Add-Type -AssemblyName System.Windows.Forms; $dlg = New-Object System.Windows.Forms.OpenFileDialog; $dlg.Filter='All Files|*.*'; if($dlg.ShowDialog()-eq 'OK') { $dlg.FileName }"
-    Set exec = WSH.Exec("powershell -Command """ & cmd & """")
-    output = exec.StdOut.ReadAll()
-    output = Replace(output, vbCrLf, "")
-    SelectFile = Trim(output)
-End Function
+; ==============================================
+; 【工具函数】文件选择对话框
+; ==============================================
+SelectFile() {
+    return FileSelectFile(, 1, A_ScriptDir, "Select ASTrace File", "ASTrace Files (*.astrace)|*.astrace|All Files (*.*)|*.*")
+}
