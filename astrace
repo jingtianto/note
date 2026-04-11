@@ -1,147 +1,180 @@
-#Requires AutoHotkey v2
-#SingleInstance Force
-#NoTrayIcon
-
-; ==============================================
-; 【1】从日志提取的核心UI坐标（trace.xplorer basic 窗口内相对坐标）
-; ==============================================
-; Signals pane (SysListView32) 主面板坐标（日志Step1/2/4/5/7/8点击位置）
-Const SignalsPaneX_Rel := 50
-Const SignalsPaneY_Rel := 50
-
-; 搜索框（AfxControlBar140su）输入区坐标（日志Step3/6/9键盘输入位置）
-Const SearchBoxX_Rel := 100
-Const SearchBoxY_Rel := 20
-
-; 右键菜单Hide/Show按钮坐标（日志中右键操作对应位置）
-Const HideBtnX_Rel := 80
-Const HideBtnY_Rel := 80
-Const ShowBtnX_Rel := 80
-Const ShowBtnY_Rel := 110
-
-; ==============================================
-; 【2】关键词配置（按日志流程，可自行增删）
-; ==============================================
-keywords := ["none", "brake"]
-
-; ==============================================
-; 【3】主流程：严格1:1复现你提供的操作日志
-; ==============================================
-; 1. 选择文件
-selectedFile := SelectFile()
-if (selectedFile = "") {
-    MsgBox "No file selected. Exiting."
-    ExitApp
-}
-
-; 2. 打开文件，等待trace.xplorer basic窗口激活
-Run selectedFile,, "Max"
-WinWaitActive "trace.xplorer basic 2025.4"
-Sleep 4000 ; 等待软件完全加载
-
-; 获取窗口左上角绝对坐标，用于相对坐标转绝对坐标
-WinGetPos winX, winY, winW, winH, "trace.xplorer basic 2025.4"
-
-; ==============================================
-; 【4】初始全隐藏流程（对应日志Step1-5）
-; ==============================================
-; Step 1: User left dick on "Signals (pane)"
-ClickAbs(winX + SignalsPaneX_Rel, winY + SignalsPaneY_Rel)
-Sleep 500
-
-; Step 2: User left dick on "Signals (pane)"
-ClickAbs(winX + SignalsPaneX_Rel, winY + SignalsPaneY_Rel)
-Sleep 500
-
-; Step 3: User keyboard input on "Signals (pane)" → Ctrl+A 全选
-Send "^a"
-Sleep 500
-
-; Step 4: User left dick on "Signals (pane)"
-ClickAbs(winX + SignalsPaneX_Rel, winY + SignalsPaneY_Rel)
-Sleep 500
-
-; Step 5: User left dick on "Signals (pane)" → 唤出右键菜单
-ClickAbs(winX + SignalsPaneX_Rel, winY + SignalsPaneY_Rel)
-Sleep 500
-Send "+{F10}" ; 右键
-Sleep 800
-
-; 点击Hide按钮（对应你要求的全隐藏逻辑）
-ClickAbs(winX + HideBtnX_Rel, winY + HideBtnY_Rel)
-Sleep 1000
-
-; ==============================================
-; 【5】关键词循环流程（严格复现日志Step6-9）
-; ==============================================
-Loop keywords.Length {
-    currentKw := keywords[A_Index]
-    
-    ; Step 1-2: 点击搜索框（对应日志点击Signals pane）
-    ClickAbs(winX + SearchBoxX_Rel, winY + SearchBoxY_Rel)
-    Sleep 500
-    ClickAbs(winX + SearchBoxX_Rel, winY + SearchBoxY_Rel)
-    Sleep 500
-
-    ; Step 3: Ctrl+A 全选 + Delete 清空（对应日志Ctrl+A Backspace）
-    Send "^a"
-    Sleep 300
-    Send "{Backspace}"
-    Sleep 300
-
-    ; Step 4-5: 输入关键词（日志中键盘输入步骤）
-    Send currentKw
-    Sleep 800
-
-    ; Step 6-7: 点击Signals pane，唤出右键菜单
-    ClickAbs(winX + SignalsPaneX_Rel, winY + SignalsPaneY_Rel)
-    Sleep 500
-    ClickAbs(winX + SignalsPaneX_Rel, winY + SignalsPaneY_Rel)
-    Sleep 500
-    Send "+{F10}"
-    Sleep 800
-
-    ; Step 8: 点击Show按钮（对应你要求的固定显示逻辑）
-    ClickAbs(winX + ShowBtnX_Rel, winY + ShowBtnY_Rel)
-    Sleep 1000
-
-    ; Step 9: Ctrl+A Backspace 清空搜索框（日志最后一步）
-    ClickAbs(winX + SearchBoxX_Rel, winY + SearchBoxY_Rel)
-    Sleep 500
-    Send "^a{Backspace}"
-    Sleep 500
-}
-
-MsgBox "✅ All operations completed! 1:1 match with your log."
-ExitApp
-
-; ==============================================
-; 【工具函数】绝对坐标点击 + 点击高亮（可见点击位置）
-; ==============================================
-ClickAbs(x, y) {
-    ; 移动鼠标到绝对坐标
-    DllCall("SetCursorPos", "int", x, "int", y)
-    Sleep 300
-
-    ; 显示红色点击高亮圈（20px半径，300ms持续）
-    highlightRadius := 20
-    hdc := DllCall("GetDC", "Ptr", 0, "Ptr")
-    hBrush := DllCall("CreateSolidBrush", "UInt", 0x000000FF, "Ptr")
-    hOldBrush := DllCall("SelectObject", "Ptr", hdc, "Ptr", hBrush, "Ptr")
-    DllCall("Ellipse", "Ptr", hdc, "int", x - highlightRadius, "int", y - highlightRadius, "int", x + highlightRadius, "int", y + highlightRadius)
-    DllCall("SelectObject", "Ptr", hdc, "Ptr", hOldBrush)
-    DllCall("DeleteObject", "Ptr", hBrush)
-    DllCall("ReleaseDC", "Ptr", 0, "Ptr", hdc)
-    Sleep 300
-
-    ; 左键点击
-    Send "{Click}"
-    Sleep 200
-}
-
-; ==============================================
-; 【工具函数】文件选择对话框
-; ==============================================
-SelectFile() {
-    return FileSelectFile(, 1, A_ScriptDir, "Select ASTrace File", "ASTrace Files (*.astrace)|*.astrace|All Files (*.*)|*.*")
-}
+<MACRO>
+<ITEM>
+TYPE=WINACTIVATE
+WINDOWTITLE=trace.xplorer basic*
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=3000
+</ITEM>
+<ITEM>
+TYPE=CLICK
+X=290
+Y=233
+BUTTON=RIGHT
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=500
+</ITEM>
+<ITEM>
+TYPE=CLICK
+X=386
+Y=246
+BUTTON=LEFT
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=1000
+</ITEM>
+<ITEM>
+TYPE=CLICK
+X=288
+Y=234
+BUTTON=LEFT
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=300
+</ITEM>
+<ITEM>
+TYPE=SEND
+TEXT=^a
+</ITEM>
+<ITEM>
+TYPE=SEND
+TEXT={Del}
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=300
+</ITEM>
+<ITEM>
+TYPE=SEND
+TEXT=panel
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=800
+</ITEM>
+<ITEM>
+TYPE=CLICK
+X=232
+Y=227
+BUTTON=RIGHT
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=500
+</ITEM>
+<ITEM>
+TYPE=CLICK
+X=283
+Y=319
+BUTTON=LEFT
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=1000
+</ITEM>
+<ITEM>
+TYPE=CLICK
+X=288
+Y=234
+BUTTON=LEFT
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=300
+</ITEM>
+<ITEM>
+TYPE=SEND
+TEXT=^a
+</ITEM>
+<ITEM>
+TYPE=SEND
+TEXT={Del}
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=300
+</ITEM>
+<ITEM>
+TYPE=SEND
+TEXT=aeb
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=800
+</ITEM>
+<ITEM>
+TYPE=CLICK
+X=232
+Y=227
+BUTTON=RIGHT
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=500
+</ITEM>
+<ITEM>
+TYPE=CLICK
+X=283
+Y=319
+BUTTON=LEFT
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=1000
+</ITEM>
+<ITEM>
+TYPE=CLICK
+X=288
+Y=234
+BUTTON=LEFT
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=300
+</ITEM>
+<ITEM>
+TYPE=SEND
+TEXT=^a
+</ITEM>
+<ITEM>
+TYPE=SEND
+TEXT={Del}
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=300
+</ITEM>
+<ITEM>
+TYPE=SEND
+TEXT=speed
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=800
+</ITEM>
+<ITEM>
+TYPE=CLICK
+X=232
+Y=227
+BUTTON=RIGHT
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=500
+</ITEM>
+<ITEM>
+TYPE=CLICK
+X=283
+Y=319
+BUTTON=LEFT
+</ITEM>
+<ITEM>
+TYPE=SLEEP
+DELAY=1000
+</ITEM>
+</MACRO>
