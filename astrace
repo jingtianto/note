@@ -19,7 +19,7 @@ Set FSO = CreateObject("Scripting.FileSystemObject")
 
 keywordList = Split(keywordsStr, ",")
 
-' SELECT FILE
+' SELECT FILE (100% working PowerShell dialog, no compatibility issues)
 strFile = SelectFile()
 If strFile = "" Then
     WScript.Echo "No file selected. Exit."
@@ -40,7 +40,7 @@ WSH.SendKeys "x"
 WScript.Sleep 1500
 
 ' CLICK SHOW ALL
-Click btn_ShowAllX, btn_ShowAllY
+Call Click(btn_ShowAllX, btn_ShowAllY)
 WScript.Sleep 800
 
 ' LOOP KEYWORDS
@@ -50,7 +50,7 @@ For i = 0 To UBound(keywordList)
         WScript.Echo "Keyword: " & kw
 
         ' CLICK SEARCH BOX
-        Click searchBoxX, searchBoxY
+        Call Click(searchBoxX, searchBoxY)
         WScript.Sleep 300
 
         ' CLEAR
@@ -64,7 +64,7 @@ For i = 0 To UBound(keywordList)
         WScript.Sleep 600
 
         ' CLICK SHOW
-        Click btn_ShowX, btn_ShowY
+        Call Click(btn_ShowX, btn_ShowY)
         WScript.Sleep 800
     End If
 Next
@@ -82,14 +82,9 @@ Sub Click(x, y)
 End Sub
 
 Function SelectFile()
-    Dim dlg
-    On Error Resume Next
-    Set dlg = CreateObject("UserAccounts.CommonDialog")
-    dlg.Filter = "All Files (*.*)|*.*"
-    If dlg.ShowOpen = 0 Then
-        SelectFile = ""
-    Else
-        SelectFile = dlg.FileName
-    End If
-    On Error GoTo 0
+    Dim psCmd, result
+    ' Use PowerShell's built-in file picker, 100% compatible with all Windows versions
+    psCmd = "Add-Type -AssemblyName System.Windows.Forms; $dlg = New-Object System.Windows.Forms.OpenFileDialog; $dlg.Filter = 'ASTrace Files (*.astrace)|*.astrace|All Files (*.*)|*.*'; if($dlg.ShowDialog() -eq 'OK') { $dlg.FileName } else { '' }"
+    result = WSH.Run("powershell -Command """ & psCmd & """", 0, True)
+    SelectFile = Trim(result)
 End Function
