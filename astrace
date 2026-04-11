@@ -12,6 +12,11 @@ Const searchBoxY   = 149
 Const btn_ShowX    = 53
 Const btn_ShowY    = 222
 
+' HIGHLIGHT SETTINGS (adjust size/color if needed)
+Const highlightSize = 20    ' Radius of highlight circle (pixels)
+Const highlightColor = "Red" ' Highlight color (Red/Yellow/Green/Blue etc.)
+Const highlightDuration = 300 ' How long highlight stays (milliseconds)
+
 Dim WSH, FSO, strFile, keywordList, i, kw, psCmd, psOutput
 
 Set WSH = CreateObject("WScript.Shell")
@@ -40,7 +45,7 @@ WSH.SendKeys "x"
 WScript.Sleep 1500
 
 ' CLICK SHOW ALL
-Call Click(btn_ShowAllX, btn_ShowAllY)
+Call ClickWithHighlight(btn_ShowAllX, btn_ShowAllY)
 WScript.Sleep 800
 
 ' LOOP KEYWORDS
@@ -49,8 +54,8 @@ For i = 0 To UBound(keywordList)
     If kw <> "" Then
         WScript.Echo "Processing keyword: " & kw
 
-        ' CLICK SEARCH BOX
-        Call Click(searchBoxX, searchBoxY)
+        ' CLICK SEARCH BOX WITH HIGHLIGHT
+        Call ClickWithHighlight(searchBoxX, searchBoxY)
         WScript.Sleep 300
 
         ' CLEAR
@@ -63,8 +68,8 @@ For i = 0 To UBound(keywordList)
         WSH.SendKeys kw
         WScript.Sleep 600
 
-        ' CLICK SHOW
-        Call Click(btn_ShowX, btn_ShowY)
+        ' CLICK SHOW WITH HIGHLIGHT
+        Call ClickWithHighlight(btn_ShowX, btn_ShowY)
         WScript.Sleep 800
     End If
 Next
@@ -72,21 +77,33 @@ Next
 WScript.Echo "Done! All keywords processed successfully."
 
 '========================================================
-' FUNCTIONS
+' FUNCTION: Click with mouse highlight (visible click position)
 '========================================================
-Sub Click(x, y)
+Sub ClickWithHighlight(x, y)
     Dim psCmd
-    psCmd = "[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(" & x & "," & y & "); [System.Windows.Forms.SendKeys]::SendWait('{LEFT}')"
+    ' Move mouse to position
+    psCmd = "[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing = New-Object System.Drawing.Point(" & x & "," & y & ")"
+    WSH.Run "powershell -Command """ & psCmd & """", 0, True
+    WScript.Sleep 100
+    
+    ' Show highlight circle
+    psCmd = "$sig = '[DllImport(\""user32.dll\"")] public static extern IntPtr GetDC(IntPtr hWnd); [DllImport(\""user32.dll\"")] public static extern IntPtr ReleaseDC(IntPtr hWnd, IntPtr hDC); [DllImport(\""gdi32.dll\"")] public static extern IntPtr CreateSolidBrush(uint color); [DllImport(\""gdi32.dll\"")] public static extern IntPtr SelectObject(IntPtr hDC, IntPtr hObject); [DllImport(\""gdi32.dll\"")] public static extern bool Ellipse(IntPtr hDC, int nLeftRect, int nTopRect, int nRightRect, int nBottomRect); [DllImport(\""gdi32.dll\"")] public static extern bool DeleteObject(IntPtr hObject);'; Add-Type -MemberDefinition $sig -Name NativeWin -Namespace WinAPI; $dc = [WinAPI.NativeWin]::GetDC([IntPtr]::Zero); $brush = [WinAPI.NativeWin]::CreateSolidBrush(0x000000FF); $old = [WinAPI.NativeWin]::SelectObject($dc, $brush); [WinAPI.NativeWin]::Ellipse($dc, " & (x-highlightSize) & ", " & (y-highlightSize) & ", " & (x+highlightSize) & ", " & (y+highlightSize) & "); [WinAPI.NativeWin]::SelectObject($dc, $old); [WinAPI.NativeWin]::DeleteObject($brush); [WinAPI.NativeWin]::ReleaseDC([IntPtr]::Zero, $dc);"
+    WSH.Run "powershell -Command """ & psCmd & """", 0, True
+    WScript.Sleep highlightDuration
+    
+    ' Perform left click
+    psCmd = "[System.Windows.Forms.SendKeys]::SendWait('{LEFT}')"
     WSH.Run "powershell -Command """ & psCmd & """", 0, True
     WScript.Sleep 200
 End Sub
 
+'========================================================
+' FUNCTION: File picker (fixed output capture)
+'========================================================
 Function SelectFile()
-    Dim psCmd, psExec, psOutput
-    ' Use PowerShell file picker with correct output capture
+    Dim psExec, psOutput
     psCmd = "Add-Type -AssemblyName System.Windows.Forms; $dlg = New-Object System.Windows.Forms.OpenFileDialog; $dlg.Filter = 'ASTrace Files (*.astrace)|*.astrace|All Files (*.*)|*.*'; if($dlg.ShowDialog() -eq 'OK') { Write-Output $dlg.FileName } else { Write-Output '' }"
     
-    ' Correct way to capture PowerShell output in VBS
     Set psExec = WSH.Exec("powershell -Command """ & psCmd & """")
     psOutput = psExec.StdOut.ReadAll()
     psOutput = Replace(psOutput, vbCrLf, "")
