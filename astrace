@@ -1,16 +1,25 @@
 Option Explicit
 
-' KEYWORDS
+' KEYWORDS (test only 2 items)
 Dim keywordsStr
-keywordsStr = "none,brake,AccPedal,Speed,Trigger,Acceleration,externalTrigger,limitAcceleration,Pos_BrakePedal"
+keywordsStr = "none,brake"
 
-' COORDINATES (your fixed positions)
+' YOUR COORDINATES
 Const btn_ShowAllX = 33
 Const btn_ShowAllY = 201
+
 Const searchBoxX   = 91
 Const searchBoxY   = 149
+
 Const btn_ShowX    = 53
 Const btn_ShowY    = 222
+
+' NEW COORDINATES YOU NEED TO FILL
+Const rightClickHideX = 150
+Const rightClickHideY = 250
+
+Const rightClickShowX = 150
+Const rightClickShowY = 270
 
 Dim WSH, FSO, strFile, keywordList, i, kw
 
@@ -18,25 +27,16 @@ Set WSH = CreateObject("WScript.Shell")
 Set FSO = CreateObject("Scripting.FileSystemObject")
 keywordList = Split(keywordsStr, ",")
 
-' ==============================
-' SELECT FILE
-' ==============================
 strFile = SelectFile()
 If strFile = "" Then
-    WScript.Echo "No file selected. Exit."
     WScript.Quit
 End If
 
-' ==============================
-' OPEN FILE
-' ==============================
-WScript.Echo "Processing: " & FSO.GetFileName(strFile)
+' Open file
 WSH.Run """" & strFile & """", 1, False
 WScript.Sleep 4000
 
-' ==============================
-' MAXIMIZE WINDOW
-' ==============================
+' Maximize
 WSH.AppActivate FSO.GetFileName(strFile)
 WScript.Sleep 1000
 WSH.SendKeys "%{F10}"
@@ -44,55 +44,58 @@ WScript.Sleep 500
 WSH.SendKeys "x"
 WScript.Sleep 2000
 
-' ==============================
-' CLICK SHOW ALL
-' ==============================
+' ====== NEW LOGIC 1: ShowAll -> Select All -> RightClick -> Hide ======
 Click btn_ShowAllX, btn_ShowAllY
+WScript.Sleep 500
+
+WSH.SendKeys "^a"
+WScript.Sleep 500
+
+WSH.SendKeys "+{F10}"
+WScript.Sleep 500
+
+Click rightClickHideX, rightClickHideY
 WScript.Sleep 1000
 
-' ==============================
-' LOOP KEYWORDS
-' ==============================
+' ====== LOOP KEYWORDS ======
 For i = 0 To UBound(keywordList)
     kw = Trim(keywordList(i))
     If kw <> "" Then
-        WScript.Echo "Keyword: " & kw
 
-        ' CLICK SEARCH BOX
+        ' Click search box
         Click searchBoxX, searchBoxY
         WScript.Sleep 500
 
-        ' CLEAR
+        ' Clear
         WSH.SendKeys "^a"
         WScript.Sleep 300
         WSH.SendKeys "{DEL}"
         WScript.Sleep 300
 
-        ' INPUT
+        ' Input
         WSH.SendKeys kw
         WScript.Sleep 800
 
-        ' CLICK SHOW BUTTON
+        ' ====== NEW LOGIC 2: Show position -> RightClick -> Show ======
         Click btn_ShowX, btn_ShowY
+        WScript.Sleep 500
+
+        WSH.SendKeys "+{F10}"
+        WScript.Sleep 500
+
+        Click rightClickShowX, rightClickShowY
         WScript.Sleep 1000
     End If
 Next
 
-WScript.Echo "DONE! All keywords finished."
-
 ' ==============================
-' SUPER STABLE CLICK FUNCTION
+' STABLE CLICK
 ' ==============================
 Sub Click(x, y)
-    ' MOVE
     WSH.Run "powershell -Command ""[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(" & x & "," & y & ")""", 0, True
     WScript.Sleep 300
-
-    ' CLICK TWICE LIKE HUMAN
     WSH.Run "powershell -Command ""[System.Windows.Forms.SendKeys]::SendWait('{LEFT}')""", 0, True
     WScript.Sleep 200
-    WSH.Run "powershell -Command ""[System.Windows.Forms.SendKeys]::SendWait('{LEFT}')""", 0, True
-    WScript.Sleep 300
 End Sub
 
 ' ==============================
