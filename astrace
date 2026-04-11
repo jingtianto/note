@@ -1,10 +1,10 @@
 Option Explicit
 
-' KEYWORDS (edit here, separated by comma)
+' KEYWORDS
 Dim keywordsStr
 keywordsStr = "none,brake,AccPedal,Speed,Trigger,Acceleration,externalTrigger,limitAcceleration,Pos_BrakePedal"
 
-' COORDINATES (your values)
+' COORDINATES (your fixed positions)
 Const btn_ShowAllX = 33
 Const btn_ShowAllY = 201
 Const searchBoxX   = 91
@@ -12,102 +12,97 @@ Const searchBoxY   = 149
 Const btn_ShowX    = 53
 Const btn_ShowY    = 222
 
-' HIGHLIGHT SETTINGS (adjust size/color if needed)
-Const highlightSize = 20    ' Radius of highlight circle (pixels)
-Const highlightColor = "Red" ' Highlight color (Red/Yellow/Green/Blue etc.)
-Const highlightDuration = 300 ' How long highlight stays (milliseconds)
-
-Dim WSH, FSO, strFile, keywordList, i, kw, psCmd, psOutput
+Dim WSH, FSO, strFile, keywordList, i, kw
 
 Set WSH = CreateObject("WScript.Shell")
 Set FSO = CreateObject("Scripting.FileSystemObject")
-
 keywordList = Split(keywordsStr, ",")
 
-' SELECT FILE (100% working PowerShell dialog, fixed return value)
+' ==============================
+' SELECT FILE
+' ==============================
 strFile = SelectFile()
 If strFile = "" Then
     WScript.Echo "No file selected. Exit."
     WScript.Quit
 End If
 
+' ==============================
 ' OPEN FILE
+' ==============================
 WScript.Echo "Processing: " & FSO.GetFileName(strFile)
 WSH.Run """" & strFile & """", 1, False
-WScript.Sleep 3000
+WScript.Sleep 4000
 
+' ==============================
 ' MAXIMIZE WINDOW
+' ==============================
 WSH.AppActivate FSO.GetFileName(strFile)
-WScript.Sleep 500
+WScript.Sleep 1000
 WSH.SendKeys "%{F10}"
-WScript.Sleep 300
+WScript.Sleep 500
 WSH.SendKeys "x"
-WScript.Sleep 1500
+WScript.Sleep 2000
 
+' ==============================
 ' CLICK SHOW ALL
-Call ClickWithHighlight(btn_ShowAllX, btn_ShowAllY)
-WScript.Sleep 800
+' ==============================
+Click btn_ShowAllX, btn_ShowAllY
+WScript.Sleep 1000
 
+' ==============================
 ' LOOP KEYWORDS
+' ==============================
 For i = 0 To UBound(keywordList)
     kw = Trim(keywordList(i))
     If kw <> "" Then
-        WScript.Echo "Processing keyword: " & kw
+        WScript.Echo "Keyword: " & kw
 
-        ' CLICK SEARCH BOX WITH HIGHLIGHT
-        Call ClickWithHighlight(searchBoxX, searchBoxY)
-        WScript.Sleep 300
+        ' CLICK SEARCH BOX
+        Click searchBoxX, searchBoxY
+        WScript.Sleep 500
 
         ' CLEAR
         WSH.SendKeys "^a"
-        WScript.Sleep 200
+        WScript.Sleep 300
         WSH.SendKeys "{DEL}"
-        WScript.Sleep 200
+        WScript.Sleep 300
 
         ' INPUT
         WSH.SendKeys kw
-        WScript.Sleep 600
-
-        ' CLICK SHOW WITH HIGHLIGHT
-        Call ClickWithHighlight(btn_ShowX, btn_ShowY)
         WScript.Sleep 800
+
+        ' CLICK SHOW BUTTON
+        Click btn_ShowX, btn_ShowY
+        WScript.Sleep 1000
     End If
 Next
 
-WScript.Echo "Done! All keywords processed successfully."
+WScript.Echo "DONE! All keywords finished."
 
-'========================================================
-' FUNCTION: Click with mouse highlight (visible click position)
-'========================================================
-Sub ClickWithHighlight(x, y)
-    Dim psCmd
-    ' Move mouse to position
-    psCmd = "[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing = New-Object System.Drawing.Point(" & x & "," & y & ")"
-    WSH.Run "powershell -Command """ & psCmd & """", 0, True
-    WScript.Sleep 100
-    
-    ' Show highlight circle
-    psCmd = "$sig = '[DllImport(\""user32.dll\"")] public static extern IntPtr GetDC(IntPtr hWnd); [DllImport(\""user32.dll\"")] public static extern IntPtr ReleaseDC(IntPtr hWnd, IntPtr hDC); [DllImport(\""gdi32.dll\"")] public static extern IntPtr CreateSolidBrush(uint color); [DllImport(\""gdi32.dll\"")] public static extern IntPtr SelectObject(IntPtr hDC, IntPtr hObject); [DllImport(\""gdi32.dll\"")] public static extern bool Ellipse(IntPtr hDC, int nLeftRect, int nTopRect, int nRightRect, int nBottomRect); [DllImport(\""gdi32.dll\"")] public static extern bool DeleteObject(IntPtr hObject);'; Add-Type -MemberDefinition $sig -Name NativeWin -Namespace WinAPI; $dc = [WinAPI.NativeWin]::GetDC([IntPtr]::Zero); $brush = [WinAPI.NativeWin]::CreateSolidBrush(0x000000FF); $old = [WinAPI.NativeWin]::SelectObject($dc, $brush); [WinAPI.NativeWin]::Ellipse($dc, " & (x-highlightSize) & ", " & (y-highlightSize) & ", " & (x+highlightSize) & ", " & (y+highlightSize) & "); [WinAPI.NativeWin]::SelectObject($dc, $old); [WinAPI.NativeWin]::DeleteObject($brush); [WinAPI.NativeWin]::ReleaseDC([IntPtr]::Zero, $dc);"
-    WSH.Run "powershell -Command """ & psCmd & """", 0, True
-    WScript.Sleep highlightDuration
-    
-    ' Perform left click
-    psCmd = "[System.Windows.Forms.SendKeys]::SendWait('{LEFT}')"
-    WSH.Run "powershell -Command """ & psCmd & """", 0, True
+' ==============================
+' SUPER STABLE CLICK FUNCTION
+' ==============================
+Sub Click(x, y)
+    ' MOVE
+    WSH.Run "powershell -Command ""[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(" & x & "," & y & ")""", 0, True
+    WScript.Sleep 300
+
+    ' CLICK TWICE LIKE HUMAN
+    WSH.Run "powershell -Command ""[System.Windows.Forms.SendKeys]::SendWait('{LEFT}')""", 0, True
     WScript.Sleep 200
+    WSH.Run "powershell -Command ""[System.Windows.Forms.SendKeys]::SendWait('{LEFT}')""", 0, True
+    WScript.Sleep 300
 End Sub
 
-'========================================================
-' FUNCTION: File picker (fixed output capture)
-'========================================================
+' ==============================
+' FILE PICKER
+' ==============================
 Function SelectFile()
-    Dim psExec, psOutput
-    psCmd = "Add-Type -AssemblyName System.Windows.Forms; $dlg = New-Object System.Windows.Forms.OpenFileDialog; $dlg.Filter = 'ASTrace Files (*.astrace)|*.astrace|All Files (*.*)|*.*'; if($dlg.ShowDialog() -eq 'OK') { Write-Output $dlg.FileName } else { Write-Output '' }"
-    
-    Set psExec = WSH.Exec("powershell -Command """ & psCmd & """")
-    psOutput = psExec.StdOut.ReadAll()
-    psOutput = Replace(psOutput, vbCrLf, "")
-    psOutput = Trim(psOutput)
-    
-    SelectFile = psOutput
+    Dim cmd, exec, output
+    cmd = "Add-Type -AssemblyName System.Windows.Forms; $dlg = New-Object System.Windows.Forms.OpenFileDialog; $dlg.Filter='All Files|*.*'; if($dlg.ShowDialog()-eq 'OK') { $dlg.FileName }"
+    Set exec = WSH.Exec("powershell -Command """ & cmd & """")
+    output = exec.StdOut.ReadAll()
+    output = Replace(output, vbCrLf, "")
+    SelectFile = Trim(output)
 End Function
