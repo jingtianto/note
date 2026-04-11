@@ -1,105 +1,91 @@
 Option Explicit
 
-' ==============================================
-' 【1】关键词配置：英文逗号分隔，方便批量增删改
-' ==============================================
+' KEYWORDS (edit here, separated by comma)
 Dim keywordsStr
 keywordsStr = "none,brake,AccPedal,Speed,Trigger,Acceleration,externalTrigger,limitAcceleration,Pos_BrakePedal"
 
-' ==============================================
-' 【2】坐标配置（已按你提供的坐标填好，无需修改）
-' ==============================================
-Const btn_ShowAllX = 33    ' 【全显示】按钮 X
-Const btn_ShowAllY = 201   ' 【全显示】按钮 Y
-Const searchBoxX   = 91    ' 搜索框 X
-Const searchBoxY   = 149   ' 搜索框 Y
-Const btn_ShowX    = 53    ' 固定【显示】按钮 X
-Const btn_ShowY    = 222   ' 固定【显示】按钮 Y
+' COORDINATES (your values)
+Const btn_ShowAllX = 33
+Const btn_ShowAllY = 201
+Const searchBoxX   = 91
+Const searchBoxY   = 149
+Const btn_ShowX    = 53
+Const btn_ShowY    = 222
 
-' ==============================================
-' 主逻辑（严格按你要求的流程执行）
-' 1. 选择文件 → 2. 打开并最大化窗口 → 3. 点击全显示
-' 4. 循环：点搜索框→清空→输入关键词→点显示
-' 5. 最后一个关键词点完显示后自动停止
-' ==============================================
-Dim WSH, FSO, strFile, keywordList, i, kw, procID
+Dim WSH, FSO, strFile, keywordList, i, kw
 
 Set WSH = CreateObject("WScript.Shell")
 Set FSO = CreateObject("Scripting.FileSystemObject")
 
-' 拆分关键词为数组（按逗号分割）
 keywordList = Split(keywordsStr, ",")
 
-' 弹出文件选择窗口
+' SELECT FILE
 strFile = SelectFile()
 If strFile = "" Then
-    WScript.Echo "未选择文件，脚本退出。"
+    WScript.Echo "No file selected. Exit."
     WScript.Quit
 End If
 
-WScript.Echo "开始处理文件：" & FSO.GetFileName(strFile)
-
-' 1. 启动 trace.xplorer 并打开文件
+' OPEN FILE
+WScript.Echo "Processing: " & FSO.GetFileName(strFile)
 WSH.Run """" & strFile & """", 1, False
-WScript.Sleep 3000 ' 等待软件启动
+WScript.Sleep 3000
 
-' 2. 激活窗口并最大化
+' MAXIMIZE WINDOW
 WSH.AppActivate FSO.GetFileName(strFile)
-WScript.Sleep 1000
-WSH.SendKeys "%{F10}" ' Alt+空格打开窗口菜单
+WScript.Sleep 500
+WSH.SendKeys "% "
 WScript.Sleep 300
-WSH.SendKeys "x"     ' 按x选择最大化
-WScript.Sleep 1000
+WSH.SendKeys "x"
+WScript.Sleep 1500
 
-' 3. 点击【全显示】按钮
-Call Click(btn_ShowAllX, btn_ShowAllY)
+' CLICK SHOW ALL
+Click btn_ShowAllX, btn_ShowAllY
 WScript.Sleep 800
 
-' 4. 遍历所有关键词，按流程执行
+' LOOP KEYWORDS
 For i = 0 To UBound(keywordList)
     kw = Trim(keywordList(i))
     If kw <> "" Then
-        WScript.Echo "正在处理关键词：" & kw
+        WScript.Echo "Keyword: " & kw
 
-        ' 4.1 点击搜索框，激活输入
-        Call Click(searchBoxX, searchBoxY)
+        ' CLICK SEARCH BOX
+        Click searchBoxX, searchBoxY
         WScript.Sleep 300
 
-        ' 4.2 全选搜索框内容 → 删除
+        ' CLEAR
         WSH.SendKeys "^a"
         WScript.Sleep 200
         WSH.SendKeys "{DEL}"
         WScript.Sleep 200
 
-        ' 4.3 输入关键词（无需回车，输入即筛选）
-        WSH.SendKeys "*" & kw & "*"
+        ' INPUT
+        WSH.SendKeys kw
         WScript.Sleep 600
 
-        ' 4.4 点击固定【显示】按钮
-        Call Click(btn_ShowX, btn_ShowY)
+        ' CLICK SHOW
+        Click btn_ShowX, btn_ShowY
         WScript.Sleep 800
     End If
 Next
 
-WScript.Echo "✅ 所有关键词处理完成！脚本结束。"
+WScript.Echo "Done! All keywords finished."
 
-' ==============================================
-' 工具函数：鼠标左键点击指定坐标（VBS原生兼容写法）
-' ==============================================
+'========================================================
+' FUNCTIONS
+'========================================================
 Sub Click(x, y)
-    WSH.Run "powershell -Command ""[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(" & x & "," & y & ");[System.Windows.Forms.SendKeys]::SendWait('{LEFT}')""", 0, True
+    WSH.Run "powershell -Command ""[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(" & x & "," & y & ")""", 0, True
+    WScript.Sleep 200
+    WSH.Run "powershell -Command ""[System.Windows.Forms.SendKeys]::SendWait('{LEFT}')""", 0, True
     WScript.Sleep 200
 End Sub
 
-' ==============================================
-' 工具函数：弹出文件选择窗口（零错误兼容版）
-' ==============================================
 Function SelectFile()
     Dim dlg
     On Error Resume Next
     Set dlg = CreateObject("UserAccounts.CommonDialog")
-    dlg.Filter = "ASTrace Files (*.astrace)|*.astrace|All Files (*.*)|*.*"
-    dlg.FilterIndex = 1
+    dlg.Filter = "All Files (*.*)|*.*"
     If dlg.ShowOpen = 0 Then
         SelectFile = ""
     Else
