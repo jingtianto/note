@@ -1,34 +1,102 @@
-# -*- coding: utf-8 -*-
-# 零依赖版：用asammdf解析.astrace(MDF4)文件，按关键字筛选信号
-import asammdf
-import os
+Option Explicit
 
-# -------------------------- 配置区（按你的需求修改） --------------------------
-KEYWORDS = ["none", "brake", "AccPedal", "Speed"]
-INPUT_FOLDER = r"C:\Onboarding\linshi\result\T3\Traces"
-OUTPUT_FOLDER = r"C:\Onboarding\linshi\result\T3\Traces\after"
-# ---------------------------------------------------------------------------
+'===============================================================================
+' 1. 关键词：一行一个，随便增删
+'===============================================================================
+Dim keywordsStr
+keywordsStr = "
+none
+brake
+AccPedal
+Speed
+Trigger
+Acceleration
+externalTrigger
+limitAcceleration
+Pos_BrakePedal
+"
 
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+'===============================================================================
+' 2. 坐标（你自己改成你屏幕的真实坐标）
+'===============================================================================
+Const btn_ShowAllX    = 120   ' 【全显示】按钮 X
+Const btn_ShowAllY    = 70    ' 【全显示】按钮 Y
 
-for filename in os.listdir(INPUT_FOLDER):
-    if filename.endswith(".astrace"):
-        input_path = os.path.join(INPUT_FOLDER, filename)
-        output_path = os.path.join(OUTPUT_FOLDER, f"filtered_{filename}")
+Const searchBoxX      = 280   ' 搜索框 X
+Const searchBoxY      = 75    ' 搜索框 Y
 
-        print(f"正在处理: {filename}")
-        try:
-            mdf = asammdf.MDF(input_path)
-            matched_channels = [ch for ch in mdf.channels_db if any(kw.lower() in ch.lower() for kw in KEYWORDS)]
-            
-            if not matched_channels:
-                print(f"⚠️ 未匹配到任何信号，跳过: {filename}\n")
-                continue
-            
-            mdf_filtered = mdf.filter(matched_channels)
-            mdf_filtered.save(output_path, overwrite=True)
-            print(f"✅ 已生成: {output_path}，共匹配 {len(matched_channels)} 个信号\n")
-        except Exception as e:
-            print(f"❌ 处理失败 {filename}: {e}\n")
+Const btn_ShowX       = 620   ' 固定【显示】按钮 X
+Const btn_ShowY       = 75    ' 固定【显示】按钮 Y
 
-print("所有文件处理完成!")
+'===============================================================================
+' 主逻辑
+'===============================================================================
+Dim WSH, FSO, strFile, list, i, kw
+
+Set WSH = CreateObject("WScript.Shell")
+Set FSO = CreateObject("Scripting.FileSystemObject")
+
+list = Split(Trim(keywordsStr), vbCrLf)
+
+' 选择文件
+strFile = SelectFile()
+If strFile = "" Then
+    WScript.Echo "未选择文件"
+    WScript.Quit
+End If
+
+WScript.Echo "开始处理：" & FSO.GetFileName(strFile)
+WScript.Sleep 1000
+
+' 第一步：点击【全显示】
+Click btn_ShowAllX, btn_ShowAllY
+WScript.Sleep 500
+
+' 遍历所有关键词
+For i = 0 To UBound(list)
+    kw = Trim(list(i))
+    If kw = "" Then Continue For
+
+    WScript.Echo "→ " & kw
+
+    ' 点击搜索框
+    Click searchBoxX, searchBoxY
+    WScript.Sleep 300
+
+    ' 全选 + 删除
+    WSH.SendKeys "^a"
+    WScript.Sleep 200
+    WSH.SendKeys "{DEL}"
+    WScript.Sleep 200
+
+    ' 输入关键词（不用回车）
+    WSH.SendKeys kw
+    WScript.Sleep 600
+
+    ' 点击固定【显示】
+    Click btn_ShowX, btn_ShowY
+    WScript.Sleep 500
+Next
+
+WScript.Echo "✅ 全部处理完毕！"
+
+'===============================================================================
+' 工具函数
+'===============================================================================
+Sub Click(x, y)
+    WSH.SendKeys "{X " & x & " " & y & "}"
+    WScript.Sleep 200
+    WSH.SendKeys "{CLICK}"
+End Sub
+
+Function SelectFile()
+    Dim dlg
+    On Error Resume Next
+    Set dlg = CreateObject("UserAccounts.CommonDialog")
+    dlg.Filter = "All Files|*.*"
+    If dlg.ShowOpen = 0 Then
+        SelectFile = ""
+    Else
+        SelectFile = dlg.FileName
+    End If
+End Function
