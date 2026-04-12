@@ -1,180 +1,89 @@
-<MACRO>
-<ITEM>
-TYPE=WINACTIVATE
-WINDOWTITLE=trace.xplorer basic*
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=3000
-</ITEM>
-<ITEM>
-TYPE=CLICK
-X=290
-Y=233
-BUTTON=RIGHT
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=500
-</ITEM>
-<ITEM>
-TYPE=CLICK
-X=386
-Y=246
-BUTTON=LEFT
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=1000
-</ITEM>
-<ITEM>
-TYPE=CLICK
-X=288
-Y=234
-BUTTON=LEFT
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=300
-</ITEM>
-<ITEM>
-TYPE=SEND
-TEXT=^a
-</ITEM>
-<ITEM>
-TYPE=SEND
-TEXT={Del}
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=300
-</ITEM>
-<ITEM>
-TYPE=SEND
-TEXT=panel
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=800
-</ITEM>
-<ITEM>
-TYPE=CLICK
-X=232
-Y=227
-BUTTON=RIGHT
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=500
-</ITEM>
-<ITEM>
-TYPE=CLICK
-X=283
-Y=319
-BUTTON=LEFT
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=1000
-</ITEM>
-<ITEM>
-TYPE=CLICK
-X=288
-Y=234
-BUTTON=LEFT
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=300
-</ITEM>
-<ITEM>
-TYPE=SEND
-TEXT=^a
-</ITEM>
-<ITEM>
-TYPE=SEND
-TEXT={Del}
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=300
-</ITEM>
-<ITEM>
-TYPE=SEND
-TEXT=aeb
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=800
-</ITEM>
-<ITEM>
-TYPE=CLICK
-X=232
-Y=227
-BUTTON=RIGHT
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=500
-</ITEM>
-<ITEM>
-TYPE=CLICK
-X=283
-Y=319
-BUTTON=LEFT
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=1000
-</ITEM>
-<ITEM>
-TYPE=CLICK
-X=288
-Y=234
-BUTTON=LEFT
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=300
-</ITEM>
-<ITEM>
-TYPE=SEND
-TEXT=^a
-</ITEM>
-<ITEM>
-TYPE=SEND
-TEXT={Del}
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=300
-</ITEM>
-<ITEM>
-TYPE=SEND
-TEXT=speed
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=800
-</ITEM>
-<ITEM>
-TYPE=CLICK
-X=232
-Y=227
-BUTTON=RIGHT
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=500
-</ITEM>
-<ITEM>
-TYPE=CLICK
-X=283
-Y=319
-BUTTON=LEFT
-</ITEM>
-<ITEM>
-TYPE=SLEEP
-DELAY=1000
-</ITEM>
-</MACRO>
+=LET(
+    keys, FILTER(A:A, A:A<>""),
+    header, TEXTJOIN(CHAR(10),TRUE,
+        "<MACRO>",
+        "  <ITEM>",
+        "    TYPE=WINACTIVATE",
+        "    WINDOWTITLE=trace.xplorer basic*",
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=SLEEP",
+        "    DELAY=3000",
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=CLICK",
+        "    X=290",
+        "    Y=233",
+        "    BUTTON=RIGHT",
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=SLEEP",
+        "    DELAY=500",
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=CLICK",
+        "    X=386",
+        "    Y=246",
+        "    BUTTON=LEFT",
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=SLEEP",
+        "    DELAY=1000",
+        "  </ITEM>"
+    ),
+    item_tpl, LAMBDA(k, TEXTJOIN(CHAR(10),TRUE,
+        "  <ITEM>",
+        "    TYPE=CLICK",
+        "    X=288",
+        "    Y=234",
+        "    BUTTON=LEFT",
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=SLEEP",
+        "    DELAY=300",
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=SEND",
+        "    TEXT=^a",
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=SEND",
+        "    TEXT={Del}",
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=SLEEP",
+        "    DELAY=300",
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=SEND",
+        "    TEXT="&k,
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=SLEEP",
+        "    DELAY=800",
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=CLICK",
+        "    X=232",
+        "    Y=227",
+        "    BUTTON=RIGHT",
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=SLEEP",
+        "    DELAY=500",
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=CLICK",
+        "    X=283",
+        "    Y=319",
+        "    BUTTON=LEFT",
+        "  </ITEM>",
+        "  <ITEM>",
+        "    TYPE=SLEEP",
+        "    DELAY=1000",
+        "  </ITEM>"
+    )),
+    body, BYROW(keys, LAMBDA(k, item_tpl(k))),
+    footer, "</MACRO>",
+    TEXTJOIN(CHAR(10), TRUE, header, body, footer)
+)
