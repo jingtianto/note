@@ -1,0 +1,46 @@
+import openpyxl
+import os
+import sys
+
+def rename_excel_by_B65(file_path):
+    try:
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+    except Exception as e:
+        print("❌ 打开文件失败，仅支持 .xlsx / .xlsm")
+        return
+
+    if "ECU_Config" not in wb.sheetnames:
+        print("❌ 找不到工作表：ECU_Config")
+        return
+
+    ws = wb["ECU_Config"]
+    cell_val = ws["B65"].value
+
+    if cell_val is None:
+        print("❌ B65 单元格为空")
+        return
+
+    new_name = str(cell_val).strip()
+
+    # 清理 Windows 非法文件名
+    invalid = r'\/*?:"><|'
+    for c in invalid:
+        new_name = new_name.replace(c, "_")
+
+    folder = os.path.dirname(file_path)
+    ext = os.path.splitext(file_path)[1]
+    new_file = os.path.join(folder, new_name + ext)
+
+    try:
+        os.rename(file_path, new_file)
+        print(f"✅ 重命名成功：{new_name}{ext}")
+    except Exception as e:
+        print(f"❌ 重命名失败：{str(e)}")
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("👉 使用方法：把 Excel 文件拖到本脚本图标上")
+        input()
+        sys.exit()
+
+    rename_excel_by_B65(sys.argv[1])
