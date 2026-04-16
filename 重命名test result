@@ -1,46 +1,70 @@
-import openpyxl
-import os
-import sys
+@echo off
+chcp 65001 >nul
+setlocal enabledelayedexpansion
 
-def rename_excel_by_B65(file_path):
-    try:
-        wb = openpyxl.load_workbook(file_path, data_only=True)
-    except Exception as e:
-        print("❌ 打开文件失败，仅支持 .xlsx / .xlsm")
-        return
+if "%~1"=="" (
+    echo 请把 Excel 文件拖到本批处理上使用
+    pause >nul
+    exit /b
+)
 
-    if "ECU_Config" not in wb.sheetnames:
-        print("❌ 找不到工作表：ECU_Config")
-        return
+set "excel_file=%~1"
+set "vbs_script=%temp%\~read_cell.vbs"
 
-    ws = wb["ECU_Config"]
-    cell_val = ws["B65"].value
+:: 生成 VBS 读取 ECU_Config!B65
+echo Set objExcel = CreateObject("Excel.Application") > "%vbs_script%"
+echo objExcel.Visible = False >> "%vbs_script%"
+echo objExcel.DisplayAlerts = False >> "%vbs_script%"
+echo Set objWB = objExcel.Workbooks.Open("%excel_file%") >> "%vbs_script%"
+echo On Error Resume Next >> "%vbs_script%"
+echo Set objWS = objWB.Sheets("ECU_Config") >> "%vbs_script%"
+echo If Err.Number ^<^> 0 Then >> "%vbs_script%"
+echo     WScript.Echo "ERR_SHEET" >> "%vbs_script%"
+echo     objWB.Close False >> "%vbs_script%"
+echo     objExcel.Quit >> "%vbs_script%"
+echo     WScript.Quit >> "%vbs_script%"
+echo End If >> "%vbs_script%"
+echo On Error GoTo 0 >> "%vbs_script%"
+echo cellVal = objWB.Sheets("ECU_Config").Range("B65").Value >> "%vbs_script%"
+echo If IsEmpty(cellVal) Then >> "%vbs_script%"
+echo     WScript.Echo "ERR_EMPTY" >> "%vbs_script%"
+echo Else >> "%vbs_script%"
+echo     WScript.Echo cellVal >> "%vbs_script%"
+echo End If >> "%vbs_script%"
+echo objWB.Close False >> "%vbs_script%"
+echo objExcel.Quit >> "%vbs_script%"
 
-    if cell_val is None:
-        print("❌ B65 单元格为空")
-        return
+:: 执行 VBS 并获取名称
+for /f "delims=" %%a in ('cscript //nologo "%vbs_script%"') do set "new_name=%%a"
+del "%vbs_script%"
 
-    new_name = str(cell_val).strip()
+if "!new_name!"=="ERR_SHEET" (
+    echo 错误：未找到工作表 ECU_Config
+    pause >nul
+    exit /b
+)
+if "!new_name!"=="ERR_EMPTY" (
+    echo 错误：B65 单元格为空
+    pause >nul
+    exit /b
+)
 
-    # 清理 Windows 非法文件名
-    invalid = r'\/*?:"><|'
-    for c in invalid:
-        new_name = new_name.replace(c, "_")
+:: 清理非法字符
+set "new_name=!new_name::=_!"
+set "new_name=!new_name:\=_!"
+set "new_name=!new_name:/=_!"
+set "new_name=!new_name:*=_!"
+set "new_name=!new_name:?=_!"
+set "new_name=!new_name:"=_!"
+set "new_name=!new_name:<=_!"
+set "new_name=!new_name:>=_!"
+set "new_name=!new_name:|=_!"
 
-    folder = os.path.dirname(file_path)
-    ext = os.path.splitext(file_path)[1]
-    new_file = os.path.join(folder, new_name + ext)
+:: 重命名
+set "ext=%~x1"
+set "dir=%~dp1"
+ren "%excel_file%" "!new_name!!ext!"
 
-    try:
-        os.rename(file_path, new_file)
-        print(f"✅ 重命名成功：{new_name}{ext}")
-    except Exception as e:
-        print(f"❌ 重命名失败：{str(e)}")
-
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("👉 使用方法：把 Excel 文件拖到本脚本图标上")
-        input()
-        sys.exit()
-
-    rename_excel_by_B65(sys.argv[1])
+echo 已重命名为：!new_name!!ext!
+echo.
+pause >nul
