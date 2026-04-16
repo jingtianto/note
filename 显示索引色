@@ -1,0 +1,35 @@
+Function ColorIndex(rng As Range) As Integer
+    Application.Volatile
+    On Error Resume Next
+    ColorIndex = rng.Interior.ColorIndex
+End Function
+
+Function ColorName(rng As Range) As String
+    Application.Volatile
+    On Error Resume Next
+    
+    Dim idx As Integer
+    idx = rng.Interior.ColorIndex
+    
+    Select Case idx
+        Case 1: ColorName = "Black"
+        Case 2: ColorName = "White"
+        Case 3: ColorName = "Red"
+        Case 4: ColorName = "Green"
+        Case 5: ColorName = "Blue"
+        Case 6: ColorName = "Yellow"
+        Case 7: ColorName = "Magenta"
+        Case 8: ColorName = "Cyan"
+        Case 9: ColorName = "Dark Grey"
+        Case 10: ColorName = "Standard Red"
+        Case 11: ColorName = "Standard Green"
+        Case 12: ColorName = "Standard Blue"
+        Case 13: ColorName = "Standard Yellow"
+        Case 14: ColorName = "Standard Magenta"
+        Case 15: ColorName = "Standard Cyan"
+        Case 16: ColorName = "Light Grey"
+        Case 50: ColorName = "Grey"
+        Case -4142, 0: ColorName = "None"
+        Case Else: ColorName = "Color " & idx
+    End Select
+End Function
