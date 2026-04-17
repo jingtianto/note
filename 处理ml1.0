@@ -2,11 +2,11 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from openpyxl import load_workbook
+from openpyxl.styles import PatternFill, Color
+from copy import copy
 
 # -------------------------- 配置项
-# 需要保留的表头关键字
 KEEP_KEYWORDS = {"id", "octane", "signalname"}
-# 查找标识
 TARGET_TEXT = "TestPackage"
 # --------------------------
 
@@ -15,7 +15,7 @@ def get_index_color(cell):
     fill_color = cell.fill.fgColor
     if fill_color.indexed is not None and fill_color.indexed != 0:
         return fill_color.indexed
-    return ""
+    return None
 
 def select_file_or_folder():
     """弹窗：选择单个文件 / 文件夹"""
@@ -33,16 +33,12 @@ def select_file_or_folder():
         return path, "file"
 
 def get_first_testpackage_right_value(wb):
-    """
-    遍历所有Sheet，从上到下查找第一个 TestPackage
-    返回它右侧单元格的内容，找不到返回空
-    """
+    """遍历所有Sheet，找到第一个 TestPackage，返回其右侧单元格内容"""
     for ws in wb.worksheets:
         for row in ws.iter_rows():
             for cell in row:
                 cell_val = str(cell.value).strip() if cell.value else ""
                 if TARGET_TEXT in cell_val:
-                    # 取右边一格
                     right_col = cell.column + 1
                     if right_col <= ws.max_column:
                         right_val = ws.cell(row=cell.row, column=right_col).value
@@ -51,10 +47,7 @@ def get_first_testpackage_right_value(wb):
     return ""
 
 def keep_target_columns_only(ws):
-    """
-    只保留表头包含 ID / Octane / Signalname 的列
-    其余列全部删除（从后往前删，防止列索引错乱）
-    """
+    """只保留表头包含 ID / Octane / Signalname 的列，其余删除"""
     if ws.max_row < 1:
         return
 
@@ -70,7 +63,7 @@ def keep_target_columns_only(ws):
         if any(k in header_low for k in KEEP_KEYWORDS):
             keep_col_nums.append(col)
 
-    # 反向删除不需要的列
+    # 反向删除不需要的列（防止索引错乱）
     del_cols = [c for c in range(1, ws.max_column + 1) if c not in keep_col_nums]
     for col in sorted(del_cols, reverse=True):
         ws.delete_cols(col)
@@ -78,17 +71,15 @@ def keep_target_columns_only(ws):
 def process_excel_one(file_path):
     """处理单个Excel文件"""
     try:
-        wb = load_workbook(file_path)
-
-        # 1. 新建工作表，存放处理后数据
-        new_ws = wb.create_sheet(title="处理结果")
+        wb = load_workbook(file_path, data_only=True)
         source_ws = wb.active
+        
+        # 新建工作表，存放处理后数据
+        new_ws = wb.create_sheet(title="IPN_1")
 
-        # 复制原表所有数据+单元格格式到新sheet
-        for row in source_ws.iter_rows():
-            for cell in row:
-                new_ws[cell.coordinate].value = cell.value
-                new_ws[cell.coordinate].fill = cell.fill.copy()
+        # 复制数据（只复制值，避免格式报错）
+        for row in source_ws.iter_rows(values_only=True):
+            new_ws.append(row)
 
         # 2. 仅保留 ID、Octane、Signalname 列，删除其他
         keep_target_columns_only(new_ws)
@@ -105,9 +96,11 @@ def process_excel_one(file_path):
             # ID列右边插入颜色索引列
             new_ws.insert_cols(id_col + 1)
             new_ws.cell(row=1, column=id_col + 1, value="IndexColor")
-            # 逐行获取颜色
+            # 重新打开文件读取颜色（data_only=True会丢失格式，所以重新加载）
+            wb_format = load_workbook(file_path)
+            source_ws_format = wb_format.active
             for r in range(2, new_ws.max_row + 1):
-                color_idx = get_index_color(new_ws.cell(row=r, column=id_col))
+                color_idx = get_index_color(source_ws_format.cell(row=r, column=id_col))
                 new_ws.cell(row=r, column=id_col + 1, value=color_idx)
 
         # 4. 查找第一个TestPackage右侧内容，作为新文件名
@@ -135,7 +128,6 @@ def batch_process_folder(folder_path):
     success = 0
     fail = 0
     for filename in os.listdir(folder_path):
-        # 忽略Excel临时缓存文件
         if filename.startswith("~$"):
             continue
         if filename.lower().endswith((".xlsx", ".xlsm")):
@@ -147,13 +139,11 @@ def batch_process_folder(folder_path):
     messagebox.showinfo("批量处理结束", f"成功：{success} 个\n失败：{fail} 个")
 
 if __name__ == "__main__":
-    # 选择路径
     path, mode = select_file_or_folder()
     if not path:
         messagebox.showwarning("提示", "未选择任何路径，程序退出")
         exit()
 
-    # 执行处理
     if mode == "file":
         process_excel_one(path)
         messagebox.showinfo("提示", "单个文件处理完成！")
