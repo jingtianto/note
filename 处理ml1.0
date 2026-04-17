@@ -2,8 +2,6 @@ import os
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from openpyxl import load_workbook
-from openpyxl.styles import PatternFill, Color
-from copy import copy
 
 # -------------------------- 配置项
 KEEP_KEYWORDS = {"id", "octane", "signalname"}
@@ -71,20 +69,21 @@ def keep_target_columns_only(ws):
 def process_excel_one(file_path):
     """处理单个Excel文件"""
     try:
+        # 1. 读取数据（不带格式，避免报错）
         wb = load_workbook(file_path, data_only=True)
         source_ws = wb.active
         
-        # 新建工作表，存放处理后数据
+        # 新建工作表
         new_ws = wb.create_sheet(title="IPN_1")
 
-        # 复制数据（只复制值，避免格式报错）
+        # 2. 复制数据（仅值，不复制格式）
         for row in source_ws.iter_rows(values_only=True):
             new_ws.append(row)
 
-        # 2. 仅保留 ID、Octane、Signalname 列，删除其他
+        # 3. 仅保留 ID、Octane、Signalname 列
         keep_target_columns_only(new_ws)
 
-        # 3. 找到ID列，右侧新增IndexColor列，写入颜色索引
+        # 4. 找到ID列，右侧新增IndexColor列
         id_col = None
         for col in range(1, new_ws.max_column + 1):
             h_val = new_ws.cell(row=1, column=col).value
@@ -93,22 +92,22 @@ def process_excel_one(file_path):
                 break
 
         if id_col:
-            # ID列右边插入颜色索引列
             new_ws.insert_cols(id_col + 1)
             new_ws.cell(row=1, column=id_col + 1, value="IndexColor")
-            # 重新打开文件读取颜色（data_only=True会丢失格式，所以重新加载）
+
+            # 重新加载文件读取颜色（data_only=True会丢失格式）
             wb_format = load_workbook(file_path)
             source_ws_format = wb_format.active
             for r in range(2, new_ws.max_row + 1):
                 color_idx = get_index_color(source_ws_format.cell(row=r, column=id_col))
                 new_ws.cell(row=r, column=id_col + 1, value=color_idx)
+            wb_format.close()
 
-        # 4. 查找第一个TestPackage右侧内容，作为新文件名
+        # 5. 查找TestPackage，获取新文件名
         new_file_name = get_first_testpackage_right_value(wb)
         dir_path = os.path.dirname(file_path)
         old_name, ext = os.path.splitext(os.path.basename(file_path))
 
-        # 兜底命名
         if not new_file_name:
             new_file_name = old_name + "_已处理"
         new_full_path = os.path.join(dir_path, f"{new_file_name}{ext}")
