@@ -1,0 +1,151 @@
+import os
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
+
+def select_file_or_folder():
+    """弹窗让用户选择单个文件或文件夹"""
+    root = tk.Tk()
+    root.withdraw()  # 隐藏主窗口
+    choice = messagebox.askquestion("选择方式", "是否要处理整个文件夹？\n(选择'否'则处理单个文件)")
+    if choice == "yes":
+        path = filedialog.askdirectory(title="选择要处理的文件夹")
+        return path, "folder"
+    else:
+        path = filedialog.askopenfilename(
+            title="选择Excel文件",
+            filetypes=[("Excel Files", "*.xlsx;*.xlsm")]
+        )
+        return path, "file"
+
+def get_color_index(cell):
+    """获取单元格的ColorIndex（兼容索引色和RGB色）"""
+    fill = cell.fill
+    if fill.patternType is None or fill.patternType == 'none':
+        return None
+    # 优先获取索引色
+    if fill.fgColor.indexed is not None and fill.fgColor.indexed != 0:
+        return fill.fgColor.indexed
+    # 兼容RGB模式（如果需要）
+    return None
+
+def process_single_excel(file_path):
+    """处理单个Excel文件"""
+    try:
+        wb = load_workbook(file_path)
+        base_dir = os.path.dirname(file_path)
+        original_name = os.path.basename(file_path)
+        name_without_ext, ext = os.path.splitext(original_name)
+
+        # --------------------------
+        # 1. 查找TestPackage的值，用于重命名
+        # --------------------------
+        test_package_values = set()
+        for ws in wb.worksheets:
+            for row in ws.iter_rows(values_only=False):
+                for cell in row:
+                    if cell.value and isinstance(cell.value, str):
+                        if "TestPackage" in str(cell.value):
+                            # 取右侧单元格
+                            if cell.column < ws.max_column:
+                                right_cell = ws.cell(row=cell.row, column=cell.column + 1)
+                                if right_cell.value:
+                                    test_package_values.add(str(right_cell.value).strip())
+        # 生成新文件名
+        if test_package_values:
+            # 去重拼接
+            new_name_part = "_".join(sorted(list(test_package_values)))
+            new_file_name = f"{new_name_part}_{name_without_ext}{ext}"
+        else:
+            new_file_name = f"processed_{name_without_ext}{ext}"
+        new_file_path = os.path.join(base_dir, new_file_name)
+
+        # --------------------------
+        # 2. 创建新Sheet并筛选列（保留ID/Octane/Signalname）
+        # --------------------------
+        # 这里假设你是复制原数据到新Sheet，和原VBA逻辑一致
+        # 先复制数据到新Sheet（这里以第一个Sheet为例，可根据需要调整）
+        source_ws = wb.active
+        new_ws = wb.create_sheet(title="IPN_1")
+
+        # 复制数据到新Sheet（先复制所有数据，再筛选列）
+        for row in source_ws.iter_rows(values_only=True):
+            new_ws.append(row)
+
+        # 找到需要保留的列索引（表头行，假设第1行是表头）
+        header_row = 1
+        keep_cols = []
+        all_cols = []
+        for col in range(1, new_ws.max_column + 1):
+            header_val = new_ws.cell(row=header_row, column=col).value
+            if header_val and isinstance(header_val, str):
+                header_val_lower = header_val.lower()
+                if any(key in header_val_lower for key in ["id", "octane", "signalname"]):
+                    keep_cols.append(col)
+            all_cols.append(col)
+
+        # 需要删除的列 = 所有列 - 保留列（从后往前删，避免索引偏移）
+        delete_cols = sorted(set(all_cols) - set(keep_cols), reverse=True)
+        for col in delete_cols:
+            new_ws.delete_cols(col)
+
+        # --------------------------
+        # 3. 获取ID列的ColorIndex并写入新列
+        # --------------------------
+        # 找到ID列的位置
+        id_col_index = None
+        for col in range(1, new_ws.max_column + 1):
+            header_val = new_ws.cell(row=header_row, column=col).value
+            if header_val and isinstance(header_val, str):
+                if "id" in str(header_val).lower() and "signalname" not in str(header_val).lower():
+                    id_col_index = col
+                    break
+
+        if id_col_index:
+            # 在ID列右侧插入ColorIndex列
+            color_col_index = id_col_index + 1
+            new_ws.insert_cols(color_col_index)
+            new_ws.cell(row=header_row, column=color_col_index).value = "ColorIndex"
+
+            # 遍历ID列，写入颜色索引
+            for row in range(2, new_ws.max_row + 1):
+                id_cell = new_ws.cell(row=row, column=id_col_index)
+                color_idx = get_color_index(id_cell)
+                new_ws.cell(row=row, column=color_col_index).value = color_idx
+
+        # --------------------------
+        # 4. 保存文件
+        # --------------------------
+        wb.save(new_file_path)
+        print(f"✅ 处理完成：{new_file_path}")
+        return True
+    except Exception as e:
+        print(f"❌ 处理失败：{file_path}，错误：{str(e)}")
+        return False
+
+def batch_process_folder(folder_path):
+    """批量处理文件夹内的所有Excel文件"""
+    success_count = 0
+    fail_count = 0
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            if file.lower().endswith((".xlsx", ".xlsm")) and not file.startswith("~$"):
+                file_path = os.path.join(root, file)
+                if process_single_excel(file_path):
+                    success_count += 1
+                else:
+                    fail_count += 1
+    messagebox.showinfo("处理完成", f"成功处理：{success_count} 个文件\n失败：{fail_count} 个文件")
+
+if __name__ == "__main__":
+    path, mode = select_file_or_folder()
+    if not path:
+        messagebox.showwarning("警告", "未选择任何文件或文件夹，程序退出。")
+        exit()
+
+    if mode == "file":
+        process_single_excel(path)
+        messagebox.showinfo("处理完成", "文件处理完成！")
+    else:
+        batch_process_folder(path)
