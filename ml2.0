@@ -1,6 +1,5 @@
-Sub CopyVisibleAndClean_OctaneID()
-    Dim originalWs As Worksheet
-    Dim newWs As Worksheet
+Sub CopyVisibleAndClean_Strict()
+    Dim originalWs As Worksheet, newWs As Worksheet
     Dim newSheetName As String
     Dim visibleRange As Range
     Dim headers As Variant
@@ -13,56 +12,55 @@ Sub CopyVisibleAndClean_OctaneID()
     Dim found As Boolean
     Dim lastRow As Long
     
-    ' 参数设置
+    ' ========== 参数设置 ==========
     newSheetName = "IPN_1"
-    headers = Array("ID", "Testfallname", "Octane-ID")   ' 列名改为 Octane-ID
+    headers = Array("ID", "Testfallname", "Octane-ID")   ' 列名（注意短横线）
     searchStartRow = 1
     searchEndRow = 10      ' 扫描前10行寻找标题行
     
-    ' 原始工作表（当前活动表，假设为 IPN）
+    ' 当前工作表（假设为 IPN）
     Set originalWs = ActiveSheet
     If originalWs.Name <> "IPN" Then
-        If MsgBox("Active sheet is not 'IPN'. Continue anyway? (will copy visible cells from current sheet)", vbYesNo + vbQuestion) = vbNo Then Exit Sub
+        If MsgBox("当前活动表不是 'IPN'，是否继续？（将复制当前表的可见内容）", vbYesNo + vbQuestion) = vbNo Then Exit Sub
     End If
     
-    ' 检查并处理已存在的目标工作表
+    ' 处理已存在的目标表
     Application.DisplayAlerts = False
     On Error Resume Next
     Set newWs = Worksheets(newSheetName)
     If Not newWs Is Nothing Then
         On Error GoTo 0
-        If MsgBox("Worksheet '" & newSheetName & "' already exists. Delete and recreate? (data will be overwritten)", vbYesNo + vbWarning) = vbYes Then
+        If MsgBox("工作表 '" & newSheetName & "' 已存在，是否删除并重建？", vbYesNo + vbWarning) = vbYes Then
             newWs.Delete
         Else
-            MsgBox "Operation cancelled.", vbInformation
+            MsgBox "操作已取消。", vbInformation
             Exit Sub
         End If
     End If
     On Error GoTo 0
     Application.DisplayAlerts = True
     
-    ' ---------- 使用定位条件复制可见内容 ----------
-    ' 获取原始表的已使用区域中的可见单元格
+    ' ========== 1. 复制可见内容 ==========
     On Error Resume Next
     Set visibleRange = originalWs.UsedRange.SpecialCells(xlCellTypeVisible)
     On Error GoTo 0
     
     If visibleRange Is Nothing Then
-        MsgBox "No visible cells found in the used range of the original sheet.", vbExclamation
+        MsgBox "原始表中没有可见单元格。", vbExclamation
         Exit Sub
     End If
     
-    ' 添加新工作表并粘贴可见内容
     Set newWs = Worksheets.Add(After:=originalWs)
     newWs.Name = newSheetName
-    visibleRange.Copy Destination:=newWs.Range("A1")
+    visibleRange.Copy
+    newWs.Range("A1").PasteSpecial Paste:=xlPasteAll   ' 粘贴所有内容（值、格式、列宽等）
+    Application.CutCopyMode = False
     
-    MsgBox "Copied only visible cells from '" & originalWs.Name & "' to new sheet '" & newSheetName & "'. Now processing...", vbInformation
+    MsgBox "已复制可见内容到新表 '" & newSheetName & "'，开始清理...", vbInformation
     
-    ' ---------- 步骤1：查找包含所有三个标题的行 ----------
+    ' ========== 2. 定位真正的标题行（包含所有三个列名） ==========
     headerRow = 0
     For r = searchStartRow To searchEndRow
-        ' 防止行号超出实际使用行数
         If r <= newWs.UsedRange.Rows.Count + newWs.UsedRange.Row - 1 Then
             Dim allFound As Boolean
             allFound = True
@@ -82,18 +80,17 @@ Sub CopyVisibleAndClean_OctaneID()
     Next r
     
     If headerRow = 0 Then
-        MsgBox "Could not find a row (within rows 1-" & searchEndRow & ") containing all three headers: " & _
-               Join(headers, ", ") & ". Please check the data.", vbExclamation
+        MsgBox "未找到包含 " & Join(headers, ", ") & " 的标题行（已扫描前 " & searchEndRow & " 行）。", vbExclamation
         Exit Sub
     End If
     
-    ' 删除标题行以上的所有行
+    ' 删除标题行以上的行
     If headerRow > 1 Then
         newWs.Rows("1:" & headerRow - 1).Delete Shift:=xlUp
     End If
-    ' 此时标题行变成第1行
+    ' 此时标题行变为第1行
     
-    ' ---------- 步骤2：只保留三列，删除其他列 ----------
+    ' ========== 3. 只保留指定的三列 ==========
     lastCol = newWs.Cells(1, newWs.Columns.Count).End(xlToLeft).Column
     Set keepCols = New Collection
     
@@ -107,7 +104,7 @@ Sub CopyVisibleAndClean_OctaneID()
     Next col
     
     If keepCols.Count <> 3 Then
-        MsgBox "After adjusting header row, not all three columns were found. Found: " & keepCols.Count, vbExclamation
+        MsgBox "删除上方行后，未能同时找到三列。找到的列数：" & keepCols.Count, vbExclamation
         Exit Sub
     End If
     
@@ -125,10 +122,9 @@ Sub CopyVisibleAndClean_OctaneID()
             End If
         End If
     Next col
-    
     If Not colToDelete Is Nothing Then colToDelete.Delete Shift:=xlToLeft
     
-    ' ---------- 步骤3：删除 Octane-ID 列为空的行 ----------
+    ' ========== 4. 删除 Octane-ID 列为空的行（严格判断） ==========
     ' 重新定位 Octane-ID 列（现在在第1行）
     lastCol = newWs.Cells(1, newWs.Columns.Count).End(xlToLeft).Column
     octaneCol = 0
@@ -140,23 +136,44 @@ Sub CopyVisibleAndClean_OctaneID()
     Next col
     
     If octaneCol = 0 Then
-        MsgBox "Column 'Octane-ID' not found after cleaning. Cannot delete empty rows.", vbExclamation
+        MsgBox "清理后未找到 'Octane-ID' 列，无法删除空行。", vbExclamation
         Exit Sub
     End If
     
+    ' 获取最后一行的行号（基于 Octane-ID 列）
     lastRow = newWs.Cells(newWs.Rows.Count, octaneCol).End(xlUp).Row
+    Dim deleteCount As Long
+    deleteCount = 0
+    
+    ' 从下往上删除（避免索引错乱）
     For r = lastRow To 2 Step -1
-        If IsEmpty(newWs.Cells(r, octaneCol).Value) Or Trim(newWs.Cells(r, octaneCol).Value) = "" Then
-            newWs.Rows(r).Delete Shift:=xlUp
+        Dim cellVal As Variant
+        cellVal = newWs.Cells(r, octaneCol).Value
+        ' 严格判断空值：Empty、Null、空字符串、纯空格、不可见字符
+        If IsEmpty(cellVal) Or IsNull(cellVal) Then
+            newWs.Rows(r).Delete
+            deleteCount = deleteCount + 1
+        Else
+            Dim strVal As String
+            strVal = Trim(CStr(cellVal))
+            If strVal = "" Then
+                newWs.Rows(r).Delete
+                deleteCount = deleteCount + 1
+            End If
         End If
     Next r
     
-    ' 完成提示
-    MsgBox "Operation completed successfully!" & vbCrLf & _
-           "Original sheet '" & originalWs.Name & "' is untouched." & vbCrLf & _
-           "New sheet '" & newSheetName & "' has:" & vbCrLf & _
-           "  1. Only visible cells from the original (hidden rows/columns ignored)" & vbCrLf & _
-           "  2. Removed all rows above the header row (found at original row " & headerRow & ")" & vbCrLf & _
-           "  3. Kept only columns: ID, Testfallname, Octane-ID" & vbCrLf & _
-           "  4. Removed all rows where Octane-ID is empty", vbInformation
+    ' ========== 5. 自适应调整列宽和行高 ==========
+    newWs.Columns.AutoFit   ' 自动调整所有列宽
+    newWs.Rows.AutoFit      ' 自动调整所有行高（可选，也可只调整数据行）
+    
+    ' ========== 完成提示 ==========
+    MsgBox "操作完成！" & vbCrLf & _
+           "原始表 '" & originalWs.Name & "' 未受影响。" & vbCrLf & _
+           "新表 '" & newSheetName & "' 已完成：" & vbCrLf & _
+           "  - 仅复制了原始表中的可见内容（隐藏行列被忽略）" & vbCrLf & _
+           "  - 删除了标题行以上的 " & (headerRow - 1) & " 行" & vbCrLf & _
+           "  - 保留了列：ID, Testfallname, Octane-ID" & vbCrLf & _
+           "  - 删除了 " & deleteCount & " 行 Octane-ID 为空的记录" & vbCrLf & _
+           "  - 已自动调整列宽和行高", vbInformation
 End Sub
