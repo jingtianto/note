@@ -1,50 +1,84 @@
-Sub ProcessCopyInNewSheet()
+Sub ProcessCopyInNewSheet_FindHeader()
     Dim originalWs As Worksheet
     Dim newWs As Worksheet
     Dim newSheetName As String
     Dim lastCol As Long, lastRow As Long
-    Dim col As Long, i As Integer, r As Long
+    Dim col As Long, r As Long, i As Integer
     Dim headers As Variant
+    Dim headerRow As Long
     Dim keepCols As Collection
     Dim colToDelete As Range
     Dim octaneCol As Long
     Dim found As Boolean
+    Dim searchStartRow As Long, searchEndRow As Long
     
-    ' 设定新表名称
+    ' Settings
     newSheetName = "IPN_1"
+    headers = Array("ID", "Testfallname", "Octane id")
+    searchStartRow = 1
+    searchEndRow = 10   ' Scan first 10 rows to find the header row
     
-    ' 当前活动工作表（即原始的 IPN 表）
+    ' Current active sheet (assumed to be IPN)
     Set originalWs = ActiveSheet
     If originalWs.Name <> "IPN" Then
-        If MsgBox("当前活动工作表不是 'IPN'，是否仍要继续？(将复制当前表)", vbYesNo + vbQuestion) = vbNo Then Exit Sub
+        If MsgBox("Active sheet is not 'IPN'. Continue anyway? (will copy current sheet)", vbYesNo + vbQuestion) = vbNo Then Exit Sub
     End If
     
-    ' 处理可能已存在同名工作表
+    ' Handle existing worksheet
     Application.DisplayAlerts = False
     On Error Resume Next
     Set newWs = Worksheets(newSheetName)
     If Not newWs Is Nothing Then
         On Error GoTo 0
-        If MsgBox("工作表 '" & newSheetName & "' 已存在，是否删除并重新创建？" & vbCrLf & _
-                  "（原数据将被覆盖）", vbYesNo + vbWarning) = vbYes Then
+        If MsgBox("Worksheet '" & newSheetName & "' already exists. Delete and recreate? (data will be overwritten)", vbYesNo + vbWarning) = vbYes Then
             newWs.Delete
         Else
-            MsgBox "操作已取消。", vbInformation
+            MsgBox "Operation cancelled.", vbInformation
             Exit Sub
         End If
     End If
     On Error GoTo 0
     Application.DisplayAlerts = True
     
-    ' 复制原始表内容到新表
+    ' Copy original sheet to new sheet
     originalWs.Copy After:=originalWs
     Set newWs = ActiveSheet
     newWs.Name = newSheetName
     
-    MsgBox "已创建新工作表 '" & newSheetName & "' 并复制了原始数据，接下来将进行清理操作。", vbInformation
+    MsgBox "Created new sheet '" & newSheetName & "' with a copy of the data. Now processing...", vbInformation
     
-    ' ---------- 1. 保留指定三列，删除其他列 ----------
-    headers = Array("ID", "Testfallname", "Octane id")
+    ' ---------- Step 1: Find the row that contains all three headers ----------
+    headerRow = 0
+    For r = searchStartRow To searchEndRow
+        Dim allFound As Boolean
+        allFound = True
+        For i = LBound(headers) To UBound(headers)
+            Dim foundCell As Range
+            Set foundCell = newWs.Rows(r).Find(What:=headers(i), LookIn:=xlValues, LookAt:=xlPart, MatchCase:=False)
+            If foundCell Is Nothing Then
+                allFound = False
+                Exit For
+            End If
+        Next i
+        If allFound Then
+            headerRow = r
+            Exit For
+        End If
+    Next r
+    
+    If headerRow = 0 Then
+        MsgBox "Could not find a row (within rows 1-" & searchEndRow & ") containing all three headers: " & _
+               Join(headers, ", ") & ". Please check the data.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Delete rows above the header row
+    If headerRow > 1 Then
+        newWs.Rows("1:" & headerRow - 1).Delete Shift:=xlUp
+    End If
+    ' Now the header row becomes row 1
+    
+    ' ---------- Step 2: Keep only the three columns, delete others ----------
     lastCol = newWs.Cells(1, newWs.Columns.Count).End(xlToLeft).Column
     Set keepCols = New Collection
     
@@ -58,8 +92,7 @@ Sub ProcessCopyInNewSheet()
     Next col
     
     If keepCols.Count <> 3 Then
-        MsgBox "未找到全部三列，请检查标题行是否包含：" & vbCrLf & _
-               "ID, Testfallname, Octane id", vbExclamation
+        MsgBox "After adjusting header row, not all three columns were found. Found columns: " & keepCols.Count, vbExclamation
         Exit Sub
     End If
     
@@ -80,11 +113,8 @@ Sub ProcessCopyInNewSheet()
     
     If Not colToDelete Is Nothing Then colToDelete.Delete Shift:=xlToLeft
     
-    ' ---------- 2. 删除第一行 ----------
-    newWs.Rows(1).Delete Shift:=xlUp
-    
-    ' ---------- 3. 删除 Octane id 列为空的行 ----------
-    ' 重新定位 Octane id 列（现在新表的第一行是原第二行，即新表头）
+    ' ---------- Step 3: Delete rows where Octane id is empty ----------
+    ' Re-locate Octane id column (now column headers are in row 1)
     lastCol = newWs.Cells(1, newWs.Columns.Count).End(xlToLeft).Column
     octaneCol = 0
     For col = 1 To lastCol
@@ -95,7 +125,7 @@ Sub ProcessCopyInNewSheet()
     Next col
     
     If octaneCol = 0 Then
-        MsgBox "删除第一行后未找到 'Octane id' 列，无法删除空行。", vbExclamation
+        MsgBox "Column 'Octane id' not found after cleaning. Cannot delete empty rows.", vbExclamation
         Exit Sub
     End If
     
@@ -106,11 +136,11 @@ Sub ProcessCopyInNewSheet()
         End If
     Next r
     
-    ' 完成提示
-    MsgBox "操作完成！" & vbCrLf & _
-           "原始工作表 '" & originalWs.Name & "' 未受影响。" & vbCrLf & _
-           "新工作表 '" & newSheetName & "' 已完成：" & vbCrLf & _
-           "  1. 仅保留 ID, Testfallname, Octane id 三列" & vbCrLf & _
-           "  2. 已删除第一行" & vbCrLf & _
-           "  3. 已删除所有 Octane id 为空的行", vbInformation
+    ' Final message
+    MsgBox "Operation completed successfully!" & vbCrLf & _
+           "Original sheet '" & originalWs.Name & "' is untouched." & vbCrLf & _
+           "New sheet '" & newSheetName & "' has:" & vbCrLf & _
+           "  1. Removed all rows above the header row (found at original row " & headerRow & ")" & vbCrLf & _
+           "  2. Kept only columns: ID, Testfallname, Octane id" & vbCrLf & _
+           "  3. Removed all rows where Octane id is empty", vbInformation
 End Sub
