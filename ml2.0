@@ -229,3 +229,30 @@ For r = lastRow To 2 Step -1
         deleteCount = deleteCount + 1
     End If
 Next r
+
+'======= 5. 删除无效行（彻底清空UNGUELTIG+空Octane-ID =======
+lastRow = newWs.Cells(newWs.Rows.Count, idCol).End(xlUp).Row
+deleteCount = 0
+
+' 必须从最后一行 倒着往上删，绝对不会跳行漏删
+For r = lastRow To 2 Step -1
+    shouldDelete = False
+    
+    ' 条件1：Octane-ID列为空白/空值
+    octVal = newWs.Cells(r, octaneCol).Value
+    If Trim(UCase(CStr(octVal))) = "" Then
+        shouldDelete = True
+    End If
+
+    ' 条件2：ID列 = UNGUELTIG（无视大小写、首尾空格、多余空白）
+    idVal = Trim(UCase(CStr(newWs.Cells(r, idCol).Value)))
+    If idVal = "UNGUELTIG" Then
+        shouldDelete = True
+    End If
+    
+    ' 满足任意条件 立刻删除
+    If shouldDelete = True Then
+        newWs.Rows(r).Delete
+        deleteCount = deleteCount + 1
+    End If
+Next r
