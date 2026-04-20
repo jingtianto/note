@@ -1,30 +1,31 @@
-Sub ProcessCopyInNewSheet_FindHeader()
+Sub CopyVisibleAndClean_OctaneID()
     Dim originalWs As Worksheet
     Dim newWs As Worksheet
     Dim newSheetName As String
-    Dim lastCol As Long, lastRow As Long
-    Dim col As Long, r As Long, i As Integer
+    Dim visibleRange As Range
     Dim headers As Variant
-    Dim headerRow As Long
+    Dim searchStartRow As Long, searchEndRow As Long
+    Dim headerRow As Long, r As Long, i As Integer
+    Dim lastCol As Long, col As Long
     Dim keepCols As Collection
     Dim colToDelete As Range
     Dim octaneCol As Long
     Dim found As Boolean
-    Dim searchStartRow As Long, searchEndRow As Long
+    Dim lastRow As Long
     
-    ' Settings
+    ' 参数设置
     newSheetName = "IPN_1"
-    headers = Array("ID", "Testfallname", "Octane id")
+    headers = Array("ID", "Testfallname", "Octane-ID")   ' 列名改为 Octane-ID
     searchStartRow = 1
-    searchEndRow = 10   ' Scan first 10 rows to find the header row
+    searchEndRow = 10      ' 扫描前10行寻找标题行
     
-    ' Current active sheet (assumed to be IPN)
+    ' 原始工作表（当前活动表，假设为 IPN）
     Set originalWs = ActiveSheet
     If originalWs.Name <> "IPN" Then
-        If MsgBox("Active sheet is not 'IPN'. Continue anyway? (will copy current sheet)", vbYesNo + vbQuestion) = vbNo Then Exit Sub
+        If MsgBox("Active sheet is not 'IPN'. Continue anyway? (will copy visible cells from current sheet)", vbYesNo + vbQuestion) = vbNo Then Exit Sub
     End If
     
-    ' Handle existing worksheet
+    ' 检查并处理已存在的目标工作表
     Application.DisplayAlerts = False
     On Error Resume Next
     Set newWs = Worksheets(newSheetName)
@@ -40,29 +41,43 @@ Sub ProcessCopyInNewSheet_FindHeader()
     On Error GoTo 0
     Application.DisplayAlerts = True
     
-    ' Copy original sheet to new sheet
-    originalWs.Copy After:=originalWs
-    Set newWs = ActiveSheet
+    ' ---------- 使用定位条件复制可见内容 ----------
+    ' 获取原始表的已使用区域中的可见单元格
+    On Error Resume Next
+    Set visibleRange = originalWs.UsedRange.SpecialCells(xlCellTypeVisible)
+    On Error GoTo 0
+    
+    If visibleRange Is Nothing Then
+        MsgBox "No visible cells found in the used range of the original sheet.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' 添加新工作表并粘贴可见内容
+    Set newWs = Worksheets.Add(After:=originalWs)
     newWs.Name = newSheetName
+    visibleRange.Copy Destination:=newWs.Range("A1")
     
-    MsgBox "Created new sheet '" & newSheetName & "' with a copy of the data. Now processing...", vbInformation
+    MsgBox "Copied only visible cells from '" & originalWs.Name & "' to new sheet '" & newSheetName & "'. Now processing...", vbInformation
     
-    ' ---------- Step 1: Find the row that contains all three headers ----------
+    ' ---------- 步骤1：查找包含所有三个标题的行 ----------
     headerRow = 0
     For r = searchStartRow To searchEndRow
-        Dim allFound As Boolean
-        allFound = True
-        For i = LBound(headers) To UBound(headers)
-            Dim foundCell As Range
-            Set foundCell = newWs.Rows(r).Find(What:=headers(i), LookIn:=xlValues, LookAt:=xlPart, MatchCase:=False)
-            If foundCell Is Nothing Then
-                allFound = False
+        ' 防止行号超出实际使用行数
+        If r <= newWs.UsedRange.Rows.Count + newWs.UsedRange.Row - 1 Then
+            Dim allFound As Boolean
+            allFound = True
+            For i = LBound(headers) To UBound(headers)
+                Dim foundCell As Range
+                Set foundCell = newWs.Rows(r).Find(What:=headers(i), LookIn:=xlValues, LookAt:=xlPart, MatchCase:=False)
+                If foundCell Is Nothing Then
+                    allFound = False
+                    Exit For
+                End If
+            Next i
+            If allFound Then
+                headerRow = r
                 Exit For
             End If
-        Next i
-        If allFound Then
-            headerRow = r
-            Exit For
         End If
     Next r
     
@@ -72,13 +87,13 @@ Sub ProcessCopyInNewSheet_FindHeader()
         Exit Sub
     End If
     
-    ' Delete rows above the header row
+    ' 删除标题行以上的所有行
     If headerRow > 1 Then
         newWs.Rows("1:" & headerRow - 1).Delete Shift:=xlUp
     End If
-    ' Now the header row becomes row 1
+    ' 此时标题行变成第1行
     
-    ' ---------- Step 2: Keep only the three columns, delete others ----------
+    ' ---------- 步骤2：只保留三列，删除其他列 ----------
     lastCol = newWs.Cells(1, newWs.Columns.Count).End(xlToLeft).Column
     Set keepCols = New Collection
     
@@ -92,7 +107,7 @@ Sub ProcessCopyInNewSheet_FindHeader()
     Next col
     
     If keepCols.Count <> 3 Then
-        MsgBox "After adjusting header row, not all three columns were found. Found columns: " & keepCols.Count, vbExclamation
+        MsgBox "After adjusting header row, not all three columns were found. Found: " & keepCols.Count, vbExclamation
         Exit Sub
     End If
     
@@ -113,19 +128,19 @@ Sub ProcessCopyInNewSheet_FindHeader()
     
     If Not colToDelete Is Nothing Then colToDelete.Delete Shift:=xlToLeft
     
-    ' ---------- Step 3: Delete rows where Octane id is empty ----------
-    ' Re-locate Octane id column (now column headers are in row 1)
+    ' ---------- 步骤3：删除 Octane-ID 列为空的行 ----------
+    ' 重新定位 Octane-ID 列（现在在第1行）
     lastCol = newWs.Cells(1, newWs.Columns.Count).End(xlToLeft).Column
     octaneCol = 0
     For col = 1 To lastCol
-        If StrComp(Trim(newWs.Cells(1, col).Value), "Octane id", vbTextCompare) = 0 Then
+        If StrComp(Trim(newWs.Cells(1, col).Value), "Octane-ID", vbTextCompare) = 0 Then
             octaneCol = col
             Exit For
         End If
     Next col
     
     If octaneCol = 0 Then
-        MsgBox "Column 'Octane id' not found after cleaning. Cannot delete empty rows.", vbExclamation
+        MsgBox "Column 'Octane-ID' not found after cleaning. Cannot delete empty rows.", vbExclamation
         Exit Sub
     End If
     
@@ -136,11 +151,12 @@ Sub ProcessCopyInNewSheet_FindHeader()
         End If
     Next r
     
-    ' Final message
+    ' 完成提示
     MsgBox "Operation completed successfully!" & vbCrLf & _
            "Original sheet '" & originalWs.Name & "' is untouched." & vbCrLf & _
            "New sheet '" & newSheetName & "' has:" & vbCrLf & _
-           "  1. Removed all rows above the header row (found at original row " & headerRow & ")" & vbCrLf & _
-           "  2. Kept only columns: ID, Testfallname, Octane id" & vbCrLf & _
-           "  3. Removed all rows where Octane id is empty", vbInformation
+           "  1. Only visible cells from the original (hidden rows/columns ignored)" & vbCrLf & _
+           "  2. Removed all rows above the header row (found at original row " & headerRow & ")" & vbCrLf & _
+           "  3. Kept only columns: ID, Testfallname, Octane-ID" & vbCrLf & _
+           "  4. Removed all rows where Octane-ID is empty", vbInformation
 End Sub
