@@ -1,4 +1,4 @@
-Sub CopyVisibleAndClean_Strict_WithIDCheck()
+Sub FinalClean_WithFullDebug()
     Dim originalWs As Worksheet, newWs As Worksheet
     Dim newSheetName As String
     Dim visibleRange As Range
@@ -8,23 +8,22 @@ Sub CopyVisibleAndClean_Strict_WithIDCheck()
     Dim lastCol As Long, col As Long
     Dim keepCols As Collection
     Dim colToDelete As Range
-    Dim octaneCol As Long, idCol As Long   ' 新增 idCol 变量
+    Dim octaneCol As Long, idCol As Long
     Dim found As Boolean
     Dim lastRow As Long
     
-    ' ========== 参数设置 ==========
+    ' 参数
     newSheetName = "IPN_1"
     headers = Array("ID", "Testfallname", "Octane-ID")
     searchStartRow = 1
-    searchEndRow = 10      ' 扫描前10行寻找标题行
+    searchEndRow = 10
     
-    ' 当前工作表（假设为 IPN）
     Set originalWs = ActiveSheet
     If originalWs.Name <> "IPN" Then
         If MsgBox("当前活动表不是 'IPN'，是否继续？（将复制当前表的可见内容）", vbYesNo + vbQuestion) = vbNo Then Exit Sub
     End If
     
-    ' 处理已存在的目标表
+    ' 处理已存在的工作表
     Application.DisplayAlerts = False
     On Error Resume Next
     Set newWs = Worksheets(newSheetName)
@@ -40,11 +39,10 @@ Sub CopyVisibleAndClean_Strict_WithIDCheck()
     On Error GoTo 0
     Application.DisplayAlerts = True
     
-    ' ========== 1. 复制可见内容 ==========
+    ' 1. 复制可见内容
     On Error Resume Next
     Set visibleRange = originalWs.UsedRange.SpecialCells(xlCellTypeVisible)
     On Error GoTo 0
-    
     If visibleRange Is Nothing Then
         MsgBox "原始表中没有可见单元格。", vbExclamation
         Exit Sub
@@ -55,45 +53,30 @@ Sub CopyVisibleAndClean_Strict_WithIDCheck()
     visibleRange.Copy
     newWs.Range("A1").PasteSpecial Paste:=xlPasteAll
     Application.CutCopyMode = False
+    MsgBox "已复制可见内容到新表 '" & newSheetName & "'，开始清理..."
     
-    MsgBox "已复制可见内容到新表 '" & newSheetName & "'，开始清理...", vbInformation
-    
-    ' ========== 2. 定位真正的标题行（包含所有三个列名） ==========
+    ' 2. 查找标题行（允许列名部分匹配，但要求三个列名都在同一行）
     headerRow = 0
     For r = searchStartRow To searchEndRow
         If r <= newWs.UsedRange.Rows.Count + newWs.UsedRange.Row - 1 Then
-            Dim allFound As Boolean
-            allFound = True
+            Dim allFound As Boolean: allFound = True
             For i = LBound(headers) To UBound(headers)
-                Dim foundCell As Range
-                Set foundCell = newWs.Rows(r).Find(What:=headers(i), LookIn:=xlValues, LookAt:=xlPart, MatchCase:=False)
-                If foundCell Is Nothing Then
-                    allFound = False
-                    Exit For
-                End If
+                Dim f As Range
+                Set f = newWs.Rows(r).Find(What:=headers(i), LookIn:=xlValues, LookAt:=xlPart, MatchCase:=False)
+                If f Is Nothing Then allFound = False: Exit For
             Next i
-            If allFound Then
-                headerRow = r
-                Exit For
-            End If
+            If allFound Then headerRow = r: Exit For
         End If
     Next r
-    
     If headerRow = 0 Then
-        MsgBox "未找到包含 " & Join(headers, ", ") & " 的标题行（已扫描前 " & searchEndRow & " 行）。", vbExclamation
+        MsgBox "未找到包含 " & Join(headers, ", ") & " 的标题行。", vbExclamation
         Exit Sub
     End If
+    If headerRow > 1 Then newWs.Rows("1:" & headerRow - 1).Delete Shift:=xlUp
     
-    ' 删除标题行以上的行
-    If headerRow > 1 Then
-        newWs.Rows("1:" & headerRow - 1).Delete Shift:=xlUp
-    End If
-    ' 此时标题行变为第1行
-    
-    ' ========== 3. 只保留指定的三列 ==========
+    ' 3. 只保留三列
     lastCol = newWs.Cells(1, newWs.Columns.Count).End(xlToLeft).Column
     Set keepCols = New Collection
-    
     For col = 1 To lastCol
         For i = LBound(headers) To UBound(headers)
             If StrComp(Trim(newWs.Cells(1, col).Value), headers(i), vbTextCompare) = 0 Then
@@ -102,12 +85,10 @@ Sub CopyVisibleAndClean_Strict_WithIDCheck()
             End If
         Next i
     Next col
-    
     If keepCols.Count <> 3 Then
-        MsgBox "删除上方行后，未能同时找到三列。找到的列数：" & keepCols.Count, vbExclamation
+        MsgBox "删除上方行后，未能同时找到三列。", vbExclamation
         Exit Sub
     End If
-    
     Set colToDelete = Nothing
     For col = lastCol To 1 Step -1
         found = False
@@ -115,86 +96,89 @@ Sub CopyVisibleAndClean_Strict_WithIDCheck()
             If keepCols(i) = col Then found = True: Exit For
         Next i
         If Not found Then
-            If colToDelete Is Nothing Then
-                Set colToDelete = newWs.Columns(col)
-            Else
-                Set colToDelete = Union(colToDelete, newWs.Columns(col))
-            End If
+            If colToDelete Is Nothing Then Set colToDelete = newWs.Columns(col) Else Set colToDelete = Union(colToDelete, newWs.Columns(col))
         End If
     Next col
     If Not colToDelete Is Nothing Then colToDelete.Delete Shift:=xlToLeft
     
-    ' ========== 4. 定位 ID 列和 Octane-ID 列 ==========
+    ' 4. 定位 ID 和 Octane-ID 列
     lastCol = newWs.Cells(1, newWs.Columns.Count).End(xlToLeft).Column
-    idCol = 0
-    octaneCol = 0
+    idCol = 0: octaneCol = 0
     For col = 1 To lastCol
-        Dim headerVal As String
-        headerVal = Trim(newWs.Cells(1, col).Value)
-        If StrComp(headerVal, "ID", vbTextCompare) = 0 Then
-            idCol = col
-        ElseIf StrComp(headerVal, "Octane-ID", vbTextCompare) = 0 Then
-            octaneCol = col
-        End If
+        Dim hv As String: hv = Trim(newWs.Cells(1, col).Value)
+        If StrComp(hv, "ID", vbTextCompare) = 0 Then idCol = col
+        If StrComp(hv, "Octane-ID", vbTextCompare) = 0 Then octaneCol = col
     Next col
-    
-    If idCol = 0 Then
-        MsgBox "清理后未找到 'ID' 列，无法删除 UNGUELTIG 行。", vbExclamation
-        Exit Sub
-    End If
-    If octaneCol = 0 Then
-        MsgBox "清理后未找到 'Octane-ID' 列，无法删除空行。", vbExclamation
+    If idCol = 0 Or octaneCol = 0 Then
+        MsgBox "未能定位 ID 或 Octane-ID 列。", vbExclamation
         Exit Sub
     End If
     
-    ' ========== 5. 删除行：条件1 - Octane-ID 为空；条件2 - ID 为 "UNGUELTIG" ==========
-    lastRow = newWs.Cells(newWs.Rows.Count, octaneCol).End(xlUp).Row
-    Dim deleteCount As Long
-    deleteCount = 0
+    ' 调试输出：列号
+    Debug.Print "ID列号: " & idCol & " , Octane-ID列号: " & octaneCol
     
+    ' 5. 获取最大行号（取两列中的最大非空行，避免遗漏）
+    Dim lastRowID As Long, lastRowOct As Long
+    lastRowID = newWs.Cells(newWs.Rows.Count, idCol).End(xlUp).Row
+    lastRowOct = newWs.Cells(newWs.Rows.Count, octaneCol).End(xlUp).Row
+    lastRow = Application.WorksheetFunction.Max(lastRowID, lastRowOct)
+    If lastRow < 2 Then lastRow = 2
+    
+    ' 辅助清理函数
+    Function CleanStr(v As Variant) As String
+        If IsNull(v) Or IsEmpty(v) Then CleanStr = "": Exit Function
+        Dim s As String: s = CStr(v)
+        ' 移除所有控制字符（回车、换行、制表符等）
+        s = Replace(s, vbCr, "")
+        s = Replace(s, vbLf, "")
+        s = Replace(s, vbTab, "")
+        s = Replace(s, Chr(160), " ")  ' 非断空格
+        CleanStr = Trim(s)
+    End Function
+    
+    Dim delCount As Long, ungueltigDel As Long, emptyOctDel As Long
+    delCount = 0: ungueltigDel = 0: emptyOctDel = 0
+    
+    ' 从下往上遍历所有数据行（第2行到最后一行）
     For r = lastRow To 2 Step -1
-        Dim shouldDelete As Boolean
-        shouldDelete = False
+        Dim del As Boolean: del = False
         
-        ' 条件1：Octane-ID 为空（严格判断）
-        Dim octVal As Variant
-        octVal = newWs.Cells(r, octaneCol).Value
-        If IsEmpty(octVal) Or IsNull(octVal) Then
-            shouldDelete = True
-        Else
-            Dim strOct As String
-            strOct = Trim(CStr(octVal))
-            If strOct = "" Then shouldDelete = True
+        ' 检查 Octane-ID
+        Dim octVal As Variant: octVal = newWs.Cells(r, octaneCol).Value
+        Dim octClean As String: octClean = CleanStr(octVal)
+        If octClean = "" Then
+            del = True
+            emptyOctDel = emptyOctDel + 1
+            Debug.Print "行 " & r & " 因 Octane-ID 为空被标记删除"
         End If
         
-        ' 条件2：ID 列内容为 "UNGUELTIG"（不区分大小写）
-        If Not shouldDelete Then
-            Dim idVal As Variant
-            idVal = newWs.Cells(r, idCol).Value
-            If Not IsEmpty(idVal) And Not IsNull(idVal) Then
-                If UCase(Trim(CStr(idVal))) = "UNGUELTIG" Then
-                    shouldDelete = True
-                End If
+        ' 检查 ID 是否为 UNGUELTIG
+        If Not del Then
+            Dim idVal As Variant: idVal = newWs.Cells(r, idCol).Value
+            Dim idClean As String: idClean = CleanStr(idVal)
+            If UCase(idClean) = "UNGUELTIG" Then
+                del = True
+                ungueltigDel = ungueltigDel + 1
+                Debug.Print "行 " & r & " 因 ID = '" & idClean & "' 被标记删除"
+            ElseIf idClean <> "" Then
+                ' 可选：输出非 UNGUELTIG 的 ID 值，帮助确认
+                ' Debug.Print "行 " & r & " ID = '" & idClean & "' (保留)"
             End If
         End If
         
-        If shouldDelete Then
+        If del Then
             newWs.Rows(r).Delete
-            deleteCount = deleteCount + 1
+            delCount = delCount + 1
         End If
     Next r
     
-    ' ========== 6. 自适应调整列宽和行高 ==========
+    ' 6. 自适应列宽行高
     newWs.Columns.AutoFit
     newWs.Rows.AutoFit
     
-    ' ========== 完成提示 ==========
     MsgBox "操作完成！" & vbCrLf & _
-           "原始表 '" & originalWs.Name & "' 未受影响。" & vbCrLf & _
-           "新表 '" & newSheetName & "' 已完成：" & vbCrLf & _
-           "  - 仅复制了原始表中的可见内容（隐藏行列被忽略）" & vbCrLf & _
-           "  - 删除了标题行以上的 " & (headerRow - 1) & " 行" & vbCrLf & _
-           "  - 保留了列：ID, Testfallname, Octane-ID" & vbCrLf & _
-           "  - 共删除了 " & deleteCount & " 行（原因：Octane-ID 为空 或 ID = UNGUELTIG）" & vbCrLf & _
-           "  - 已自动调整列宽和行高", vbInformation
+           "共删除 " & delCount & " 行，其中：" & vbCrLf & _
+           "  - Octane-ID 为空: " & emptyOctDel & " 行" & vbCrLf & _
+           "  - ID = UNGUELTIG: " & ungueltigDel & " 行" & vbCrLf & _
+           "详细信息请查看VBA立即窗口（Ctrl+G）。", vbInformation
 End Sub
