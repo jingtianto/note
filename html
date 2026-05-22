@@ -1,0 +1,134 @@
+from bs4 import BeautifulSoup
+import os
+
+# ====================== 只修改这两个路径 ======================
+ROOT_FOLDER = r"D:\autosar_html_root"   # 你的HTML总根文件夹
+OUTPUT_HTML = r"D:\all_autosar_merged.html"  # 合并后保存位置
+# ==============================================================
+
+SKIP_FILE = os.path.basename(OUTPUT_HTML)
+all_pages = []
+head_template = None
+
+# 1. 递归遍历所有层级所有html文件
+print("开始深度扫描所有HTML文件...")
+for root, dirs, files in os.walk(ROOT_FOLDER):
+    for fname in files:
+        if fname.lower().endswith(".html") and fname != SKIP_FILE:
+            full_path = os.path.join(root, fname)
+            rel_path = os.path.relpath(full_path, ROOT_FOLDER).replace("\\", "/")
+            print(f"读取：{rel_path}")
+            try:
+                with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                    raw_html = f.read()
+                soup = BeautifulSoup(raw_html, "html.parser")
+                if head_template is None and soup.head:
+                    head_template = soup.head
+                body_content = soup.body.contents if soup.body else []
+                all_pages.append({
+                    "path": rel_path,
+                    "content": body_content
+                })
+            except Exception as e:
+                print(f"跳过异常文件 {rel_path}：{str(e)}")
+
+# 2. 生成树形目录导航
+def build_tree_nav(pages_list):
+    tree = {}
+    for p in pages_list:
+        parts = p["path"].split("/")
+        node = tree
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+        node[parts[-1]] = p
+
+    def render_tree(node_dict):
+        html_str = "<ul>"
+        for name, item in sorted(node_dict.items()):
+            if isinstance(item, dict):
+                html_str += f'''
+                <li class="folder-item">
+                    <span class="folder-btn">📁 {name}</span>
+                    {render_tree(item)}
+                </li>'''
+            else:
+                aid = f"anchor_{item['path'].replace('/','_').replace('.','_')}"
+                html_str += f'<li class="file-item"><a href="#{aid}" class="nav-link">📄 {name}</a></li>'
+        html_str += "</ul>"
+        return html_str
+    return render_tree(tree)
+
+# 3. 组装最终带布局+JS交互的完整HTML
+base_html = '''
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>AUTOSAR 全文档合并</title>
+<style>
+*{box-sizing:border-box;}
+body{margin:0;padding:0;display:flex;height:100vh;overflow:hidden;}
+#leftNav{width:300px;background:#f5f7fa;border-right:1px solid #ddd;overflow-y:auto;padding:15px;flex-shrink:0;}
+#mainContent{flex:1;overflow-y:auto;padding:25px 40px;}
+#leftNav h3{margin-top:0;color:#222;border-bottom:1px solid #eee;padding-bottom:10px;}
+ul{list-style:none;padding-left:15px;margin:5px 0;}
+.folder-btn{cursor:pointer;font-weight:550;user-select:none;color:#111;}
+.folder-btn:hover{color:#005cc5;}
+.folder-item ul{display:none;}
+.folder-item.open ul{display:block;}
+.nav-link{text-decoration:none;color:#333;line-height:1.7;}
+.nav-link:hover{color:#005cc5;text-decoration:underline;}
+.page-title{margin:40px 0 15px 0;padding-top:25px;border-top:2px solid #e5e7eb;color:#1f2937;}
+</style>
+</head>
+<body>
+<div id="leftNav">
+    <h3>📂 文档树形目录</h3>
+    <div id="treeMenu"></div>
+</div>
+<div id="mainContent"></div>
+<script>
+// 文件夹折叠展开
+document.addEventListener('DOMContentLoaded',function(){
+    document.querySelectorAll('.folder-btn').forEach(btn=>{
+        btn.onclick=function(){
+            this.parentElement.classList.toggle('open');
+        }
+    })
+})
+</script>
+</body>
+</html>
+'''
+
+final_soup = BeautifulSoup(base_html, "html.parser")
+
+# 植入原文档样式
+if head_template:
+    for css_tag in head_template.find_all(["style","link"]):
+        final_soup.head.append(css_tag)
+
+# 插入树形菜单
+tree_html = build_tree_nav(all_pages)
+final_soup.find(id="treeMenu").append(BeautifulSoup(tree_html, "html.parser"))
+
+# 写入所有页面内容
+content_wrap = final_soup.find(id="mainContent")
+for page in all_pages:
+    anchor_id = f"anchor_{page['path'].replace('/','_').replace('.','_')}"
+    title_tag = final_soup.new_tag("h4", attrs={"class":"page-title","id":anchor_id})
+    title_tag.string = "【" + page["path"] + "】"
+    content_wrap.append(title_tag)
+    for ele in page["content"]:
+        content_wrap.append(ele)
+
+# 保存文件
+with open(OUTPUT_HTML, "w", encoding="utf-8") as f:
+    f.write(final_soup.prettify())
+
+print(f"\n✅ 合并完成！")
+print(f"输出路径：{OUTPUT_HTML}")
+print("功能说明：")
+print("1. 自动遍历所有层级子文件夹HTML")
+print("2. 左侧树形目录，点击文件夹展开/收起")
+print("3. 点击目录直接跳转到对应文档位置")
+print("4. 保留原页面所有表格、样式、排版")
