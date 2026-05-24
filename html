@@ -1,243 +1,116 @@
-"""
-全自动解析SOME/IP HTML服务手册
-输出：服务 - 事件组 - 事件 - 多层结构体字段 - 枚举释义 - 数组列表说明
-生成：结构化JSON + 层级树状Markdown报文结构文档
-"""
+import xml.etree.ElementTree as ET
+import pandas as pd
+from openpyxl import Workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl.worksheet.dimensions import ColumnDimension
 import os
-import json
-from bs4 import BeautifulSoup
 
-# ====================== 【在这里修改你的HTML根目录】======================
-BASE_HTML_ROOT = r"C:\xxx\ServiceCatalogue"
-# =========================================================================
+# ========== 配置区域 ==========
+ARXML_FILE = r"C:\xxx\service.arxml"   # 替换为你的ARXML路径
+OUTPUT_EXCEL = r"SOMEIP层级通讯矩阵.xlsx"
+# =============================
 
-OUTPUT_JSON = os.path.join(BASE_HTML_ROOT, "ALL_SOMEIP_STRUCTURE.json")
-OUTPUT_MD = os.path.join(BASE_HTML_ROOT, "ALL_SOMEIP报文层级树.md")
+# AUTOSAR命名空间
+NS = {"ar": "http://autosar.org/schema/r4.0"}
 
-# 全局缓存自定义数据类型（结构体/枚举）
-GLOBAL_DATATYPE_CACHE = {}
+def get_node_text(node, xpath):
+    res = node.find(xpath, namespaces=NS)
+    return res.text.strip() if res is not None else ""
 
+# 递归解析数据元素，记录层级与偏移
+def recursive_parse_elem(elem, level, service, eg_name, event_name, parent_path, byte_off, bit_off, row_list):
+    short_name = get_node_text(elem, "./ar:SHORT_NAME")
+    full_path = f"{parent_path}.{short_name}" if parent_path else short_name
 
-def safe_text(el):
-    if not el:
-        return ""
-    return el.text.strip().replace("\n", " ").replace("\r", "")
+    # 基础属性
+    base_type = get_node_text(elem, "./ar:TypeEmitter/ar:BaseType/ar:SHORT_NAME")
+    bit_len = get_node_text(elem, "./ar:BitLength")
 
-
-def parse_enum_text(text):
-    """解析枚举字符串，返回 {值:含义}"""
+    # 解析枚举
     enum_map = {}
-    if not text:
-        return enum_map
-    seg_list = text.split(",")
-    for seg in seg_list:
-        seg = seg.strip()
-        if ":" in seg:
-            k, v = seg.split(":", 1)
-            enum_map[k.strip()] = v.strip()
-    return enum_map
+    compu_scales = elem.findall(".//ar:CompuScale", namespaces=NS)
+    for scale in compu_scales:
+        val = get_node_text(scale, "./ar:Value")
+        desc = get_node_text(scale, "./ar:Text")
+        if val and desc:
+            enum_map[val] = desc
+    enum_str = "；".join([f"{k}={v}" for k, v in enum_map.items()]) if enum_map else ""
 
+    # 存入行数据
+    row_list.append({
+        "层级": level,
+        "服务": service,
+        "事件组": eg_name,
+        "事件": event_name,
+        "完整信号路径": full_path,
+        "信号名称": short_name,
+        "字节偏移": byte_off,
+        "起始位": bit_off,
+        "位长度": bit_len,
+        "数据类型": base_type,
+        "枚举释义": enum_str
+    })
 
-def parse_field_table(table_soup):
-    """
-    递归解析字段表格
-    支持：普通字段 / 嵌套结构体 / 数组 / 枚举
-    """
-    field_list = []
-    if not table_soup:
-        return field_list
+    # 遍历子字段
+    child_elems = elem.findall("./ar:DataElem", namespaces=NS)
+    for child in child_elems:
+        recursive_parse_elem(child, level+1, service, eg_name, event_name, full_path, byte_off, bit_off, row_list)
 
-    rows = table_soup.find_all("tr")
-    for row in rows:
-        tds = row.find_all("td")
-        if len(tds) < 2:
-            continue
+def parse_someip_arxml(xml_path):
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
+    all_rows = []
 
-        field_name = safe_text(tds[0])
-        if not field_name:
-            continue
+    # 遍历SOMEIP服务接口
+    service_interfaces = root.findall(".//ar:SOMEIPServiceInterface", namespaces=NS)
+    for srv_if in service_interfaces:
+        srv_name = get_node_text(srv_if, "./ar:SHORT_NAME")
+        # 遍历事件组
+        event_groups = srv_if.findall("./ar:SOMEIPEventGroup", namespaces=NS)
+        for eg in event_groups:
+            eg_name = get_node_text(eg, "./ar:SHORT_NAME")
+            # 遍历事件
+            events = eg.findall("./ar:SOMEIPEvent", namespaces=NS)
+            for evt in events:
+                evt_name = get_node_text(evt, "./ar:SHORT_NAME")
+                # 报文负载结构
+                payload_type = evt.find("./ar:PayloadDataType/ar:DataElem", namespaces=NS)
+                if payload_type:
+                    recursive_parse_elem(payload_type, 1, srv_name, eg_name, evt_name, "", 0, 0, all_rows)
+    return all_rows
 
-        data_type_raw = safe_text(tds[1])
-        bit_len = safe_text(tds[2]) if len(tds) >= 3 else ""
-        enum_str = safe_text(tds[3]) if len(tds) >= 4 else ""
-        enum_map = parse_enum_text(enum_str)
+def export_foldable_excel(data_rows, save_path):
+    df = pd.DataFrame(data_rows)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "SOMEIP通讯矩阵"
 
-        # 嵌套子结构体
-        child_table = tds[1].find("table")
-        child_fields = []
-        if child_table:
-            child_fields = parse_field_table(child_table)
+    # 写入数据
+    for r in dataframe_to_rows(df, index=False, header=True):
+        ws.append(r)
 
-        field_list.append({
-            "field_name": field_name,
-            "data_type": data_type_raw,
-            "bit_length": bit_len,
-            "enum_define": enum_map,
-            "child_fields": child_fields
-        })
-    return field_list
+    # 设置分组折叠（按层级分组）
+    max_level = df["层级"].max() if not df.empty else 0
+    for row_idx in range(2, ws.max_row+1):
+        level = df.iloc[row_idx-2]["层级"]
+        if level > 1:
+            ws.row_dimensions[row_idx].outline_level = level - 1
 
+    # 自动列宽
+    for col in ws.columns:
+        max_len = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            cell_val = str(cell.value)
+            current_len = len(cell_val)
+            if current_len > max_len:
+                max_len = current_len
+        ws.column_dimensions[col_letter].width = min(max_len + 3, 35)
 
-def parse_datatype_page(html_path):
-    """解析数据类型页面，缓存结构体/枚举定义"""
-    try:
-        with open(html_path, "r", encoding="utf-8") as f:
-            soup = BeautifulSoup(f.read(), "html.parser")
-        dt_name = safe_text(soup.find("title"))
-        tables = soup.find_all("table", class_="repdeftable")
-        for tb in tables:
-            fields = parse_field_table(tb)
-            GLOBAL_DATATYPE_CACHE[dt_name] = fields
-    except Exception as e:
-        print("[跳过数据类型页]", html_path, str(e))
-
-
-def parse_service_page(html_path):
-    """解析单个服务页面：服务 - 事件组 - Event - 字段层级"""
-    with open(html_path, "r", encoding="utf-8") as f:
-        soup = BeautifulSoup(f.read(), "html.parser")
-
-    service_name = safe_text(soup.find("title"))
-    service_info = {
-        "service_name": service_name,
-        "methods": [],
-        "event_groups": []
-    }
-
-    # 解析方法
-    for table in soup.find_all("table", class_="repdeftable"):
-        rows = table.find_all("tr")
-        for row in rows:
-            tds = row.find_all("td")
-            if len(tds) < 3:
-                continue
-            m_name = safe_text(tds[0])
-            m_type = safe_text(tds[1])
-            req_fields = parse_field_table(tds[2].find("table"))
-            service_info["methods"].append({
-                "method_name": m_name,
-                "method_type": m_type,
-                "request_fields": req_fields
-            })
-
-    # 解析事件组 + Event（适配绝大多数Symphony HTML结构）
-    all_eg_blocks = soup.find_all("div", class_="eventgroup")
-    if not all_eg_blocks:
-        all_eg_blocks = soup.find_all("section")
-
-    for eg_block in all_eg_blocks:
-        eg_title = eg_block.find(["h3", "h2", "h4"])
-        eg_name = safe_text(eg_title) if eg_title else "UnnamedEventGroup"
-
-        event_blocks = eg_block.find_all("div", class_="event")
-        if not event_blocks:
-            event_blocks = [eg_block]
-
-        for evt in event_blocks:
-            evt_title = evt.find(["h4", "h3"])
-            evt_name = safe_text(evt_title) if evt_title else "UnnamedEvent"
-            evt_table = evt.find("table")
-            evt_fields = parse_field_table(evt_table)
-
-            service_info["event_groups"].append({
-                "event_group": eg_name,
-                "event_name": evt_name,
-                "event_fields": evt_fields
-            })
-
-    return service_info
-
-
-def scan_all_html(base_path):
-    """遍历全部HTML，区分服务页、数据类型页"""
-    service_html_paths = []
-    datatype_html_paths = []
-
-    for root, _, files in os.walk(base_path):
-        for fname in files:
-            if fname.lower().endswith(".html"):
-                full_p = os.path.join(root, fname)
-                if "datatype" in root.lower() or "datatype" in fname.lower():
-                    datatype_html_paths.append(full_p)
-                elif "service" in root.lower() or "interface" in fname.lower():
-                    service_html_paths.append(full_p)
-
-    # 先加载所有数据类型
-    print(f"开始加载全局数据类型定义：{len(datatype_html_paths)} 个")
-    for p in datatype_html_paths:
-        parse_datatype_page(p)
-
-    # 再加载所有服务
-    print(f"开始解析服务页面：{len(service_html_paths)} 个")
-    all_service_list = []
-    for idx, p in enumerate(service_html_paths):
-        print(f"[{idx+1}/{len(service_html_paths)}] 解析: {os.path.basename(p)}")
-        s_data = parse_service_page(p)
-        all_service_list.append(s_data)
-    return all_service_list
-
-
-def fields_to_md_tree(field_list, depth=1):
-    """字段转markdown树状文本（递归）"""
-    md_txt = ""
-    prefix = "  " * (depth - 1)
-    for f in field_list:
-        # 基础信息
-        line = f"{prefix}- **{f['field_name']}** | 类型:{f['data_type']} | 位宽:{f['bit_length']}"
-        # 枚举释义
-        if f["enum_define"]:
-            enum_text = "、".join([f"{k}={v}" for k, v in f["enum_define"].items()])
-            line += f" | 枚举释义:【{enum_text}】"
-        md_txt += line + "\n"
-        # 递归子字段
-        if f["child_fields"]:
-            md_txt += fields_to_md_tree(f["child_fields"], depth + 1)
-    return md_txt
-
-
-def export_markdown(all_services):
-    """导出完整层级树状MD文档"""
-    md_content = "# 全网段SOME/IP报文层级结构（真实以太网日志结构）\n\n"
-    for serv in all_services:
-        md_content += f"## 服务：{serv['service_name']}\n\n"
-
-        # 方法
-        if serv["methods"]:
-            md_content += f"### 1. 方法列表\n\n"
-            for m in serv["methods"]:
-                md_content += f"#### 方法：{m['method_name']}（{m['method_type']}）\n\n"
-                md_content += f"**请求参数字段层级：**\n\n"
-                md_content += fields_to_md_tree(m["request_fields"], 1)
-                md_content += "\n"
-
-        # 事件组 & 事件
-        if serv["event_groups"]:
-            md_content += f"### 2. 事件组 & 事件报文\n\n"
-            for eg in serv["event_groups"]:
-                md_content += f"#### 事件组：{eg['event_group']}\n"
-                md_content += f"##### 事件：{eg['event_name']}\n\n"
-                md_content += f"**报文字段层级：**\n\n"
-                md_content += fields_to_md_tree(eg["event_fields"], 1)
-                md_content += "\n"
-
-    with open(OUTPUT_MD, "w", encoding="utf-8") as f:
-        f.write(md_content)
-    print("✅ Markdown 报文层级树 导出完成：", OUTPUT_MD)
-
+    wb.save(save_path)
+    print(f"✅ 可折叠Excel生成完成：{save_path}")
+    print(f"✅ 总计解析信号：{len(df)} 条")
 
 if __name__ == "__main__":
-    # 1. 全盘解析
-    total_data = scan_all_html(BASE_HTML_ROOT)
-
-    # 2. 保存原始结构化JSON
-    with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
-        json.dump(total_data, f, indent=2, ensure_ascii=False)
-    print("✅ 原始结构化JSON 导出完成：", OUTPUT_JSON)
-
-    # 3. 生成可读报文层级树
-    export_markdown(total_data)
-
-    print("\n==================== 全部解析完成 ====================")
-    print("输出文件：")
-    print("1. 完整结构化数据源：ALL_SOMEIP_STRUCTURE.json")
-    print("2. 可直接阅读的报文层级树：ALL_SOMEIP报文层级树.md")
+    result_data = parse_someip_arxml(ARXML_FILE)
+    export_foldable_excel(result_data, OUTPUT_EXCEL)
