@@ -1,85 +1,98 @@
 (function(){
-    // ========= 在这里改你的关键词，Excel换行/逗号分隔都支持 =========
+    // 👇 在这里填你的关键词，逗号/Excel换行单列都兼容
     const rawKeywords = `175768,175769`;
-    // ===========================================================
 
-    // 清洗关键词+自动分配柔和颜色
+    // 关键词&配色初始化
     const keywordList = rawKeywords
         .split(/[,，\n]/)
         .map(s => s.trim())
         .filter(s => s);
 
+    if(keywordList.length === 0) return alert("请先填写关键词");
+
     const colors = ["#ffdddd","#ddffdd","#ffffcc","#ddddff","#ffeedd","#eeddff"];
     const rules = keywordList.map((word, idx) => ({
         text: word,
+        regex: new RegExp(word, "gi"),
         bg: colors[idx % colors.length]
     }));
 
-    // 安全高亮单个节点（不破坏输入框、表单）
-    function highlightText(node){
-        if (node.nodeType !== 3 || !node.nodeValue.trim()) return;
-        const txt = node.nodeValue;
-        const frag = document.createDocumentFragment();
-        let last = 0;
+    // 已经高亮过的节点标记，永久跳过，避免重复处理卡死
+    const processed = new WeakSet();
 
-        rules.forEach(rule => {
-            const reg = new RegExp(rule.text, "gi");
-            let match;
-            while((match = reg.exec(txt)) !== null){
-                if(match.index > last){
-                    frag.appendChild(document.createTextNode(txt.slice(last, match.index)));
-                }
-                const span = document.createElement("span");
-                span.style.background = rule.bg;
-                span.style.padding = "1px 3px";
-                span.style.borderRadius = "2px";
-                span.textContent = match[0];
-                frag.appendChild(span);
-                last = reg.lastIndex;
-            }
-        });
-
-        if(last < txt.length){
-            frag.appendChild(document.createTextNode(txt.slice(last)));
-        }
-
-        if(frag.childNodes.length > 0){
-            node.parentNode.replaceChild(frag, node);
-        }
-    }
-
-    // 批量扫描整个区域执行高亮
-    function highlightAll(root = document.body){
+    // 单次安全高亮，只处理未标记的新内容
+    function highlightOnce(root = document.body){
         const walker = document.createTreeWalker(
             root,
             NodeFilter.SHOW_TEXT,
             null
         );
-        const textNodes = [];
+        const nodes = [];
         let node;
         while(node = walker.nextNode()){
-            if(!["SCRIPT","STYLE","INPUT","TEXTAREA","BUTTON"].includes(node.parentElement.tagName)){
-                textNodes.push(node);
+            const parent = node.parentElement;
+            if(
+                !processed.has(node)
+                && parent
+                && !["SCRIPT","STYLE","INPUT","TEXTAREA","BUTTON","SPAN"].includes(parent.tagName)
+                && node.nodeValue.trim()
+            ){
+                nodes.push(node);
+                processed.add(node);
             }
         }
-        textNodes.forEach(highlightText);
+
+        nodes.forEach(textNode => {
+            const txt = textNode.nodeValue;
+            const frag = document.createDocumentFragment();
+            let lastIdx = 0;
+
+            rules.forEach(rule => {
+                let match;
+                rule.regex.lastIndex = 0;
+                while((match = rule.regex.exec(txt)) !== null){
+                    if(match.index > lastIdx){
+                        frag.appendChild(document.createTextNode(txt.slice(lastIdx, match.index)));
+                    }
+                    const span = document.createElement("span");
+                    span.style.background = rule.bg;
+                    span.style.padding = "1px 3px";
+                    span.style.borderRadius = "2px";
+                    span.textContent = match[0];
+                    frag.appendChild(span);
+                    lastIdx = rule.regex.lastIndex;
+                }
+            });
+
+            if(lastIdx < txt.length){
+                frag.appendChild(document.createTextNode(txt.slice(lastIdx)));
+            }
+
+            if(frag.childNodes.length > 0){
+                textNode.parentNode.replaceChild(frag, textNode);
+            }
+        });
     }
 
-    // 首次执行全页高亮
-    highlightAll();
+    // 首次全页高亮
+    highlightOnce();
 
-    // 自动监听：滚动新增内容、动态加载DOM，自动重新高亮
-    const observer = new MutationObserver(()=>{
-        highlightAll();
+    // 防抖节流：等待滚动/加载停止后，只执行1次更新，绝不卡死
+    let timer = null;
+    const observer = new MutationObserver(() => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+            highlightOnce();
+        }, 300);
     });
 
-    // 监听整个页面所有新增改动，极致稳定
+    // 轻量化监听，最小性能占用
     observer.observe(document.body, {
         childList: true,
         subtree: true,
-        characterData: true
+        characterData: false
     });
 
-    console.log("✅ 常驻高亮已启动！滚动新加载内容也会自动高亮");
-    alert("常驻高亮生效！现在往下滚动，新加载的内容也会自动保持高亮");
+    console.log("✅ 稳定版常驻高亮启动，滚动丝滑不卡顿");
+    alert("修复完成！现在上下左右滚动完全正常，新加载内容依然会自动高亮");
 })();
