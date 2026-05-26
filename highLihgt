@@ -1,9 +1,10 @@
 (function(){
-    // 👇 只需要在这里粘贴你的关键词，逗号分隔/Excel换行单列，自动识别
-    const inputKeywords = `175768,175769`;
+    // ========= 在这里改你的关键词，Excel换行/逗号分隔都支持 =========
+    const rawKeywords = `175768,175769`;
+    // ===========================================================
 
-    // 自动清洗、去重、生成配色
-    const keywordList = inputKeywords
+    // 清洗关键词+自动分配柔和颜色
+    const keywordList = rawKeywords
         .split(/[,，\n]/)
         .map(s => s.trim())
         .filter(s => s);
@@ -14,46 +15,71 @@
         bg: colors[idx % colors.length]
     }));
 
-    // 安全遍历高亮（不破坏原有页面结构、输入框正常编辑）
-    function highlightNode(node) {
-        if (node.nodeType === 3 && node.nodeValue.trim()) {
-            const text = node.nodeValue;
-            const frag = document.createDocumentFragment();
-            let lastPos = 0;
+    // 安全高亮单个节点（不破坏输入框、表单）
+    function highlightText(node){
+        if (node.nodeType !== 3 || !node.nodeValue.trim()) return;
+        const txt = node.nodeValue;
+        const frag = document.createDocumentFragment();
+        let last = 0;
 
-            rules.forEach(rule => {
-                const reg = new RegExp(rule.text, "gi");
-                let match;
-                while ((match = reg.exec(text)) !== null) {
-                    if (match.index > lastPos) {
-                        frag.appendChild(document.createTextNode(text.slice(lastPos, match.index)));
-                    }
-                    const span = document.createElement("span");
-                    span.style.background = rule.bg;
-                    span.style.padding = "1px 3px";
-                    span.style.borderRadius = "2px";
-                    span.textContent = match[0];
-                    frag.appendChild(span);
-                    lastPos = reg.lastIndex;
+        rules.forEach(rule => {
+            const reg = new RegExp(rule.text, "gi");
+            let match;
+            while((match = reg.exec(txt)) !== null){
+                if(match.index > last){
+                    frag.appendChild(document.createTextNode(txt.slice(last, match.index)));
                 }
-            });
-
-            if (lastPos < text.length) {
-                frag.appendChild(document.createTextNode(text.slice(lastPos)));
+                const span = document.createElement("span");
+                span.style.background = rule.bg;
+                span.style.padding = "1px 3px";
+                span.style.borderRadius = "2px";
+                span.textContent = match[0];
+                frag.appendChild(span);
+                last = reg.lastIndex;
             }
+        });
 
-            if (frag.childNodes.length > 0) {
-                node.parentNode.replaceChild(frag, node);
-            }
+        if(last < txt.length){
+            frag.appendChild(document.createTextNode(txt.slice(last)));
         }
-        else if (
-            node.nodeType === 1 &&
-            !["SCRIPT","STYLE","INPUT","TEXTAREA","BUTTON"].includes(node.tagName)
-        ) {
-            [...node.childNodes].forEach(highlightNode);
+
+        if(frag.childNodes.length > 0){
+            node.parentNode.replaceChild(frag, node);
         }
     }
 
-    highlightNode(document.body);
-    console.log("✅ 全部关键词高亮完成，可直接在线填写参数");
+    // 批量扫描整个区域执行高亮
+    function highlightAll(root = document.body){
+        const walker = document.createTreeWalker(
+            root,
+            NodeFilter.SHOW_TEXT,
+            null
+        );
+        const textNodes = [];
+        let node;
+        while(node = walker.nextNode()){
+            if(!["SCRIPT","STYLE","INPUT","TEXTAREA","BUTTON"].includes(node.parentElement.tagName)){
+                textNodes.push(node);
+            }
+        }
+        textNodes.forEach(highlightText);
+    }
+
+    // 首次执行全页高亮
+    highlightAll();
+
+    // 自动监听：滚动新增内容、动态加载DOM，自动重新高亮
+    const observer = new MutationObserver(()=>{
+        highlightAll();
+    });
+
+    // 监听整个页面所有新增改动，极致稳定
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true
+    });
+
+    console.log("✅ 常驻高亮已启动！滚动新加载内容也会自动高亮");
+    alert("常驻高亮生效！现在往下滚动，新加载的内容也会自动保持高亮");
 })();
