@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Excel转网页表格填充脚本生成器</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+        body {
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 0 20px;
+            background: #f5f7fa;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 25px;
+            font-size: 22px;
+        }
+        .tips {
+            background: #f0f8ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            color: #666;
+            line-height: 1.6;
+        }
+        .tips strong {
+            color: #409eff;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            resize: vertical;
+            margin-bottom: 20px;
+            font-family: monospace;
+        }
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        button {
+            flex: 1;
+            padding: 12px 0;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        #generateBtn {
+            background: #409eff;
+            color: white;
+        }
+        #generateBtn:hover {
+            background: #337ecc;
+        }
+        #clearBtn {
+            background: #909399;
+            color: white;
+        }
+        #clearBtn:hover {
+            background: #73767a;
+        }
+        .result-box {
+            position: relative;
+        }
+        #scriptResult {
+            width: 100%;
+            height: 400px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 12px;
+            background: #fafafa;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-y: auto;
+        }
+        .copy-tip {
+            text-align: center;
+            margin-top: 12px;
+            color: #00b42a;
+            font-weight: bold;
+            display: none;
+            font-size: 14px;
+        }
+        .error-tip {
+            text-align: center;
+            margin-top: 12px;
+            color: #f53f3f;
+            font-weight: bold;
+            display: none;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>📋 Excel转网页表格填充脚本生成器</h2>
+        
+        <div class="tips">
+            <strong>使用步骤：</strong><br>
+            1. 从Excel复制 A列(关键字) + B列 + C列 内容（整列复制）<br>
+            2. 粘贴到下方输入框（自动兼容制表符/空格分隔）<br>
+            3. 点击「生成并复制脚本」→ 自动复制到剪贴板<br>
+            4. 打开目标网页 → F12控制台 → 粘贴脚本 → 回车执行
+        </div>
+
+        <textarea id="excelInput" placeholder="请粘贴从Excel复制的三列内容（示例：
+19921312	Passed	Automatica Passed
+19921313	Passed	Automatica Passed
+19921314	Passed	Automatica Passed）"></textarea>
+
+        <div class="btn-group">
+            <button id="generateBtn">生成并复制脚本</button>
+            <button id="clearBtn">清空内容</button>
+        </div>
+
+        <div class="result-box">
+            <textarea id="scriptResult" readonly placeholder="生成的JS脚本会显示在这里..."></textarea>
+        </div>
+
+        <div class="copy-tip" id="copyTip">✅ 脚本已复制到剪贴板！直接去网页控制台粘贴即可</div>
+        <div class="error-tip" id="errorTip">❌ 请先输入有效的Excel数据！</div>
+    </div>
+
+    <script>
+        // 生成脚本核心函数
+        function generateScript() {
+            // 获取输入的Excel数据
+            const excelData = document.getElementById('excelInput').value.trim();
+            if (!excelData) {
+                document.getElementById('errorTip').style.display = 'block';
+                setTimeout(() => {
+                    document.getElementById('errorTip').style.display = 'none';
+                }, 2000);
+                return;
+            }
+
+            // 脚本模板（嵌入用户的Excel数据）
+            const scriptTemplate = `(function() {
+    // 自动导入的Excel数据
+    const excelDataRaw = \`${excelData.replace(/`/g, '\\`')}\`;
+
+    try {
+        // 解析Excel数据为字典（关键字→{col2: B列内容, col3: C列内容}）
+        const dataMap = {};
+        excelDataRaw
+            .split('\\n')
+            .map(line => line.trim())
+            .filter(line => line)
+            .forEach(line => {
+                // 按制表符/多空格分割（兼容Excel复制格式）
+                const parts = line.split(/\\t+|\\s{2,}/);
+                const key = parts[0]?.trim();
+                const col2 = parts[1]?.trim() || '';
+                const col3 = parts[2]?.trim() || '';
+                
+                if (key) {
+                    dataMap[key] = { col2, col3 };
+                }
+            });
+
+        if (Object.keys(dataMap).length === 0) {
+            alert('❌ 未解析到有效数据！请检查Excel数据格式：\\n1. 确保是A/B/C列复制\\n2. 关键字列不为空');
+            return;
+        }
+
+        // 表格匹配配置（通用适配，无需修改）
+        const config = {
+            rowSelector: 'table tr:has(td)',
+            newColStyle: 'background:#e8f4ff;padding:4px 8px;border:1px solid #409eff;color:#333;cursor:pointer;',
+            markerClass: 'excel-matched-col'
+        };
+
+        // 记录已处理的行，避免重复新增列
+        let processedRows = new WeakSet();
+        function processTable() {
+            const rows = document.querySelectorAll(config.rowSelector);
+            let matchedCount = 0;
+
+            rows.forEach(row => {
+                if (processedRows.has(row)) return;
+
+                const cells = row.querySelectorAll('td');
+                let keyCell = null;
+                let key = '';
+
+                // 匹配关键字单元格
+                for (const cell of cells) {
+                    const cellText = cell.textContent.trim();
+                    if (dataMap[cellText]) {
+                        keyCell = cell;
+                        key = cellText;
+                        break;
+                    }
+                }
+
+                // 新增列并填充数据
+                if (keyCell && dataMap[key]) {
+                    // 新增B列（Excel第二列）
+                    const col2 = document.createElement('td');
+                    col2.className = config.markerClass;
+                    col2.style = config.newColStyle;
+                    col2.textContent = dataMap[key].col2;
+                    col2.title = '点击复制此内容';
+                    col2.onclick = () => {
+                        try {
+                            navigator.clipboard.writeText(col2.textContent).then(() => {
+                                alert(\`✅ 已复制：\${col2.textContent}\`);
+                            }).catch(() => {
+                                const textArea = document.createElement('textarea');
+                                textArea.value = col2.textContent;
+                                document.body.appendChild(textArea);
+                                textArea.select();
+                                document.execCommand('copy');
+                                document.body.removeChild(textArea);
+                                alert(\`✅ 已复制：\${col2.textContent}\`);
+                            });
+                        } catch (e) {
+                            alert(\`⚠️ 复制失败，请手动复制：\${col2.textContent}\`);
+                        }
+                    };
+
+                    // 新增C列（Excel第三列）
+                    const col3 = document.createElement('td');
+                    col3.className = config.markerClass;
+                    col3.style = config.newColStyle;
+                    col3.textContent = dataMap[key].col3;
+                    col3.title = '点击复制此内容';
+                    col3.onclick = () => {
+                        try {
+                            navigator.clipboard.writeText(col3.textContent).then(() => {
+                                alert(\`✅ 已复制：\${col3.textContent}\`);
+                            }).catch(() => {
+                                const textArea = document.createElement('textarea');
+                                textArea.value = col3.textContent;
+                                document.body.appendChild(textArea);
+                                textArea.select();
+                                document.execCommand('copy');
+                                document.body.removeChild(textArea);
+                                alert(\`✅ 已复制：\${col3.textContent}\`);
+                            });
+                        } catch (e) {
+                            alert(\`⚠️ 复制失败，请手动复制：\${col3.textContent}\`);
+                        }
+                    };
+
+                    // 插入到关键字右侧（B列在前，C列在后）
+                    keyCell.after(col2, col3);
+                    processedRows.add(row);
+                    matchedCount++;
+                }
+            });
+
+            console.log(\`✅ 表格处理完成！本次匹配到 \${matchedCount} 行，累计处理 \${processedRows.size} 行\`);
+        }
+
+        // 首次执行
+        processTable();
+
+        // 监听动态表格加载（防抖+性能优化）
+        let timer = null;
+        const observer = new MutationObserver((mutations) => {
+            const hasNewNodes = mutations.some(m => m.addedNodes.length > 0);
+            if (!hasNewNodes) return;
+
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                processTable();
+            }, 300);
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: false
+        });
+
+        console.log(\`🚀 Excel数据加载完成！共解析 \${Object.keys(dataMap).length} 条关键字\`);
+        console.log(\`💡 提示：点击新增列可直接复制内容，动态加载的表格会自动匹配\`);
+
+    } catch (e) {
+        alert(\`❌ 脚本执行出错：\${e.message}\\n请查看控制台（F12）获取详细信息\`);
+        console.error('脚本错误详情：', e);
+    }
+})();`;
+
+            // 显示生成的脚本
+            document.getElementById('scriptResult').value = scriptTemplate;
+            
+            // 自动复制到剪贴板
+            try {
+                navigator.clipboard.writeText(scriptTemplate).then(() => {
+                    document.getElementById('copyTip').style.display = 'block';
+                    setTimeout(() => {
+                        document.getElementById('copyTip').style.display = 'none';
+                    }, 3000);
+                }).catch(() => {
+                    // 降级复制方案（兼容所有浏览器）
+                    const textArea = document.getElementById('scriptResult');
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.getElementById('copyTip').style.display = 'block';
+                    setTimeout(() => {
+                        document.getElementById('copyTip').style.display = 'none';
+                    }, 3000);
+                });
+            } catch (err) {
+                alert('✅ 脚本已生成，请手动复制下方内容到控制台！');
+            }
+        }
+
+        // 清空内容
+        function clearAll() {
+            document.getElementById('excelInput').value = '';
+            document.getElementById('scriptResult').value = '';
+        }
+
+        // 绑定按钮事件
+        document.getElementById('generateBtn').addEventListener('click', generateScript);
+        document.getElementById('clearBtn').addEventListener('click', clearAll);
+    </script>
+</body>
+</html>
