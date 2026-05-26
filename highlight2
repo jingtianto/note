@@ -1,0 +1,100 @@
+(function(){
+    // 填写关键词：逗号分隔 / Excel换行粘贴 都支持
+    const rawKeywords = `175768,175769`;
+
+    const keywordList = rawKeywords
+        .split(/[,，\n]/)
+        .map(s => s.trim())
+        .filter(s => s);
+
+    if(keywordList.length === 0) return alert("未检测到有效关键词");
+
+    // 【加深版配色池 共12组，循环使用】颜色更深、辨识度更高
+    const colors = [
+        "#ffb3b3","#b3ffb3","#fff380","#b3d1ff",
+        "#ffcc99","#d9b3ff","#80ffff","#ff99cc",
+        "#c2f0c2","#e6e68a","#99ccff","#ffd199"
+    ];
+
+    const rules = keywordList.map((word, idx) => ({
+        text: word,
+        regex: new RegExp(word, "gi"),
+        bg: colors[idx % colors.length]
+    }));
+
+    const processed = new WeakSet();
+
+    function highlightOnce(root = document.body){
+        const walker = document.createTreeWalker(
+            root,
+            NodeFilter.SHOW_TEXT,
+            null
+        );
+        const nodes = [];
+        let node;
+        while(node = walker.nextNode()){
+            const parent = node.parentElement;
+            if(
+                !processed.has(node)
+                && parent
+                && !["SCRIPT","STYLE","INPUT","TEXTAREA","BUTTON","SPAN"].includes(parent.tagName)
+                && node.nodeValue.trim()
+            ){
+                nodes.push(node);
+                processed.add(node);
+            }
+        }
+
+        nodes.forEach(textNode => {
+            const txt = textNode.nodeValue;
+            const frag = document.createDocumentFragment();
+            let lastIdx = 0;
+
+            rules.forEach(rule => {
+                let match;
+                rule.regex.lastIndex = 0;
+                while((match = rule.regex.exec(txt)) !== null){
+                    if(match.index > lastIdx){
+                        frag.appendChild(document.createTextNode(txt.slice(lastIdx, match.index)));
+                    }
+                    const span = document.createElement("span");
+                    span.style.background = rule.bg;
+                    span.style.padding = "1px 4px";
+                    span.style.borderRadius = "2px";
+                    span.style.color = "#000"; // 文字黑色，清晰可读
+                    span.textContent = match[0];
+                    frag.appendChild(span);
+                    lastIdx = rule.regex.lastIndex;
+                }
+            });
+
+            if(lastIdx < txt.length){
+                frag.appendChild(document.createTextNode(txt.slice(lastIdx)));
+            }
+
+            if(frag.childNodes.length > 0){
+                textNode.parentNode.replaceChild(frag, textNode);
+            }
+        });
+    }
+
+    // 首次高亮
+    highlightOnce();
+
+    // 防抖监听，保证滚动流畅
+    let timer = null;
+    const observer = new MutationObserver(() => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+            highlightOnce();
+        }, 300);
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: false
+    });
+
+    console.log("✅ 深色高亮已启动，滚动正常，懒加载内容自动高亮");
+})();
