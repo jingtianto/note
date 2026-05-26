@@ -1,1 +1,59 @@
-javascript:(function(){let e=prompt("关键词：逗号/换行分隔","");if(!e)return;let t=e.replace(/\s+/g,",").split(",").map(s=>s.trim()).filter(s=>s);if(0===t.length)return void alert("无有效关键词");const r=["#ffd0d0","#d0ffd0","#fff8b0","#d0e8ff","#ffe6cc","#e8d0ff","#d0ffff"],o=t.map((s,i)=>({text:s,bg:r[i%r.length]})),a=`(function(){const keywords=${JSON.stringify(o)};function walk(n){if(3===n.nodeType&&n.nodeValue.trim()){let e=n.nodeValue,t=document.createDocumentFragment(),r=0;keywords.forEach(o=>{let i=new RegExp(o.text,"gi"),a;for(;(a=i.exec(e))!==null;){a.index>r&&t.appendChild(document.createTextNode(e.slice(r,a.index)));let s=document.createElement("span");s.style.background=o.bg,s.style.padding="0 2px",s.textContent=a[0],t.appendChild(s),r=i.lastIndex}r<i.length&&t.appendChild(document.createTextNode(e.slice(r)))}t.childNodes.length>0&&n.parentNode.replaceChild(t,n)}else if(1===n.nodeType&&!["SCRIPT","STYLE","INPUT","TEXTAREA"].includes(n.tagName))for(let e=0;e<n.childNodes.length;e++)walk(n.childNodes[e])}walk(document.body);console.log("✅ 高亮完成")})();`;console.log("=== 最终可用代码 ==="),console.log(a),alert("已生成，查看控制台复制")})();
+(function(){
+    // 👇 只需要在这里粘贴你的关键词，逗号分隔/Excel换行单列，自动识别
+    const inputKeywords = `175768,175769`;
+
+    // 自动清洗、去重、生成配色
+    const keywordList = inputKeywords
+        .split(/[,，\n]/)
+        .map(s => s.trim())
+        .filter(s => s);
+
+    const colors = ["#ffdddd","#ddffdd","#ffffcc","#ddddff","#ffeedd","#eeddff"];
+    const rules = keywordList.map((word, idx) => ({
+        text: word,
+        bg: colors[idx % colors.length]
+    }));
+
+    // 安全遍历高亮（不破坏原有页面结构、输入框正常编辑）
+    function highlightNode(node) {
+        if (node.nodeType === 3 && node.nodeValue.trim()) {
+            const text = node.nodeValue;
+            const frag = document.createDocumentFragment();
+            let lastPos = 0;
+
+            rules.forEach(rule => {
+                const reg = new RegExp(rule.text, "gi");
+                let match;
+                while ((match = reg.exec(text)) !== null) {
+                    if (match.index > lastPos) {
+                        frag.appendChild(document.createTextNode(text.slice(lastPos, match.index)));
+                    }
+                    const span = document.createElement("span");
+                    span.style.background = rule.bg;
+                    span.style.padding = "1px 3px";
+                    span.style.borderRadius = "2px";
+                    span.textContent = match[0];
+                    frag.appendChild(span);
+                    lastPos = reg.lastIndex;
+                }
+            });
+
+            if (lastPos < text.length) {
+                frag.appendChild(document.createTextNode(text.slice(lastPos)));
+            }
+
+            if (frag.childNodes.length > 0) {
+                node.parentNode.replaceChild(frag, node);
+            }
+        }
+        else if (
+            node.nodeType === 1 &&
+            !["SCRIPT","STYLE","INPUT","TEXTAREA","BUTTON"].includes(node.tagName)
+        ) {
+            [...node.childNodes].forEach(highlightNode);
+        }
+    }
+
+    highlightNode(document.body);
+    console.log("✅ 全部关键词高亮完成，可直接在线填写参数");
+})();
