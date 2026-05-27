@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Excel表格 → 网页表格填充脚本</title>
+<style>
+body {margin: 20px; font-family: Microsoft YaHei;}
+textarea {width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; border:1px solid #ccc; border-radius:4px;}
+#inputArea {height: 280px;}
+#outArea {height: 320px; font-family: Consolas; font-size:12px;}
+button {padding: 10px 20px; background:#2d8cf0; color:#fff; border:none; border-radius:4px; cursor:pointer; margin-right:10px;}
+button:hover {background:#1b76d8;}
+.tipOk {color:green; margin:10px 0; display:none;}
+.tipErr {color:red; margin:10px 0; display:none;}
+</style>
+</head>
+<body>
+<h3>粘贴 Excel 三列数据（含换行/引号也兼容）</h3>
+<textarea id="inputArea" placeholder="直接粘贴你的Excel复制内容"></textarea>
+
+<button onclick="buildScript()">生成并复制脚本</button>
+<button onclick="clearAll()">清空</button>
+
+<div class="tipOk" id="tipOk">✅ 生成完成并已复制！</div>
+<div class="tipErr" id="tipErr">❌ 请先粘贴数据</div>
+
+<p>生成结果：</p>
+<textarea id="outArea" readonly></textarea>
+
+<script>
+function escapeAll(str){
+    return str
+        .replace(/\\/g, '\\\\')
+        .replace(/`/g, '\\`')
+        .replace(/"/g, '\\"')
+        .replace(/\r/g, '\\r')
+        .replace(/\n/g, '\\n');
+}
+
+function buildScript(){
+    document.getElementById('tipOk').style.display = 'none';
+    document.getElementById('tipErr').style.display = 'none';
+
+    var raw = document.getElementById('inputArea').value;
+    if(!raw.trim()){
+        document.getElementById('tipErr').style.display = 'block';
+        return;
+    }
+
+    var safeData = escapeAll(raw);
+
+    var js = '(function(){\n'
++'const excelDataRaw = `' + safeData + '`;\n'
++'try{\n'
++'    const dataMap = {};\n'
++'    excelDataRaw.split("\\n").forEach(line=>{\n'
++'        const row = line.trim();\n'
++'        if(!row) return;\n'
++'        const cells = row.split(/\\t+/);\n'
++'        const key = (cells[0]||"").trim();\n'
++'        const col2 = (cells[1]||"").trim();\n'
++'        const col3 = (cells.slice(2).join("\\t")||"").trim();\n'
++'        if(key) dataMap[key] = {col2, col3};\n'
++'    });\n'
++'    if(Object.keys(dataMap).length===0) return alert("无有效数据");\n'
++'\n'
++'    const config = {\n'
++'        rowSelector: "table tr:has(td)",\n'
++'        style: "background:#e8f4ff;padding:4px 8px;border:1px solid #409eff;color:#333;cursor:pointer;",\n'
++'        cls: "excel-matched-col"\n'
++'    };\n'
++'    const processed = new WeakSet();\n'
++'\n'
++'    function renderTable(){\n'
++'        const rows = document.querySelectorAll(config.rowSelector);\n'
++'        rows.forEach(tr=>{\n'
++'            if(processed.has(tr)) return;\n'
++'            const tds = tr.querySelectorAll("td");\n'
++'            let key = "", keyTd = null;\n'
++'            for(let td of tds){\n'
++'                const txt = td.textContent.trim();\n'
++'                if(dataMap[txt]){ key=txt; keyTd=td; break; }\n'
++'            }\n'
++'            if(!keyTd) return;\n'
++'\n'
++'            const d = dataMap[key];\n'
++'            const td2 = document.createElement("td");\n'
++'            td2.className = config.cls;\n'
++'            td2.style.cssText = config.style;\n'
++'            td2.textContent = d.col2;\n'
++'            td2.title = "点击复制";\n'
++'            td2.onclick = function(){\n'
++'                const t = document.createElement("textarea");\n'
++'                t.value = this.textContent;\n'
++'                document.body.appendChild(t);\n'
++'                t.select();\n'
++'                document.execCommand("copy");\n'
++'                document.body.removeChild(t);\n'
++'                alert("已复制："+this.textContent);\n'
++'            };\n'
++'\n'
++'            const td3 = document.createElement("td");\n'
++'            td3.className = config.cls;\n'
++'            td3.style.cssText = config.style;\n'
++'            td3.textContent = d.col3;\n'
++'            td3.title = "点击复制";\n'
++'            td3.onclick = function(){\n'
++'                const t = document.createElement("textarea");\n'
++'                t.value = this.textContent;\n'
++'                document.body.appendChild(t);\n'
++'                t.select();\n'
++'                document.execCommand("copy");\n'
++'                document.body.removeChild(t);\n'
++'                alert("已复制："+this.textContent);\n'
++'            };\n'
++'\n'
++'            keyTd.after(td2, td3);\n'
++'            processed.add(tr);\n'
++'        });\n'
++'    }\n'
++'\n'
++'    renderTable();\n'
++'    let timer = null;\n'
++'    const ob = new MutationObserver(()=>{\n'
++'        clearTimeout(timer);\n'
++'        timer = setTimeout(renderTable,200);\n'
++'    });\n'
++'    ob.observe(document.body, {childList:true, subtree:true});\n'
++'    console.log("✅ 表格填充脚本已启动，共"+Object.keys(dataMap).length+"条数据");\n'
++'}catch(e){\n'
++'    alert("脚本异常："+e.message);\n'
++'    console.error(e);\n'
++'}\n'
++'})();';
+
+    var out = document.getElementById('outArea');
+    out.value = js;
+
+    // 复制
+    out.select();
+    document.execCommand('copy');
+    document.getElementById('tipOk').style.display = 'block';
+}
+
+function clearAll(){
+    document.getElementById('inputArea').value = '';
+    document.getElementById('outArea').value = '';
+    document.getElementById('tipOk').style.display = 'none';
+    document.getElementById('tipErr').style.display = 'none';
+}
+</script>
+</body>
+</html>
