@@ -1,269 +1,137 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <title>关键词高亮脚本生成器</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: "Microsoft YaHei", sans-serif;
-        }
-        body {
-            max-width: 800px;
-            margin: 30px auto;
-            padding: 0 20px;
-            background: #f5f7fa;
-        }
-        .container {
-            background: #fff;
-            padding: 25px;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h2 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 20px;
-        }
-        .tips {
-            color: #666;
-            margin-bottom: 12px;
-            line-height: 1.5;
-        }
-        textarea {
-            width: 100%;
-            height: 160px;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-            resize: vertical;
-            margin-bottom: 15px;
-        }
-        .btn-box {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        button {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            border-radius: 6px;
-            font-size: 15px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        .btn-generate {
-            background: #409eff;
-            color: #fff;
-        }
-        .btn-clear {
-            background: #909399;
-            color: #fff;
-        }
-        #result {
-            width: 100%;
-            height: 260px;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 12px;
-            background: #fafafa;
-            font-family: monospace;
-        }
-        .copy-tip {
-            text-align: center;
-            margin-top: 10px;
-            color: #00b42a;
-            font-weight: bold;
-            display: none;
-        }
-        .err-tip {
-            text-align: center;
-            margin-top: 10px;
-            color: #f53f3f;
-            font-weight: bold;
-            display: none;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>关键词高亮脚本生成器</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:Microsoft YaHei,sans-serif;}
+body{max-width:800px;margin:30px auto;padding:0 20px;background:#f5f7fa;}
+.box{background:#fff;padding:25px;border-radius:12px;box-shadow:0 2px 10px #00000014;}
+h2{text-align:center;color:#333;margin-bottom:20px;}
+.tip{color:#666;margin-bottom:15px;line-height:1.6;}
+textarea{width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:14px;resize:vertical;margin-bottom:15px;}
+#kw{height:160px;}
+#code{height:260px;background:#fafafa;font-family:monospace;font-size:12px;}
+.btn-wrap{display:flex;gap:10px;margin-bottom:15px;}
+button{flex:1;padding:12px;border:none;border-radius:6px;font-size:15px;font-weight:bold;cursor:pointer;}
+.btn-gen{background:#409eff;color:#fff;}
+.btn-clr{background:#909399;color:#fff;}
+.msg{text-align:center;margin-top:10px;font-weight:bold;display:none;}
+.ok{color:#00b42a;}
+.err{color:#f53f3f;}
+</style>
 </head>
 <body>
-    <div class="container">
-        <h2>🔧 关键词高亮脚本生成器</h2>
-        <p class="tips">
-            支持格式：<br>
-            1. 逗号分隔：175768,175769,12345<br>
-            2. 直接换行 / Excel 整列粘贴
-        </p>
+<div class="box">
+    <h2>关键词高亮脚本生成器</h2>
+    <p class="tip">支持逗号分隔、换行、Excel整列粘贴关键词</p>
 
-        <textarea id="keywords" placeholder="在此粘贴关键词..."></textarea>
+    <textarea id="kw" placeholder="请输入/粘贴关键词"></textarea>
 
-        <div class="btn-box">
-            <button class="btn-generate" id="genBtn">生成并复制脚本</button>
-            <button class="btn-clear" id="clrBtn">清空内容</button>
-        </div>
-
-        <textarea id="result" readonly placeholder="生成的JS脚本将展示在这里..."></textarea>
-
-        <div class="copy-tip" id="copyTip">✅ 脚本已复制到剪贴板</div>
-        <div class="err-tip" id="errTip">❌ 请先输入有效关键词</div>
+    <div class="btn-wrap">
+        <button class="btn-gen" id="btnGenerate">生成并复制</button>
+        <button class="btn-clr" id="btnClear">清空</button>
     </div>
 
-    <script>
-        // 绑定事件（替代 onclick，杜绝点击无响应）
-        const genBtn = document.getElementById('genBtn');
-        const clrBtn = document.getElementById('clrBtn');
-        const keywordsArea = document.getElementById('keywords');
-        const resultArea = document.getElementById('result');
-        const copyTip = document.getElementById('copyTip');
-        const errTip = document.getElementById('errTip');
+    <textarea id="code" readonly placeholder="生成的脚本"></textarea>
 
-        // 隐藏提示
-        function hideTips() {
-            copyTip.style.display = 'none';
-            errTip.style.display = 'none';
-        }
+    <div class="msg ok" id="msgOk">✅ 已生成并复制</div>
+    <div class="msg err" id="msgErr">❌ 请先输入关键词</div>
+</div>
 
-        // 清空
-        clrBtn.addEventListener('click', function () {
-            hideTips();
-            keywordsArea.value = '';
-            resultArea.value = '';
-        });
+<script>
+// 元素获取
+var kwInput = document.getElementById('kw');
+var codeArea = document.getElementById('code');
+var btnGen = document.getElementById('btnGenerate');
+var btnClr = document.getElementById('btnClear');
+var msgOk = document.getElementById('msgOk');
+var msgErr = document.getElementById('msgErr');
 
-        // 生成脚本主逻辑
-        genBtn.addEventListener('click', function () {
-            hideTips();
-            const rawText = keywordsArea.value.trim();
-            if (!rawText) {
-                errTip.style.display = 'block';
-                return;
-            }
+// 隐藏所有提示
+function hideMsg(){
+    msgOk.style.display = 'none';
+    msgErr.style.display = 'none';
+}
 
-            // 转义反引号，防止模板字符串报错
-            const safeText = rawText.replace(/`/g, '\\`');
+// 清空按钮
+btnClr.onclick = function(){
+    hideMsg();
+    kwInput.value = '';
+    codeArea.value = '';
+};
 
-            // 修复版高亮核心脚本（无NodeFilter报错、无文字偏移、无残留）
-            const jsCode = `(function(){
-    const rawKeywords = \`${safeText}\`;
-
-    const keywordList = rawKeywords
-        .split(/[,，\\n]/)
-        .map(s => s.trim())
-        .filter(s => s);
-
-    if(keywordList.length === 0){
-        alert("未检测到有效关键词");
+// 生成按钮（纯同步逻辑，无异步阻塞）
+btnGen.onclick = function(){
+    hideMsg();
+    var inputVal = kwInput.value.trim();
+    if(!inputVal){
+        msgErr.style.display = 'block';
         return;
     }
 
-    const colors = [
-        "#ffb3b3","#b3ffb3","#fff380","#b3d1ff",
-        "#ffcc99","#d9b3ff","#80ffff","#ff99cc",
-        "#c2f0c2","#e6e68a","#99ccff","#ffd199"
-    ];
+    // 转义反引号
+    var safeStr = inputVal.replace(/`/g, '\\`');
 
-    const rules = keywordList.map(function(word, idx){
-        const regStr = word.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
-        return {
-            text: word,
-            regex: new RegExp(regStr, "gi"),
-            bg: colors[idx % colors.length]
-        };
-    });
+    // 固定脚本模板
+    var template = '(function(){\n' +
+'    var rawKeywords = `' + safeStr + '`;\n' +
+'    var keywordList = rawKeywords.split(/[,，\\n]/).map(function(s){return s.trim();}).filter(function(s){return s;});\n' +
+'    if(keywordList.length === 0){alert("未检测到有效关键词");return;}\n' +
+'    var colors = ["#ffb3b3","#b3ffb3","#fff380","#b3d1ff","#ffcc99","#d9b3ff","#80ffff","#ff99cc","#c2f0c2","#e6e68a","#99ccff","#ffd199"];\n' +
+'    var rules = [];\n' +
+'    for(var i=0;i<keywordList.length;i++){\n' +
+'        var w = keywordList[i];\n' +
+'        var reg = w.replace(/[.*+?^${}()|[\\]\\\\]/g,"\\\\$&");\n' +
+'        rules.push({regex:new RegExp(reg,"gi"),bg:colors[i%colors.length]});\n' +
+'    }\n' +
+'    var processed = new WeakSet();\n' +
+'    function highlight(root){\n' +
+'        root = root || document.body;\n' +
+'        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);\n' +
+'        var node;\n' +
+'        while(node = walker.nextNode()){\n' +
+'            var p = node.parentElement;\n' +
+'            if(!p || processed.has(node) || node.nodeValue.trim() === "")continue;\n' +
+'            var tag = p.tagName;\n' +
+'            if(tag === "SCRIPT" || tag === "STYLE" || tag === "INPUT" || tag === "TEXTAREA" || tag === "BUTTON" || tag === "SPAN")continue;\n' +
+'            processed.add(node);\n' +
+'            var txt = node.nodeValue;\n' +
+'            var html = txt;\n' +
+'            for(var j=0;j<rules.length;j++){\n' +
+'                var st = "background:"+rules[j].bg+";padding:1px 4px;border-radius:3px;color:#000;font-weight:500;";\n' +
+'                html = html.replace(rules[j].regex,"<span style=\\""+st+"\\">$&</span>");\n' +
+'            }\n' +
+'            if(html === txt)continue;\n' +
+'            var div = document.createElement("div");\n' +
+'            div.innerHTML = html;\n' +
+'            var frag = document.createDocumentFragment();\n' +
+'            while(div.firstChild)frag.appendChild(div.firstChild);\n' +
+'            p.replaceChild(frag, node);\n' +
+'        }\n' +
+'    }\n' +
+'    highlight();\n' +
+'    var timer = null;\n' +
+'    var obs = new MutationObserver(function(){\n' +
+'        clearTimeout(timer);\n' +
+'        timer = setTimeout(highlight,260);\n' +
+'    });\n' +
+'    obs.observe(document.body,{childList:true,subtree:true,characterData:false});\n' +
+'    console.log("关键词高亮已启动");\n' +
+'})();';
 
-    const processedNodes = new WeakSet();
+    // 写入代码区域
+    codeArea.value = template;
 
-    function highlightOnce(root){
-        root = root || document.body;
-        const walker = document.createTreeWalker(
-            root,
-            NodeFilter.SHOW_TEXT
-        );
+    // 复制（优先选中+execCommand，全浏览器兼容）
+    codeArea.focus();
+    codeArea.select();
+    document.execCommand('copy');
 
-        let node;
-        while((node = walker.nextNode())){
-            const parent = node.parentElement;
-            if(!parent) continue;
-            // 跳过已处理、空文本、特殊标签、已被span包裹的内容
-            if(
-                processedNodes.has(node)
-                || node.nodeValue.trim() === ""
-                || ["SCRIPT","STYLE","INPUT","TEXTAREA","BUTTON","SPAN"].indexOf(parent.tagName) > -1
-            ){
-                continue;
-            }
-
-            processedNodes.add(node);
-            let txt = node.nodeValue;
-            let newHtml = txt;
-
-            // 全局一次性替换，解决文字偏移、错位
-            rules.forEach(function(rule){
-                const style = "background:" + rule.bg + ";padding:1px 4px;border-radius:3px;color:#000;font-weight:500;";
-                newHtml = newHtml.replace(rule.regex, "<span style=\\"" + style + "\\">$&</span>");
-            });
-
-            if(newHtml === txt) continue;
-
-            // 整体替换DOM，不拆分节点
-            const temp = document.createElement("div");
-            temp.innerHTML = newHtml;
-            const frag = document.createDocumentFragment();
-            while(temp.firstChild){
-                frag.appendChild(temp.firstChild);
-            }
-            parent.replaceChild(frag, node);
-        }
-    }
-
-    // 首次执行
-    highlightOnce();
-
-    // 动态内容防抖监听（适配滚动懒加载）
-    let timer = null;
-    const observer = new MutationObserver(function(){
-        clearTimeout(timer);
-        timer = setTimeout(highlightOnce, 260);
-    });
-
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        characterData: false
-    });
-
-    console.log("✅ 关键词高亮已启动，共 " + keywordList.length + " 个关键词");
-})();`;
-
-            // 写入结果区
-            resultArea.value = jsCode;
-
-            // 兼容所有浏览器复制（优先Clipboard，降级execCommand）
-            resultArea.select();
-            let copySuccess = false;
-            try {
-                navigator.clipboard.writeText(jsCode).then(() => {
-                    copyTip.style.display = 'block';
-                    setTimeout(hideTips, 2500);
-                });
-                copySuccess = true;
-            } catch (e) {
-                // 降级方案
-                if (document.execCommand('copy')) {
-                    copyTip.style.display = 'block';
-                    setTimeout(hideTips, 2500);
-                    copySuccess = true;
-                }
-            }
-
-            if (!copySuccess) {
-                alert('自动复制失败，请手动选中下方代码复制');
-            }
-        });
-    </script>
+    // 显示成功提示
+    msgOk.style.display = 'block';
+    setTimeout(hideMsg, 2500);
+};
+</script>
 </body>
 </html>
