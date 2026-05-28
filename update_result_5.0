@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slick Grid 辅助列脚本生成器 - 支持多行备注</title>
+    <title>Slick Grid 辅助列脚本生成器 - 支持结果颜色标记</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -147,7 +147,7 @@
     <h1>📋 Slick Grid 辅助列生成器</h1>
     <div class="sub">
         粘贴 Excel 三列数据（Case ID、Result、Remark）→ 生成智能脚本 → 复制到控制台执行<br>
-        ✅ 完全支持备注内包含 <kbd>Alt+Enter</kbd> 换行符，无需预处理
+        ✅ 备注内支持 <kbd>Alt+Enter</kbd> 换行 | 结果非 "Passed" 时徽章自动变浅红色
     </div>
 
     <div class="grid">
@@ -156,7 +156,7 @@
                 <span>📥 粘贴原始数据（制表符分隔，三列）</span>
                 <button id="clearBtn">清空</button>
             </div>
-            <textarea id="inputData" placeholder="示例：&#10;1734833	Passed	25.05.2026 qz715a: passed. Manually evaluated...&#10;1734837	Passed	A_ADcLow_AdmissGuid 320+1.1s...&#10;1734839	Passed	Automatically passed&#10;&#10;💡 备注内部可以自由换行（Alt+Enter），脚本会自动识别续行。"></textarea>
+            <textarea id="inputData" placeholder="示例：&#10;1734833	Passed	25.05.2026 qz715a: passed...&#10;1733676	retest	需要重新测试的原因...&#10;1734839	Passed	Automatically passed&#10;&#10;💡 备注内部可以自由换行（Alt+Enter），脚本会自动识别续行。"></textarea>
         </div>
         <div class="panel">
             <div class="panel-header">
@@ -178,7 +178,7 @@
         2. 粘贴到左侧文本框（保留制表符分隔）。<br>
         3. 点击「生成脚本」，右侧将自动生成完整的可执行代码。<br>
         4. 点击「复制脚本」，然后打开目标页面（Slick Grid 表格页），按 <kbd>F12</kbd> 打开控制台，粘贴并回车执行。<br>
-        ✅ 脚本内置智能解析，<strong>备注内的换行符（Alt+Enter）会被正确保留并合并</strong>，不会破坏数据结构。
+        ✅ 脚本会根据结果字段自动着色：<strong style="background:#d4edda;padding:2px 6px;border-radius:12px;">Passed 为绿色</strong>，其他值（如 retest）显示为<strong style="background:#f8d7da;padding:2px 6px;border-radius:12px;">浅红色</strong>。
     </div>
     <div class="footer">
         ⚙️ 基于 WeakMap + fixed 定位 | 无重叠 | 支持虚拟滚动 | 三列悬浮（ID / 结果 / 备注）
@@ -187,7 +187,6 @@
 <div id="toast" class="toast">✅ 已复制</div>
 
 <script>
-    // 辅助提示
     function showToast(msg) {
         const toast = document.getElementById('toast');
         toast.textContent = msg || '✅ 已复制';
@@ -195,12 +194,9 @@
         setTimeout(() => { toast.style.opacity = '0'; }, 2000);
     }
 
-    // 生成包含完整解析逻辑的脚本（将用户输入原样嵌入 caseData）
+    // 生成完整脚本，动态决定结果徽章颜色
     function generateFullScript(rawUserText) {
-        // 对 rawUserText 进行转义，以便安全地放入模板字符串中
-        // 需要转义 ` 和 \ 以及 ${}
         const escaped = rawUserText.replace(/`/g, '\\`').replace(/\$/g, '\\$');
-        
         return `// 清除页面焦点阻塞
 document.activeElement?.blur();
 document.body.focus();
@@ -221,7 +217,6 @@ document.body.focus();
             const trimmed = line.trim();
             if (trimmed === '') continue;
 
-            // 匹配行首：数字 + 制表符/空格 + 结果（至少一个非空字符）
             const match = trimmed.match(/^(\\d+)[\\t\\s]+(\\S+)/);
             if (match) {
                 if (currentId !== null) {
@@ -261,6 +256,21 @@ document.body.focus();
         });
     }
 
+    // 根据结果值获取徽章样式
+    function getResultStyle(result) {
+        if (result === 'Passed') {
+            return {
+                background: '#d4edda',
+                border: '1px solid #28a745'
+            };
+        } else {
+            return {
+                background: '#f8d7da',
+                border: '1px solid #dc3545'
+            };
+        }
+    }
+
     function createFloatingBadge(id, result, remark, targetCell) {
         const wrapper = document.createElement('div');
         wrapper.className = 'slick-extra-floating';
@@ -278,6 +288,7 @@ document.body.focus();
             white-space: nowrap;
         \`;
 
+        // ID 徽章
         const idSpan = document.createElement('span');
         idSpan.textContent = id;
         idSpan.style.cssText = \`
@@ -295,11 +306,13 @@ document.body.focus();
             copyToClip(id, 'Case ID');
         };
 
+        // 结果徽章（动态颜色）
+        const resultStyle = getResultStyle(result);
         const resSpan = document.createElement('span');
         resSpan.textContent = result;
         resSpan.style.cssText = \`
-            background: #d4edda;
-            border: 1px solid #28a745;
+            background: \${resultStyle.background};
+            border: \${resultStyle.border};
             padding: 2px 8px;
             border-radius: 12px;
             cursor: pointer;
@@ -312,6 +325,7 @@ document.body.focus();
             copyToClip(result, '执行结果');
         };
 
+        // 备注徽章
         const shortRemark = remark.length > 30 ? remark.substring(0, 30) + '…' : remark;
         const remSpan = document.createElement('span');
         remSpan.textContent = shortRemark;
@@ -366,14 +380,18 @@ document.body.focus();
             const children = wrapper.children;
             if (children.length >= 3) {
                 const resSpan = children[1];
-                const remSpan = children[2];
                 if (resSpan.textContent !== result) {
                     resSpan.textContent = result;
+                    // 更新颜色样式
+                    const resultStyle = getResultStyle(result);
+                    resSpan.style.background = resultStyle.background;
+                    resSpan.style.border = resultStyle.border;
                     resSpan.onclick = (e) => {
                         e.stopPropagation();
                         copyToClip(result, '执行结果');
                     };
                 }
+                const remSpan = children[2];
                 const newShortRemark = remark.length > 30 ? remark.substring(0, 30) + '…' : remark;
                 if (remSpan.textContent !== newShortRemark) {
                     remSpan.textContent = newShortRemark;
@@ -430,11 +448,10 @@ document.body.focus();
         timer = setTimeout(render, 400);
     });
 
-    console.log("🚀 已启动 Slick Grid 三列辅助浮层（支持多行备注，无重叠）");
+    console.log("🚀 已启动 Slick Grid 三列辅助浮层（支持多行备注，结果非Passed自动红色）");
 })();`;
     }
 
-    // 生成并显示
     function generate() {
         const raw = document.getElementById('inputData').value;
         if (!raw.trim()) {
@@ -465,7 +482,6 @@ document.body.focus();
         showToast('已清空');
     }
 
-    // 绑定事件
     document.getElementById('generateBtn').addEventListener('click', generate);
     document.getElementById('copyBtn').addEventListener('click', copyScript);
     document.getElementById('copyQuickBtn').addEventListener('click', copyScript);
