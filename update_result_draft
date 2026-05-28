@@ -1,0 +1,130 @@
+// 清除页面焦点，解决 autofocus 报错
+document.activeElement?.blur();
+document.body.focus();
+
+(function(){
+// 1:1 替换为你截图里真实的Case数据
+const excelDataRaw = `1734833	Passed	25.05.2026 qz715a: passed. Manually evaluated as pass. P_ADcLow_AdmissGuid==64d Trigger not same. With GER TS(1782001) Next: TA need to be fixed, all other evaluations are met
+1734837	Passed	25.05.2026 qz715a: passed. A_ADcLow_AdmissGuid 320+1.1s:AdcLow_AdmissGuid 320+1.6s is not right timing to chek. Other signal value is met. Same with GER TS(1782001) ML need to adjust evaluation in ML
+1734839	Passed	25.05.2026 qz715a: passed. Automatically passed
+1734840	Passed	25.05.2026 qz715a: passed. Automatically passed
+1736760	Passed	25.05.2026 qz629N: Passed. Manually evaluated as passed
+1734809	Passed	25.05.2026 qz715a: passed. Obs; in dym required signal AGL2:IPN_MAIN::FastfSC_P_ERRIN_Activate_GlobalManip ==1d,but always 0 The result shall be the same as GER TS 1777543, and from GER run comment :observed additional evaluation for target curvature cause failure, which is not specified. FT reviewed and confirmed , evaluation not required
+1736781	Passed	25.05.2026 qz715a: Passed Automatically passed
+1736782	Passed	25.05.2026 qz715a: Passed. Manually evaluated as passed
+1737682	Passed	LimitSteaterAccelerationRequest always 0 compare with GER TS 1777543
+1737685	Passed	25.05.2026 qz629N: Passed.Manually evaluated as passed ML need updeate Required targetcurve[CN_stack_DFT_ModelCN_stack_DFT_stack]==180d, t=AdcLow_AdmissGuid_128+0.5s: Expected value delay with 3.29s (GER 1777543 result:3.315s)
+1737686	Passed	25.05.2026 qz629N: Passed. Manually evaluated as passed
+1737689	Passed	LimitSteaterAccelerationRequest always 0 compare with GER TS 1777543
+1737951	Passed	25.05.2026 qz715a: passed. Automatically passed
+1737952	Passed	25.05.2026 qz715a: passed. Automatically passed
+1737963	Passed	25.05.2026 qz715a: passed.manually evaluated as pass
+1737965	Passed	19.05.2026 qz715a:max(excepded14+16), GER 1779087 result:16.0039"
+1754198	Passed	25.05.2026 qz629N: Passed. Manually evaluated as passed. Compare with GER TS 1779087
+1760607	Passed	Stimulation time out, but all required signal value passed
+1757611	Passed	25.05.2026 qz715a: Passed. Automatically passed
+1757613	Passed	25.05.2026 qz715a: Passed. Automatically passed
+1737233	Passed	25.05.2026 qz715a: Passed. Automatically passed
+1734835	Passed	25.05.2026 qz715a: passed. Automatically passed
+1734836	Passed	25.05.2026 qz715a: passed. Automatically passed
+1734838	Passed	25.05.2026 qz715a: passed. Automatically passed
+1734841	Passed	25.05.2026 qz715a: passed. Automatically passed`;
+
+    // 解析数据映射
+    const dataMap = {};
+    excelDataRaw.split("\n").forEach(line=>{
+        const row = line.trim();
+        if(!row) return;
+        const cells = row.split(/\t+/);
+        const caseId = (cells[0]||"").trim();
+        const status = (cells[1]||"").trim();
+        const comment = cells.slice(2).join("\t").trim();
+        if(caseId) dataMap[caseId] = {status, comment};
+    });
+
+    console.log("✅ 成功加载截图内用例，总数：", Object.keys(dataMap).length);
+
+    const processedRows = new WeakSet();
+
+    // AG-Grid专属渲染填充逻辑
+    function renderFill(){
+        const rows = document.querySelectorAll('.ag-row, .ag-row-level-0, [role="row"]');
+        let currentMatch = 0;
+
+        rows.forEach(row=>{
+            if(processedRows.has(row)) return;
+
+            const allCells = row.querySelectorAll('.ag-cell, [role="gridcell"]');
+            let targetId = null;
+            let idCell = null;
+
+            // 纯数字宽松精准匹配CaseID，无视空格/隐藏字符
+            for(const cell of allCells){
+                const pureId = cell.textContent.replace(/\D+/g,'').trim();
+                if(dataMap[pureId]){
+                    targetId = pureId;
+                    idCell = cell;
+                    break;
+                }
+            }
+
+            if(!idCell) return;
+            currentMatch++;
+
+            // 状态辅助列
+            const statusCol = document.createElement('div');
+            statusCol.style.cssText = 'display:table-cell;background:#d4edda;border:1px solid #28a745;padding:6px 8px;cursor:pointer;white-space:normal;word-break:break-all;max-width:300px;';
+            statusCol.textContent = dataMap[targetId].status;
+            statusCol.onclick = ()=>{
+                const temp = document.createElement('textarea');
+                temp.value = statusCol.textContent;
+                document.body.appendChild(temp);
+                temp.select();
+                document.execCommand('copy');
+                document.body.removeChild(temp);
+                alert("✅ 已复制执行结果");
+            };
+
+            // 长文本备注辅助列
+            const commentCol = document.createElement('div');
+            commentCol.style.cssText = 'display:table-cell;background:#cce5ff;border:1px solid #007bff;padding:6px 8px;cursor:pointer;white-space:pre-wrap;word-break:break-all;max-width:600px;';
+            commentCol.textContent = dataMap[targetId].comment;
+            commentCol.onclick = ()=>{
+                const temp = document.createElement('textarea');
+                temp.value = commentCol.textContent;
+                document.body.appendChild(temp);
+                temp.select();
+                document.execCommand('copy');
+                document.body.removeChild(temp);
+                alert("✅ 已复制完整备注");
+            };
+
+            // 插入到CaseID单元格右侧
+            idCell.after(statusCol, commentCol);
+            processedRows.add(row);
+        });
+
+        console.log(`✅ 本轮匹配新增 ${currentMatch} 条，累计已填充 ${processedRows.size} 条`);
+    }
+
+    // 多轮延迟兜底，适配AG-Grid虚拟DOM懒渲染
+    setTimeout(renderFill, 1200);
+    setTimeout(renderFill, 2800);
+    setTimeout(renderFill, 4500);
+
+    // 监听无限滚动、分页、表格刷新
+    let debounceTimer = null;
+    const observer = new MutationObserver(()=>{
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(renderFill, 350);
+    });
+    observer.observe(document.body, {childList:true, subtree:true});
+
+    // 滚动自动触发填充
+    window.addEventListener('scroll', ()=>{
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(renderFill, 400);
+    });
+
+    console.log("🚀 截图专属Case填充脚本运行完毕，滚动页面自动加载新用例");
+})();
