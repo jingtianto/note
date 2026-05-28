@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slick Grid 辅助列脚本生成器 - 支持多行备注</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+            background: #f1f5f9;
+            margin: 0;
+            padding: 24px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.25rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sub {
+            color: #334155;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid #3b82f6;
+            padding-left: 16px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .panel {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .panel-header {
+            background: #f8fafc;
+            padding: 12px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-header button {
+            background: #e2e8f0;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: 0.2s;
+        }
+        .panel-header button:hover {
+            background: #cbd5e1;
+        }
+        textarea {
+            width: 100%;
+            height: 420px;
+            padding: 16px;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 13px;
+            border: none;
+            resize: vertical;
+            outline: none;
+            background: #ffffff;
+            line-height: 1.5;
+        }
+        .output-area {
+            background: #0f172a;
+            color: #e2e8f0;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 12px;
+            padding: 16px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            height: 420px;
+            overflow: auto;
+            margin: 0;
+        }
+        .action-bar {
+            margin-top: 20px;
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+        }
+        .btn {
+            background: #3b82f6;
+            border: none;
+            color: white;
+            padding: 10px 28px;
+            border-radius: 40px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-secondary {
+            background: #475569;
+        }
+        .btn:hover {
+            filter: brightness(1.05);
+            transform: translateY(-1px);
+        }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 40px;
+            font-size: 0.9rem;
+            z-index: 1000;
+            transition: opacity 0.2s;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .tip {
+            background: #fef9c3;
+            padding: 10px 16px;
+            border-radius: 16px;
+            font-size: 0.8rem;
+            margin-top: 20px;
+            color: #854d0e;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📋 Slick Grid 辅助列生成器</h1>
+    <div class="sub">
+        粘贴 Excel 三列数据（Case ID、Result、Remark）→ 生成智能脚本 → 复制到控制台执行<br>
+        ✅ 完全支持备注内包含 <kbd>Alt+Enter</kbd> 换行符，无需预处理
+    </div>
+
+    <div class="grid">
+        <div class="panel">
+            <div class="panel-header">
+                <span>📥 粘贴原始数据（制表符分隔，三列）</span>
+                <button id="clearBtn">清空</button>
+            </div>
+            <textarea id="inputData" placeholder="示例：&#10;1734833	Passed	25.05.2026 qz715a: passed. Manually evaluated...&#10;1734837	Passed	A_ADcLow_AdmissGuid 320+1.1s...&#10;1734839	Passed	Automatically passed&#10;&#10;💡 备注内部可以自由换行（Alt+Enter），脚本会自动识别续行。"></textarea>
+        </div>
+        <div class="panel">
+            <div class="panel-header">
+                <span>⚡ 生成的完整脚本（可直接在控制台执行）</span>
+                <button id="copyBtn">复制脚本</button>
+            </div>
+            <pre id="outputScript" class="output-area">// 点击“生成脚本”后显示可执行代码</pre>
+        </div>
+    </div>
+
+    <div class="action-bar">
+        <button class="btn" id="generateBtn">✨ 生成脚本</button>
+        <button class="btn btn-secondary" id="copyQuickBtn">📋 复制脚本</button>
+    </div>
+
+    <div class="tip">
+        💡 使用说明：<br>
+        1. 在 Excel 中选中三列（Case ID, Result, Remark），按 <kbd>Ctrl+C</kbd> 复制。<br>
+        2. 粘贴到左侧文本框（保留制表符分隔）。<br>
+        3. 点击「生成脚本」，右侧将自动生成完整的可执行代码。<br>
+        4. 点击「复制脚本」，然后打开目标页面（Slick Grid 表格页），按 <kbd>F12</kbd> 打开控制台，粘贴并回车执行。<br>
+        ✅ 脚本内置智能解析，<strong>备注内的换行符（Alt+Enter）会被正确保留并合并</strong>，不会破坏数据结构。
+    </div>
+    <div class="footer">
+        ⚙️ 基于 WeakMap + fixed 定位 | 无重叠 | 支持虚拟滚动 | 三列悬浮（ID / 结果 / 备注）
+    </div>
+</div>
+<div id="toast" class="toast">✅ 已复制</div>
+
+<script>
+    // 辅助提示
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        toast.textContent = msg || '✅ 已复制';
+        toast.style.opacity = '1';
+        setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+    }
+
+    // 生成包含完整解析逻辑的脚本（将用户输入原样嵌入 caseData）
+    function generateFullScript(rawUserText) {
+        // 对 rawUserText 进行转义，以便安全地放入模板字符串中
+        // 需要转义 ` 和 \ 以及 ${}
+        const escaped = rawUserText.replace(/`/g, '\\`').replace(/\$/g, '\\$');
+        
+        return `// 清除页面焦点阻塞
+document.activeElement?.blur();
+document.body.focus();
+
+(function () {
+    // ==================== 原始数据（用户粘贴，保留所有换行） ====================
+    const rawCaseData = \`${escaped}\`;
+
+    // ==================== 智能解析（支持备注内换行） ====================
+    function parseCaseData(rawText) {
+        const lines = rawText.split(/\\r?\\n/);
+        const idMap = {};
+        let currentId = null;
+        let currentResult = null;
+        let currentRemark = [];
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed === '') continue;
+
+            // 匹配行首：数字 + 制表符/空格 + 结果（至少一个非空字符）
+            const match = trimmed.match(/^(\\d+)[\\t\\s]+(\\S+)/);
+            if (match) {
+                if (currentId !== null) {
+                    idMap[currentId] = {
+                        result: currentResult,
+                        remark: currentRemark.join('\\n').trim()
+                    };
+                }
+                currentId = match[1];
+                currentResult = match[2];
+                const rest = trimmed.substring(match[0].length).trim();
+                currentRemark = rest ? [rest] : [];
+            } else {
+                if (currentId !== null) {
+                    currentRemark.push(trimmed);
+                }
+            }
+        }
+        if (currentId !== null) {
+            idMap[currentId] = {
+                result: currentResult,
+                remark: currentRemark.join('\\n').trim()
+            };
+        }
+        return idMap;
+    }
+
+    const idMap = parseCaseData(rawCaseData);
+    console.log(\`✅ 成功加载 \${Object.keys(idMap).length} 条Case数据（支持多行备注）\`);
+
+    // ==================== 辅助函数 ====================
+    function copyToClip(text, label) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert(\`✅ 已复制\${label}\`);
+        }).catch(() => {
+            alert(\`❌ 复制\${label}失败，请手动复制\`);
+        });
+    }
+
+    function createFloatingBadge(id, result, remark, targetCell) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'slick-extra-floating';
+        wrapper.style.cssText = \`
+            position: fixed;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+            z-index: 100000;
+            display: inline-flex;
+            gap: 6px;
+            padding: 4px 8px;
+            pointer-events: auto;
+            white-space: nowrap;
+        \`;
+
+        const idSpan = document.createElement('span');
+        idSpan.textContent = id;
+        idSpan.style.cssText = \`
+            background: #e9ecef;
+            border: 1px solid #6c757d;
+            padding: 2px 8px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+        \`;
+        idSpan.title = '点击复制 Case ID';
+        idSpan.onclick = (e) => {
+            e.stopPropagation();
+            copyToClip(id, 'Case ID');
+        };
+
+        const resSpan = document.createElement('span');
+        resSpan.textContent = result;
+        resSpan.style.cssText = \`
+            background: #d4edda;
+            border: 1px solid #28a745;
+            padding: 2px 8px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+        \`;
+        resSpan.title = '点击复制执行结果';
+        resSpan.onclick = (e) => {
+            e.stopPropagation();
+            copyToClip(result, '执行结果');
+        };
+
+        const shortRemark = remark.length > 30 ? remark.substring(0, 30) + '…' : remark;
+        const remSpan = document.createElement('span');
+        remSpan.textContent = shortRemark;
+        remSpan.style.cssText = \`
+            background: #cce5ff;
+            border: 1px solid #007bff;
+            padding: 2px 8px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 11px;
+            max-width: 250px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        \`;
+        remSpan.title = remark;
+        remSpan.onclick = (e) => {
+            e.stopPropagation();
+            copyToClip(remark, '完整备注');
+        };
+
+        wrapper.appendChild(idSpan);
+        wrapper.appendChild(resSpan);
+        wrapper.appendChild(remSpan);
+        document.body.appendChild(wrapper);
+
+        function updatePosition() {
+            const rect = targetCell.getBoundingClientRect();
+            wrapper.style.left = rect.right + 5 + 'px';
+            wrapper.style.top = rect.top + 'px';
+        }
+        updatePosition();
+
+        const updateHandler = () => updatePosition();
+        window.addEventListener('scroll', updateHandler, true);
+        window.addEventListener('resize', updateHandler);
+
+        wrapper._cleanup = () => {
+            window.removeEventListener('scroll', updateHandler, true);
+            window.removeEventListener('resize', updateHandler);
+        };
+        return wrapper;
+    }
+
+    let floatingMap = new WeakMap();
+
+    function updateOrCreateFloating(cell, matchedId) {
+        const { result, remark } = idMap[matchedId];
+        let entry = floatingMap.get(cell);
+        if (entry) {
+            const wrapper = entry.wrapper;
+            const children = wrapper.children;
+            if (children.length >= 3) {
+                const resSpan = children[1];
+                const remSpan = children[2];
+                if (resSpan.textContent !== result) {
+                    resSpan.textContent = result;
+                    resSpan.onclick = (e) => {
+                        e.stopPropagation();
+                        copyToClip(result, '执行结果');
+                    };
+                }
+                const newShortRemark = remark.length > 30 ? remark.substring(0, 30) + '…' : remark;
+                if (remSpan.textContent !== newShortRemark) {
+                    remSpan.textContent = newShortRemark;
+                    remSpan.title = remark;
+                    remSpan.onclick = (e) => {
+                        e.stopPropagation();
+                        copyToClip(remark, '完整备注');
+                    };
+                }
+            }
+            const rect = cell.getBoundingClientRect();
+            wrapper.style.left = rect.right + 5 + 'px';
+            wrapper.style.top = rect.top + 'px';
+        } else {
+            const wrapper = createFloatingBadge(matchedId, result, remark, cell);
+            floatingMap.set(cell, { wrapper, cleanup: wrapper._cleanup });
+        }
+    }
+
+    function render() {
+        const rows = document.querySelectorAll('.slick-row');
+        let matchCount = 0;
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('.slick-cell');
+            let targetCell = null;
+            let matchedId = null;
+            for (const cell of cells) {
+                const cleanText = cell.textContent.trim().replace(/\\s+/g, '');
+                if (idMap[cleanText]) {
+                    matchedId = cleanText;
+                    targetCell = cell;
+                    break;
+                }
+            }
+            if (!targetCell) return;
+            matchCount++;
+            updateOrCreateFloating(targetCell, matchedId);
+        });
+        if (matchCount) console.log(\`✅ 已处理 \${matchCount} 行，悬浮三列已显示\`);
+    }
+
+    setTimeout(render, 800);
+    setTimeout(render, 2000);
+    setTimeout(render, 4000);
+
+    let timer = null;
+    new MutationObserver(() => {
+        clearTimeout(timer);
+        timer = setTimeout(render, 300);
+    }).observe(document.body, { childList: true, subtree: true });
+
+    window.addEventListener('scroll', () => {
+        clearTimeout(timer);
+        timer = setTimeout(render, 400);
+    });
+
+    console.log("🚀 已启动 Slick Grid 三列辅助浮层（支持多行备注，无重叠）");
+})();`;
+    }
+
+    // 生成并显示
+    function generate() {
+        const raw = document.getElementById('inputData').value;
+        if (!raw.trim()) {
+            alert('请先粘贴 Excel 三列数据！');
+            return;
+        }
+        const script = generateFullScript(raw);
+        document.getElementById('outputScript').textContent = script;
+        showToast('✅ 脚本已生成');
+    }
+
+    function copyScript() {
+        const script = document.getElementById('outputScript').textContent;
+        if (!script || script === '// 点击“生成脚本”后显示可执行代码') {
+            alert('还没有生成脚本，请先点击“生成脚本”');
+            return;
+        }
+        navigator.clipboard.writeText(script).then(() => {
+            showToast('✅ 脚本已复制，请到控制台粘贴执行');
+        }).catch(() => {
+            alert('复制失败，请手动复制');
+        });
+    }
+
+    function clearInput() {
+        document.getElementById('inputData').value = '';
+        document.getElementById('outputScript').textContent = '// 点击“生成脚本”后显示可执行代码';
+        showToast('已清空');
+    }
+
+    // 绑定事件
+    document.getElementById('generateBtn').addEventListener('click', generate);
+    document.getElementById('copyBtn').addEventListener('click', copyScript);
+    document.getElementById('copyQuickBtn').addEventListener('click', copyScript);
+    document.getElementById('clearBtn').addEventListener('click', clearInput);
+</script>
+</body>
+</html>
