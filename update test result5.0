@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AG-Grid 表格填充脚本生成器</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+        body {
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 0 20px;
+            background: #f5f7fa;
+        }
+        .wrap {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        h2 {
+            text-align: center;
+            color: #222;
+            margin-bottom: 20px;
+        }
+        .tip {
+            background: #eef5ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            color: #444;
+            line-height: 1.6;
+        }
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            resize: vertical;
+            margin-bottom: 15px;
+        }
+        #inputBox {
+            height: 300px;
+        }
+        #outBox {
+            height: 350px;
+            background: #fafafa;
+            font-family: Consolas, monospace;
+            font-size: 12px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #runBtn {
+            background: #409eff;
+            color: #fff;
+        }
+        #clrBtn {
+            background: #909399;
+            color: #fff;
+        }
+        .success {
+            color: #00b42a;
+            font-weight: bold;
+            margin: 10px 0;
+            display: none;
+        }
+        .warn {
+            color: #f53f3f;
+            font-weight: bold;
+            margin: 10px 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h2>📋 AG-Grid 动态表格填充脚本生成器</h2>
+
+    <div class="tip">
+        <strong>使用说明：</strong><br>
+        1. 直接全选粘贴Excel导出的【三列原始数据】（支持换行、引号、空单元格）<br>
+        2. 点击「生成&复制脚本」<br>
+        3. 打开目标测试/生产网页 → F12控制台 → 粘贴回车运行<br>
+        4. 适配虚拟滚动懒加载，滚动页面自动识别新数据
+    </div>
+
+    <textarea id="inputBox" placeholder="粘贴你的3列Excel数据，示例：
+1231321	Passed	长文本备注内容
+1231322	Blocked	备注..."></textarea>
+
+    <div class="btn-group">
+        <button onclick="buildAndCopy()">✅ 生成 & 复制脚本</button>
+        <button onclick="clearAll()">🗑️ 清空</button>
+    </div>
+
+    <div class="success" id="okTip">✅ 脚本已生成并自动复制！直接去控制台粘贴即可</div>
+    <div class="warn" id="errTip">❌ 请先粘贴Excel数据</div>
+
+    <p>生成结果：</p>
+    <textarea id="outBox" readonly></textarea>
+
+</div>
+
+<script>
+    function hideTips(){
+        document.getElementById('okTip').style.display = 'none';
+        document.getElementById('errTip').style.display = 'none';
+    }
+
+    function clearAll(){
+        hideTips();
+        document.getElementById('inputBox').value = '';
+        document.getElementById('outBox').value = '';
+    }
+
+    // 核心生成函数 纯同步 零卡顿
+    function buildAndCopy(){
+        hideTips();
+        const raw = document.getElementById('inputBox').value.trim();
+        if(!raw){
+            document.getElementById('errTip').style.display = 'block';
+            return;
+        }
+
+        // 深度字符转义 杜绝多行/引号语法报错
+        const safeRaw = raw.replace(/`/g, '\\`');
+
+        // AG-Grid专属最终脚本
+        const finalJs = `(function(){
+const excelDataRaw = \`${safeRaw}\`;
+
+try{
+    const dataMap = {};
+    excelDataRaw.split("\\n").forEach(line=>{
+        const row = line.trim();
+        if(!row) return;
+        const cells = row.split(/\\t+/);
+        const key = (cells[0]||"").trim();
+        const col2 = (cells[1]||"").trim();
+        const col3 = cells.slice(2).join("\\t").trim();
+        if(key) dataMap[key] = {col2, col3};
+    });
+
+    if(Object.keys(dataMap).length === 0){
+        alert("未解析到有效用例数据");
+        return;
+    }
+
+    const processed = new WeakSet();
+
+    function renderAGGrid(){
+        // 精准命中AG-Grid虚拟表格行
+        const rows = document.querySelectorAll('.ag-row, .ag-row-level-0');
+
+        rows.forEach(row=>{
+            if(processed.has(row)) return;
+
+            const allCells = row.querySelectorAll('.ag-cell, [role="gridcell"], .ag-field-cell');
+            let targetKey = null;
+            let targetCell = null;
+
+            // 精准匹配ID
+            for(const cell of allCells){
+                const txt = cell.textContent.trim();
+                if(dataMap[txt]){
+                    targetKey = txt;
+                    targetCell = cell;
+                    break;
+                }
+            }
+
+            if(!targetCell) return;
+            const info = dataMap[targetKey];
+
+            // 生成辅助状态列
+            const td1 = document.createElement('div');
+            td1.style.cssText = 'display:table-cell;background:#e8f4ff;padding:6px 8px;border:1px solid #409eff;cursor:pointer;white-space:pre-wrap;max-width:450px;word-break:break-all;';
+            td1.textContent = info.col2;
+            td1.onclick = function(){
+                const temp = document.createElement('textarea');
+                temp.value = this.textContent;
+                document.body.appendChild(temp);
+                temp.select();
+                document.execCommand('copy');
+                document.body.removeChild(temp);
+                alert("✅ 已复制状态内容");
+            };
+
+            // 生成辅助备注长文本列
+            const td2 = document.createElement('div');
+            td2.style.cssText = 'display:table-cell;background:#e8f4ff;padding:6px 8px;border:1px solid #409eff;cursor:pointer;white-space:pre-wrap;max-width:450px;word-break:break-all;';
+            td2.textContent = info.col3;
+            td2.onclick = function(){
+                const temp = document.createElement('textarea');
+                temp.value = this.textContent;
+                document.body.appendChild(temp);
+                temp.select();
+                document.execCommand('copy');
+                document.body.removeChild(temp);
+                alert("✅ 已复制备注内容");
+            };
+
+            // 插入到ID单元格右侧
+            targetCell.after(td1, td2);
+            processed.add(row);
+        });
+
+        console.log("✅ 本次匹配完成，累计处理: " + processed.size + " 条");
+    }
+
+    // 等待AG-Grid骨架屏、虚拟DOM完全渲染
+    setTimeout(renderAGGrid, 1500);
+
+    // 深度监听滚动懒加载、分页、表格刷新
+    let debounceTimer = null;
+    const observer = new MutationObserver(()=>{
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(renderAGGrid, 350);
+    });
+    observer.observe(document.body, {childList:true, subtree:true});
+
+    // 滚动兜底触发
+    window.addEventListener('scroll', ()=>{
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(renderAGGrid, 400);
+    });
+
+    console.log("🚀 AG-Grid专属表格填充脚本运行成功");
+
+}catch(e){
+    alert("脚本运行异常: " + e.message);
+    console.error(e);
+}
+})();`;
+
+        // 写入结果框
+        document.getElementById('outBox').value = finalJs;
+
+        // 全兼容自动复制
+        const out = document.getElementById('outBox');
+        out.select();
+        document.execCommand('copy');
+
+        // 成功提示
+        document.getElementById('okTip').style.display = 'block';
+        setTimeout(hideTips, 3500);
+    }
+</script>
+</body>
+</html>
