@@ -2,9 +2,9 @@
 document.activeElement?.blur();
 document.body.focus();
 
-(function(){
-// 你的完整Case数据
-const caseData = `1734833	Passed	25.05.2026 qz715a: passed. Manually evaluated as pass. P_ADcLow_AdmissGuid==64d Trigger not same. With GER TS(1782001) Next: TA need to be fixed, all other evaluations are met
+(function () {
+    // ==================== 数据区 ====================
+    const caseData = `1734833	Passed	25.05.2026 qz715a: passed. Manually evaluated as pass. P_ADcLow_AdmissGuid==64d Trigger not same. With GER TS(1782001) Next: TA need to be fixed, all other evaluations are met
 1734837	Passed	25.05.2026 qz715a: passed. A_ADcLow_AdmissGuid 320+1.1s:AdcLow_AdmissGuid 320+1.6s is not right timing to chek. Other signal value is met. Same with GER TS(1782001) ML need to adjust evaluation in ML
 1734839	Passed	25.05.2026 qz715a: passed. Automatically passed
 1734840	Passed	25.05.2026 qz715a: passed. Automatically passed
@@ -30,89 +30,199 @@ const caseData = `1734833	Passed	25.05.2026 qz715a: passed. Manually evaluated a
 1734838	Passed	25.05.2026 qz715a: passed. Automatically passed
 1734841	Passed	25.05.2026 qz715a: passed. Automatically passed`;
 
+    // 构建 ID -> {result, remark} 映射
     const idMap = {};
-    caseData.split('\n').forEach(line=>{
+    caseData.split('\n').forEach(line => {
         const parts = line.trim().split(/\t+/);
         const cid = parts[0]?.trim();
-        if(!cid) return;
+        if (!cid) return;
         idMap[cid] = {
             result: parts[1]?.trim() || '',
             remark: parts.slice(2).join('\t').trim() || ''
         };
     });
+    console.log(`✅ 成功加载 ${Object.keys(idMap).length} 条Case数据`);
 
-    console.log(`✅ 已加载 ${Object.keys(idMap).length} 条Case`);
+    // ==================== 辅助函数 ====================
+    function copyToClip(text, label) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert(`✅ 已复制${label}`);
+        }).catch(() => {
+            alert(`❌ 复制${label}失败，请手动复制`);
+        });
+    }
 
-    const processed = new WeakSet();
+    // 创建悬浮层 DOM（挂载到 body 上）
+    function createFloatingBadge(result, remark, targetCell) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'slick-extra-floating';
+        wrapper.style.cssText = `
+            position: fixed;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+            z-index: 100000;
+            display: inline-flex;
+            gap: 6px;
+            padding: 4px 8px;
+            pointer-events: auto;
+            white-space: nowrap;
+        `;
 
-    function render(){
+        // 结果徽章
+        const resSpan = document.createElement('span');
+        resSpan.textContent = result;
+        resSpan.style.cssText = `
+            background: #d4edda;
+            border: 1px solid #28a745;
+            padding: 2px 8px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+        `;
+        resSpan.title = '点击复制执行结果';
+        resSpan.onclick = (e) => {
+            e.stopPropagation();
+            copyToClip(result, '执行结果');
+        };
+
+        // 备注徽章（显示前30字+…，悬浮显示完整）
+        const shortRemark = remark.length > 30 ? remark.substring(0, 30) + '…' : remark;
+        const remSpan = document.createElement('span');
+        remSpan.textContent = shortRemark;
+        remSpan.style.cssText = `
+            background: #cce5ff;
+            border: 1px solid #007bff;
+            padding: 2px 8px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 12px;
+            max-width: 300px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        `;
+        remSpan.title = remark;
+        remSpan.onclick = (e) => {
+            e.stopPropagation();
+            copyToClip(remark, '完整备注');
+        };
+
+        wrapper.appendChild(resSpan);
+        wrapper.appendChild(remSpan);
+        document.body.appendChild(wrapper);
+
+        // 定位到目标单元格的右侧
+        function updatePosition() {
+            const rect = targetCell.getBoundingClientRect();
+            wrapper.style.left = rect.right + 5 + 'px';
+            wrapper.style.top = rect.top + 'px';
+        }
+        updatePosition();
+        // 监听滚动和窗口大小变化，更新位置
+        const updateHandler = () => updatePosition();
+        window.addEventListener('scroll', updateHandler, true);
+        window.addEventListener('resize', updateHandler);
+        // 保存清理函数到 wrapper 上，以便后续移除
+        wrapper._cleanup = () => {
+            window.removeEventListener('scroll', updateHandler, true);
+            window.removeEventListener('resize', updateHandler);
+        };
+        return wrapper;
+    }
+
+    // 更新或创建悬浮层（支持虚拟滚动重用行）
+    const floatingMap = new WeakMap(); // cell -> {wrapper, cleanup}
+
+    function updateOrCreateFloating(cell, matchedId) {
+        const { result, remark } = idMap[matchedId];
+        let entry = floatingMap.get(cell);
+        if (entry) {
+            // 更新现有悬浮层内容
+            const wrapper = entry.wrapper;
+            const [resSpan, remSpan] = wrapper.children;
+            if (resSpan.textContent !== result) {
+                resSpan.textContent = result;
+                resSpan.onclick = (e) => {
+                    e.stopPropagation();
+                    copyToClip(result, '执行结果');
+                };
+            }
+            const newShortRemark = remark.length > 30 ? remark.substring(0, 30) + '…' : remark;
+            if (remSpan.textContent !== newShortRemark) {
+                remSpan.textContent = newShortRemark;
+                remSpan.title = remark;
+                remSpan.onclick = (e) => {
+                    e.stopPropagation();
+                    copyToClip(remark, '完整备注');
+                };
+            }
+            // 更新位置
+            const rect = cell.getBoundingClientRect();
+            wrapper.style.left = rect.right + 5 + 'px';
+            wrapper.style.top = rect.top + 'px';
+        } else {
+            // 创建新的悬浮层
+            const wrapper = createFloatingBadge(result, remark, cell);
+            floatingMap.set(cell, { wrapper, cleanup: wrapper._cleanup });
+        }
+    }
+
+    // 清理所有已有的悬浮层（可选，用于完全刷新）
+    function cleanupAll() {
+        for (let [cell, entry] of floatingMap) {
+            entry.cleanup();
+            entry.wrapper.remove();
+        }
+        floatingMap = new WeakMap();
+    }
+
+    // ==================== 核心渲染 ====================
+    function render() {
         const rows = document.querySelectorAll('.slick-row');
         let matchCount = 0;
 
-        rows.forEach(row=>{
-            if(processed.has(row)) return;
-
+        rows.forEach(row => {
             const cells = row.querySelectorAll('.slick-cell');
+            let targetCell = null;
             let matchedId = null;
 
-            // 先匹配ID
-            for(const cell of cells){
-                const pureText = cell.textContent.trim().replace(/\s+/g,'');
-                if(idMap[pureText]){
-                    matchedId = pureText;
+            for (const cell of cells) {
+                const text = cell.textContent.trim().replace(/\s+/g, '');
+                if (idMap[text]) {
+                    matchedId = text;
+                    targetCell = cell;
                     break;
                 }
             }
 
-            if(!matchedId) return;
+            if (!targetCell) return;
             matchCount++;
 
-            // 先清掉本行旧的辅助列，避免重复叠加重叠
-            row.querySelectorAll('.temp-aux-col').forEach(el=>el.remove());
-
-            // 新建首列辅助单元格
-            const resCol = document.createElement('div');
-            resCol.className = 'temp-aux-col slick-cell';
-            resCol.style = 'float:left;background:#d4edda;border:1px solid #28a745;padding:6px 6px;cursor:pointer;width:140px;word-break:break-all;margin-right:4px;z-index:999;';
-            resCol.textContent = idMap[matchedId].result;
-            resCol.onclick = ()=>{
-                navigator.clipboard.writeText(resCol.textContent);
-                alert('✅ 复制结果成功');
-            };
-
-            const remCol = document.createElement('div');
-            remCol.className = 'temp-aux-col slick-cell';
-            remCol.style = 'float:left;background:#cce5ff;border:1px solid #007bff;padding:6px 6px;cursor:pointer;width:380px;white-space:pre-wrap;word-break:break-all;margin-right:4px;z-index:999;';
-            remCol.textContent = idMap[matchedId].remark;
-            remCol.onclick = ()=>{
-                navigator.clipboard.writeText(remCol.textContent);
-                alert('✅ 复制备注成功');
-            };
-
-            // ✅ 插入到【本行最开头 首列位置】
-            row.prepend(resCol, remCol);
-            processed.add(row);
+            updateOrCreateFloating(targetCell, matchedId);
         });
 
-        console.log(`✅ 本轮新增匹配 ${matchCount} 条，累计 ${processed.size} 条`);
+        // 可选：清理不再存在行的悬浮层（性能优化，本例忽略）
+        if (matchCount) console.log(`✅ 本次处理 ${matchCount} 行`);
     }
 
-    // 延迟渲染+兜底重试
-    setTimeout(render, 1000);
-    setTimeout(render, 2500);
-    setTimeout(render, 4500);
+    // ==================== 启动监听 ====================
+    setTimeout(render, 800);
+    setTimeout(render, 2000);
+    setTimeout(render, 4000);
 
-    // 滚动/懒加载自动更新
     let timer = null;
-    new MutationObserver(()=>{
+    new MutationObserver(() => {
         clearTimeout(timer);
-        timer = setTimeout(render, 350);
-    }).observe(document.body, {childList:true, subtree:true});
+        timer = setTimeout(render, 300);
+    }).observe(document.body, { childList: true, subtree: true });
 
-    window.addEventListener('scroll', ()=>{
+    window.addEventListener('scroll', () => {
         clearTimeout(timer);
         timer = setTimeout(render, 400);
     });
 
-    console.log("🚀 首列插入专属脚本运行完成");
+    console.log("🚀 Slick Grid 辅助列脚本已启动（无重叠，支持虚拟滚动）");
 })();
