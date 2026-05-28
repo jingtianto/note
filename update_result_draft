@@ -3,7 +3,7 @@ document.activeElement?.blur();
 document.body.focus();
 
 (function(){
-// 你的截图里完整Case数据
+// 你的完整Case数据
 const caseData = `1734833	Passed	25.05.2026 qz715a: passed. Manually evaluated as pass. P_ADcLow_AdmissGuid==64d Trigger not same. With GER TS(1782001) Next: TA need to be fixed, all other evaluations are met
 1734837	Passed	25.05.2026 qz715a: passed. A_ADcLow_AdmissGuid 320+1.1s:AdcLow_AdmissGuid 320+1.6s is not right timing to chek. Other signal value is met. Same with GER TS(1782001) ML need to adjust evaluation in ML
 1734839	Passed	25.05.2026 qz715a: passed. Automatically passed
@@ -30,7 +30,6 @@ const caseData = `1734833	Passed	25.05.2026 qz715a: passed. Manually evaluated a
 1734838	Passed	25.05.2026 qz715a: passed. Automatically passed
 1734841	Passed	25.05.2026 qz715a: passed. Automatically passed`;
 
-    // 构建ID映射字典
     const idMap = {};
     caseData.split('\n').forEach(line=>{
         const parts = line.trim().split(/\t+/);
@@ -42,80 +41,78 @@ const caseData = `1734833	Passed	25.05.2026 qz715a: passed. Manually evaluated a
         };
     });
 
-    console.log(`✅ 成功加载 ${Object.keys(idMap).length} 条Case数据`);
+    console.log(`✅ 已加载 ${Object.keys(idMap).length} 条Case`);
 
     const processed = new WeakSet();
 
-    // Slick Grid专属渲染函数
     function render(){
-        // 精准匹配 slick-grid 所有行
         const rows = document.querySelectorAll('.slick-row');
         let matchCount = 0;
 
         rows.forEach(row=>{
             if(processed.has(row)) return;
 
-            // 获取当前行所有单元格
             const cells = row.querySelectorAll('.slick-cell');
-            let targetCell = null;
             let matchedId = null;
 
-            // 精准匹配纯数字CaseID
+            // 先匹配ID
             for(const cell of cells){
-                const text = cell.textContent.trim().replace(/\s+/g,'');
-                if(idMap[text]){
-                    matchedId = text;
-                    targetCell = cell;
+                const pureText = cell.textContent.trim().replace(/\s+/g,'');
+                if(idMap[pureText]){
+                    matchedId = pureText;
                     break;
                 }
             }
 
-            if(!targetCell) return;
+            if(!matchedId) return;
             matchCount++;
 
-            // 新建结果辅助列
+            // 先清掉本行旧的辅助列，避免重复叠加重叠
+            row.querySelectorAll('.temp-aux-col').forEach(el=>el.remove());
+
+            // 新建首列辅助单元格
             const resCol = document.createElement('div');
-            resCol.style = 'display:inline-block;background:#d4edda;border:1px solid #28a745;padding:6px 8px;cursor:pointer;max-width:300px;word-break:break-all;margin:0 4px;';
+            resCol.className = 'temp-aux-col slick-cell';
+            resCol.style = 'float:left;background:#d4edda;border:1px solid #28a745;padding:6px 6px;cursor:pointer;width:140px;word-break:break-all;margin-right:4px;z-index:999;';
             resCol.textContent = idMap[matchedId].result;
             resCol.onclick = ()=>{
                 navigator.clipboard.writeText(resCol.textContent);
-                alert('✅ 已复制执行结果');
+                alert('✅ 复制结果成功');
             };
 
-            // 新建备注辅助列（完美保留长文本+换行）
             const remCol = document.createElement('div');
-            remCol.style = 'display:inline-block;background:#cce5ff;border:1px solid #007bff;padding:6px 8px;cursor:pointer;max-width:600px;white-space:pre-wrap;word-break:break-all;margin:0 4px;';
+            remCol.className = 'temp-aux-col slick-cell';
+            remCol.style = 'float:left;background:#cce5ff;border:1px solid #007bff;padding:6px 6px;cursor:pointer;width:380px;white-space:pre-wrap;word-break:break-all;margin-right:4px;z-index:999;';
             remCol.textContent = idMap[matchedId].remark;
             remCol.onclick = ()=>{
                 navigator.clipboard.writeText(remCol.textContent);
-                alert('✅ 已复制完整备注');
+                alert('✅ 复制备注成功');
             };
 
-            // 插入到ID单元格右侧
-            targetCell.after(resCol, remCol);
+            // ✅ 插入到【本行最开头 首列位置】
+            row.prepend(resCol, remCol);
             processed.add(row);
         });
 
-        console.log(`✅ 本次匹配成功填充 ${matchCount} 条，累计 ${processed.size} 条`);
+        console.log(`✅ 本轮新增匹配 ${matchCount} 条，累计 ${processed.size} 条`);
     }
 
-    // 等待Slick Grid完全渲染，多次兜底执行
-    setTimeout(render, 800);
-    setTimeout(render, 2000);
-    setTimeout(render, 4000);
+    // 延迟渲染+兜底重试
+    setTimeout(render, 1000);
+    setTimeout(render, 2500);
+    setTimeout(render, 4500);
 
-    // 监听滚动懒加载、分页、表格刷新
+    // 滚动/懒加载自动更新
     let timer = null;
     new MutationObserver(()=>{
         clearTimeout(timer);
-        timer = setTimeout(render, 300);
+        timer = setTimeout(render, 350);
     }).observe(document.body, {childList:true, subtree:true});
 
-    // 滚动页面自动填充新加载的行
     window.addEventListener('scroll', ()=>{
         clearTimeout(timer);
         timer = setTimeout(render, 400);
     });
 
-    console.log("🚀 Slick Grid专属脚本已启动，滚动自动识别新行");
+    console.log("🚀 首列插入专属脚本运行完成");
 })();
