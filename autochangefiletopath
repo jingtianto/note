@@ -1,0 +1,16 @@
+Set objShell = CreateObject("WScript.Shell")
+Set objHTML = CreateObject("htmlfile")
+
+' 从剪贴板读取文本
+clipText = objHTML.ParentWindow.ClipboardData.GetData("text")
+
+' 删除开头的 "file:"（不区分大小写）
+If LCase(Left(clipText, 5)) = "file:" Then
+    clipText = Mid(clipText, 6)
+End If
+
+' 将正斜杠 / 替换为反斜杠 \
+clipText = Replace(clipText, "/", "\")
+
+' 在资源管理器中打开该路径
+objShell.Run "explorer.exe """ & clipText & """", 1, False
