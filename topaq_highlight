@@ -2,185 +2,751 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>highlight keywords tool</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>高级关键词高亮工具 | 控制台脚本生成 + 实时预览</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f0f2f5;
-            padding: 20px;
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: #eef2f7;
+            padding: 24px 20px;
             margin: 0;
         }
+
         .container {
-            max-width: 800px;
+            max-width: 1100px;
             margin: 0 auto;
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            padding: 24px;
         }
+
+        /* 主卡片 */
+        .card {
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.02);
+            padding: 28px 30px;
+            margin-bottom: 28px;
+            transition: all 0.2s;
+        }
+
         h1 {
-            font-size: 24px;
-            text-align: center;
-            margin: 0 0 20px;
-            color: #333;
+            font-size: 28px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+            color: #1a2c3e;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
         }
-        .format-info {
+
+        h1 small {
             font-size: 14px;
-            color: #666;
-            margin-bottom: 16px;
-            line-height: 1.6;
+            font-weight: normal;
+            background: #eef2fa;
+            padding: 4px 12px;
+            border-radius: 40px;
+            color: #2c5f8a;
         }
-        textarea {
+
+        .sub {
+            color: #4a627a;
+            border-left: 3px solid #3b82f6;
+            padding-left: 12px;
+            margin: 12px 0 20px 0;
+            font-size: 14px;
+        }
+
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 20px;
+            align-items: flex-start;
+        }
+
+        .input-group {
+            flex: 2;
+            min-width: 240px;
+        }
+
+        .label {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        textarea, input, select {
             width: 100%;
-            min-height: 150px;
-            padding: 12px;
-            border: 1px solid #d9d9d9;
-            border-radius: 4px;
+            padding: 12px 14px;
+            border: 1px solid #cfdfed;
+            border-radius: 14px;
             font-size: 14px;
-            resize: vertical;
-            box-sizing: border-box;
-            margin-bottom: 12px;
+            background: #fff;
+            transition: 0.2s;
+            font-family: inherit;
         }
-        .button-group {
+
+        textarea:focus, input:focus, select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+        }
+
+        textarea {
+            resize: vertical;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+
+        .config-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            background: #f8fafc;
+            padding: 18px 20px;
+            border-radius: 20px;
+            margin: 20px 0 20px 0;
+            border: 1px solid #e2edf7;
+        }
+
+        .config-item {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .color-row {
             display: flex;
             gap: 12px;
-            margin-bottom: 16px;
+            align-items: center;
         }
-        button {
+        .color-row .config-item {
             flex: 1;
-            padding: 12px;
+        }
+        input[type="color"] {
+            height: 42px;
+            padding: 4px;
+        }
+
+        .button-bar {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin: 20px 0 16px;
+        }
+        .btn {
+            padding: 12px 22px;
             border: none;
-            border-radius: 4px;
-            font-size: 16px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 15px;
             cursor: pointer;
-            transition: opacity 0.2s;
+            transition: 0.2s;
+            background: #f1f5f9;
+            color: #1e293b;
         }
-        #runBtn {
-            background-color: #1677ff;
-            color: #fff;
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+            box-shadow: 0 2px 6px rgba(59,130,246,0.3);
         }
-        #emptyBtn {
-            background-color: #8c8c8c;
-            color: #fff;
+        .btn-primary:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
         }
-        button:hover {
-            opacity: 0.9;
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #1e293b;
         }
-        #outputArea {
-            background-color: #f5f5f5;
-            font-family: Consolas, monospace;
+        .btn-secondary:hover {
+            background: #cbd5e1;
+        }
+        .btn-warning {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+        .btn-warning:hover {
+            background: #fecaca;
+        }
+
+        /* 预览区域 */
+        .preview-area {
+            background: #fefce8;
+            border-radius: 20px;
+            padding: 20px;
+            border: 1px solid #fde68a;
+            margin-top: 28px;
+        }
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+            border-bottom: 2px dashed #facc15;
+            padding-bottom: 10px;
+        }
+        .preview-title {
+            font-weight: 700;
+            color: #854d0e;
+            font-size: 16px;
+        }
+        .preview-badge {
             font-size: 12px;
+            background: #fff3cd;
+            padding: 4px 10px;
+            border-radius: 30px;
+        }
+        .mock-table {
+            background: white;
+            border-radius: 18px;
+            padding: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .mock-row {
+            display: flex;
+            border-bottom: 1px solid #e9ecef;
+            padding: 8px 12px;
+        }
+        .mock-cell {
+            flex: 1;
+            font-size: 14px;
+            font-family: monospace;
+        }
+        .demo-text {
+            font-size: 14px;
+            line-height: 1.5;
+            background: #fff;
+            padding: 12px;
+            border-radius: 16px;
+        }
+        .highlight-demo {
+            transition: all 0.1s ease;
+        }
+        hr {
+            margin: 16px 0;
+            border-color: #e9eef3;
+        }
+        .status-msg {
+            font-size: 12px;
+            color: #2c5f8a;
+            margin-top: 8px;
+        }
+        @media (max-width: 720px) {
+            .card {
+                padding: 20px;
+            }
+            .config-grid {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🔧 highlight keywords tool</h1>
-        
-        <div class="format-info">
-            <strong>Format:</strong><br>
-            1. 逗号分隔: 175768,175769,12345<br>
-            2. 直接换行粘贴 (Excel 整列复制/粘贴)
+<div class="container">
+    <div class="card">
+        <h1>
+            🔍 精准高亮工具箱
+            <small>控制台脚本 + 实时预览</small>
+        </h1>
+        <div class="sub">
+            🧩 生成专业的高亮脚本，粘贴到任何网页控制台即可批量标记关键词。<br>
+            ✨ 下方「实时预览区」会立即展示高亮效果，方便调试匹配规则。
         </div>
 
-        <textarea id="inputArea" placeholder="请输入需要高亮的ID/关键词..."></textarea>
-
-        <div class="button-group">
-            <button id="runBtn">RUN and copy</button>
-            <button id="emptyBtn">empty</button>
+        <!-- 关键词输入区 -->
+        <div class="input-group">
+            <div class="label">📋 关键词列表</div>
+            <textarea id="keywordInput" rows="4" placeholder="支持多种格式：
+175768,175769,12345
+或者直接粘贴Excel列：
+175768
+175769
+ABC项目
+测试关键词"></textarea>
+            <div class="status-msg">💡 支持英文逗号分隔 / 换行分隔 (自动去重 & 过滤空白)</div>
         </div>
 
-        <textarea id="outputArea" readonly placeholder="生成的控制台脚本将显示在这里..."></textarea>
+        <!-- 高级配置面板 -->
+        <div class="config-grid">
+            <div class="config-item">
+                <div class="label">🎯 匹配模式</div>
+                <select id="matchMode">
+                    <option value="exact">完全匹配 (精确等于)</option>
+                    <option value="contains">包含匹配 (文本包含关键词即高亮)</option>
+                    <option value="regex">正则表达式 (高级)</option>
+                </select>
+            </div>
+            <div class="config-item">
+                <div class="label">🔡 大小写敏感</div>
+                <select id="caseSensitive">
+                    <option value="sensitive">敏感 (区分大小写)</option>
+                    <option value="insensitive">不敏感 (忽略大小写)</option>
+                </select>
+            </div>
+            <div class="config-item">
+                <div class="label">🎨 高亮背景色</div>
+                <input type="color" id="bgColor" value="#ffff00">
+            </div>
+            <div class="config-item">
+                <div class="label">✍️ 文字颜色</div>
+                <input type="color" id="textColor" value="#000000">
+            </div>
+            <div class="config-item">
+                <div class="label">🧩 CSS选择器 (作用范围)</div>
+                <input type="text" id="targetSelector" value="td, span, div, [role='gridcell'], p, li" placeholder="例: td, .data-cell, span">
+                <div class="status-msg">默认覆盖常见表格/文本元素</div>
+            </div>
+            <div class="config-item">
+                <div class="label">📌 自动滚动至首个匹配</div>
+                <select id="autoScroll">
+                    <option value="true">是 (平滑滚动)</option>
+                    <option value="false">否</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="button-bar">
+            <button id="runBtn" class="btn btn-primary">✨ 生成脚本 & 复制</button>
+            <button id="clearBtn" class="btn btn-secondary">🗑️ 清空输入/输出</button>
+            <button id="resetConfigBtn" class="btn btn-secondary">🔄 重置配置</button>
+        </div>
+
+        <!-- 输出区域: 控制台脚本 -->
+        <div class="label">📜 控制台脚本 (已自动复制, 也可手动复制)</div>
+        <textarea id="outputArea" readonly rows="10" style="font-family: monospace; background:#f8fafc;" placeholder="点击 RUN 后自动生成并复制..."></textarea>
     </div>
 
-    <script>
-        const inputArea = document.getElementById('inputArea');
+    <!-- 实时预览卡片 (高亮模拟) -->
+    <div class="card preview-area" id="previewCard">
+        <div class="preview-header">
+            <span class="preview-title">🎬 实时预览区 —— 基于当前配置的高亮模拟</span>
+            <span class="preview-badge">动态更新 | 所见即所得</span>
+        </div>
+        <div class="status-msg" style="margin-bottom: 12px;">⬇️ 以下示例数据会按照上方【匹配模式/颜色/选择器】展示高亮效果，帮你验证规则</div>
+        <div id="livePreviewContainer">
+            <!-- 动态内容: 模拟表格 + 文本块 -->
+            <div class="mock-table">
+                <div class="mock-row">
+                    <div class="mock-cell"><strong>ID / 字段</strong></div>
+                    <div class="mock-cell"><strong>值</strong></div>
+                </div>
+                <div class="mock-row">
+                    <div class="mock-cell">订单号</div>
+                    <div class="mock-cell">175768</div>
+                </div>
+                <div class="mock-row">
+                    <div class="mock-cell">订单号2</div>
+                    <div class="mock-cell">175769</div>
+                </div>
+                <div class="mock-row">
+                    <div class="mock-cell">关键词示例</div>
+                    <div class="mock-cell">重点测试项目</div>
+                </div>
+                <div class="mock-row">
+                    <div class="mock-cell">混合文本</div>
+                    <div class="mock-cell">包含 12345 的数字和 HelloWorld</div>
+                </div>
+                <div class="mock-row">
+                    <div class="mock-cell">特殊格式</div>
+                    <div class="mock-cell">ABC项目-重要</div>
+                </div>
+            </div>
+            <div class="demo-text" style="margin-top: 16px;">
+                📌 额外演示块: span 内容 "175768" 和 "重点测试项目" 以及正则测试字段 "ERROR_CODE_500"
+            </div>
+            <div style="margin-top: 12px; display: flex; gap: 20px; flex-wrap: wrap;">
+                <span class="demo-chip">175768</span>
+                <span class="demo-chip">175769</span>
+                <span class="demo-chip">测试关键词</span>
+                <span class="demo-chip">ERROR_CODE_500</span>
+                <span class="demo-chip">daily-report</span>
+            </div>
+        </div>
+        <div class="status-msg" style="margin-top: 14px;">✅ 预览区与「生成脚本」逻辑完全一致 (匹配规则, 颜色, 选择器范围)</div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // DOM 元素
+        const keywordTextarea = document.getElementById('keywordInput');
         const outputArea = document.getElementById('outputArea');
         const runBtn = document.getElementById('runBtn');
-        const emptyBtn = document.getElementById('emptyBtn');
-
-        // 生成控制台高亮脚本
-        function generateHighlightScript() {
-            const rawInput = inputArea.value.trim();
-            if (!rawInput) {
-                alert('请先输入需要高亮的ID/关键词！');
-                return;
-            }
-
-            // 解析输入（支持逗号分隔或换行分隔）
-            let idList = [];
-            if (rawInput.includes(',')) {
-                // 逗号分隔模式
-                idList = rawInput.split(',').map(item => item.trim()).filter(item => item);
+        const clearBtn = document.getElementById('clearBtn');
+        const resetConfigBtn = document.getElementById('resetConfigBtn');
+        
+        // 配置项
+        const matchModeSelect = document.getElementById('matchMode');
+        const caseSensitiveSelect = document.getElementById('caseSensitive');
+        const bgColorInput = document.getElementById('bgColor');
+        const textColorInput = document.getElementById('textColor');
+        const targetSelectorInput = document.getElementById('targetSelector');
+        const autoScrollSelect = document.getElementById('autoScroll');
+        
+        // 预览容器
+        const previewContainer = document.getElementById('livePreviewContainer');
+        
+        // ---------- 辅助函数: 解析关键词 (支持逗号 / 换行 / 去重) ----------
+        function parseKeywords(raw) {
+            if (!raw.trim()) return [];
+            let items = [];
+            // 优先检测逗号 (如果包含英文逗号，按逗号分割，否则按换行)
+            if (raw.includes(',')) {
+                items = raw.split(',').map(s => s.trim()).filter(s => s !== '');
             } else {
-                // 换行分隔模式（Excel整列粘贴）
-                idList = rawInput.split(/\r?\n/).map(item => item.trim()).filter(item => item);
+                items = raw.split(/\r?\n/).map(s => s.trim()).filter(s => s !== '');
             }
-
-            if (idList.length === 0) {
-                alert('未解析到有效的ID/关键词！');
-                return;
+            // 去重 (保留顺序)
+            const unique = [];
+            const set = new Set();
+            for (let it of items) {
+                if (!set.has(it)) {
+                    set.add(it);
+                    unique.push(it);
+                }
             }
-
-            // 生成可直接在控制台运行的JS脚本
-            const consoleScript = `(function(){
-    // 配置区：可自定义高亮颜色和匹配规则
-    const targetIds = ${JSON.stringify(idList)};
-    const highlightBg = '#ffff00'; // 高亮背景色（黄色）
-    const highlightColor = '#000000'; // 文字颜色
-    const targetSelectors = 'td, span, div, [role="gridcell"]'; // 适配表格单元格
-
-    // 清除之前的高亮
-    document.querySelectorAll('.highlight-keyword-mark').forEach(el => {
+            return unique;
+        }
+        
+        // 预览专用: 获取当前配置的高亮规则 (返回匹配函数)
+        function getPreviewMatchFunction() {
+            const mode = matchModeSelect.value;
+            const caseSense = caseSensitiveSelect.value;
+            const keywordsRaw = keywordTextarea.value;
+            const keywordList = parseKeywords(keywordsRaw);
+            if (keywordList.length === 0) {
+                return (text) => false; // 无关键词永不匹配
+            }
+            
+            const caseInsensitive = (caseSense === 'insensitive');
+            
+            if (mode === 'exact') {
+                // 完全匹配: 预处理标准化
+                let compareKeywords;
+                if (caseInsensitive) {
+                    compareKeywords = keywordList.map(k => k.toLowerCase());
+                    return (text) => {
+                        const normText = (text || '').trim().toLowerCase();
+                        return compareKeywords.includes(normText);
+                    };
+                } else {
+                    compareKeywords = keywordList;
+                    return (text) => {
+                        const normText = (text || '').trim();
+                        return compareKeywords.includes(normText);
+                    };
+                }
+            } 
+            else if (mode === 'contains') {
+                if (caseInsensitive) {
+                    const lowerKeywords = keywordList.map(k => k.toLowerCase());
+                    return (text) => {
+                        if (!text) return false;
+                        const lowerText = text.toLowerCase();
+                        return lowerKeywords.some(kw => lowerText.includes(kw));
+                    };
+                } else {
+                    return (text) => {
+                        if (!text) return false;
+                        return keywordList.some(kw => text.includes(kw));
+                    };
+                }
+            }
+            else if (mode === 'regex') {
+                // 正则模式: 每个关键词作为一个正则 (需验证有效性)
+                const regexList = [];
+                for (let kw of keywordList) {
+                    try {
+                        let flags = caseInsensitive ? 'gi' : 'g';
+                        // 为了 match 测试，使用 new RegExp, 注意全局标志仅用于测试不影响 test
+                        const reg = new RegExp(kw, caseInsensitive ? 'i' : '');
+                        regexList.push(reg);
+                    } catch(e) {
+                        console.warn(`无效正则: ${kw}`, e);
+                        // 无效正则忽略
+                    }
+                }
+                return (text) => {
+                    if (!text) return false;
+                    return regexList.some(reg => reg.test(text));
+                };
+            }
+            return () => false;
+        }
+        
+        // 实时预览高亮 (基于当前选择器，样式，匹配规则)
+        function refreshLivePreview() {
+            if (!previewContainer) return;
+            const selector = targetSelectorInput.value.trim() || 'td, span, div, [role="gridcell"], p, li, .demo-chip';
+            const bg = bgColorInput.value;
+            const color = textColorInput.value;
+            const rawKeywords = keywordTextarea.value;
+            const keywordArray = parseKeywords(rawKeywords);
+            
+            // 获取匹配函数
+            const matchFunc = getPreviewMatchFunction();
+            
+            // 1. 清除当前预览区域内所有高亮class和内联样式
+            const allElements = previewContainer.querySelectorAll('.preview-highlight');
+            allElements.forEach(el => {
+                el.style.backgroundColor = '';
+                el.style.color = '';
+                el.style.fontWeight = '';
+                el.classList.remove('preview-highlight');
+            });
+            
+            if (keywordArray.length === 0) return;
+            
+            // 2. 根据选择器获取目标元素 (仅限 previewContainer 内部)
+            let targets;
+            try {
+                targets = previewContainer.querySelectorAll(selector);
+            } catch(e) {
+                console.warn("选择器无效, 降级为常用元素");
+                targets = previewContainer.querySelectorAll('td, span, div, .demo-chip');
+            }
+            
+            let matchedCount = 0;
+            targets.forEach(el => {
+                // 获取纯文本 (不包含子元素干扰，一般直接使用 textContent)
+                const text = (el.textContent || '').trim();
+                if (text === "") return;
+                const isMatch = matchFunc(text);
+                if (isMatch) {
+                    el.style.backgroundColor = bg;
+                    el.style.color = color;
+                    el.style.fontWeight = 'bold';
+                    el.classList.add('preview-highlight');
+                    matchedCount++;
+                }
+            });
+            
+            // 在预览区底栏显示匹配数量 (可选)
+            let statusDiv = previewContainer.querySelector('.preview-match-status');
+            if (!statusDiv) {
+                statusDiv = document.createElement('div');
+                statusDiv.className = 'status-msg preview-match-status';
+                statusDiv.style.marginTop = '12px';
+                previewContainer.appendChild(statusDiv);
+            }
+            statusDiv.innerHTML = `✨ 预览匹配: 共高亮 ${matchedCount} 个元素 (基于当前关键词及规则)`;
+        }
+        
+        // 防抖刷新预览
+        let previewDebounce;
+        function schedulePreview() {
+            if (previewDebounce) clearTimeout(previewDebounce);
+            previewDebounce = setTimeout(() => {
+                refreshLivePreview();
+            }, 100);
+        }
+        
+        // 监听所有配置变动 + 关键词变动 -> 刷新预览
+        const configElements = [matchModeSelect, caseSensitiveSelect, bgColorInput, textColorInput, targetSelectorInput, autoScrollSelect];
+        configElements.forEach(el => {
+            el.addEventListener('change', () => schedulePreview());
+        });
+        keywordTextarea.addEventListener('input', () => schedulePreview());
+        
+        // ---------- 生成控制台脚本 (核心产出) ----------
+        function generateConsoleScript() {
+            const rawKeywords = keywordTextarea.value.trim();
+            if (!rawKeywords) {
+                alert('❌ 请先输入需要高亮的关键词/ID！');
+                return null;
+            }
+            const keywordList = parseKeywords(rawKeywords);
+            if (keywordList.length === 0) {
+                alert('❌ 未检测到有效关键词 (请检查格式)');
+                return null;
+            }
+            
+            // 获取配置
+            const mode = matchModeSelect.value;
+            const caseSense = caseSensitiveSelect.value;
+            const bgColor = bgColorInput.value;
+            const textColor = textColorInput.value;
+            let targetSelector = targetSelectorInput.value.trim();
+            if (!targetSelector) targetSelector = 'td, span, div, [role="gridcell"], p, li';
+            const autoScroll = autoScrollSelect.value === 'true';
+            const caseInsensitive = (caseSense === 'insensitive');
+            
+            // 构建匹配逻辑的代码字符串 (动态生成高效函数)
+            // 采用优化方式：提前生成匹配器，避免双重循环低效。
+            let matchLogicCode = '';
+            if (mode === 'exact') {
+                if (caseInsensitive) {
+                    const lowerKeywords = keywordList.map(k => escapeStringForJs(k.toLowerCase()));
+                    matchLogicCode = `
+                        const lowerKeywordsSet = new Set([${lowerKeywords.map(k => `'${k}'`).join(', ')}]);
+                        return lowerKeywordsSet.has(textLower);
+                    `;
+                } else {
+                    const exactSet = keywordList.map(k => escapeStringForJs(k));
+                    matchLogicCode = `
+                        const exactSet = new Set([${exactSet.map(k => `'${k}'`).join(', ')}]);
+                        return exactSet.has(text);
+                    `;
+                }
+            } 
+            else if (mode === 'contains') {
+                if (caseInsensitive) {
+                    const lowerKeywords = keywordList.map(k => escapeStringForJs(k.toLowerCase()));
+                    matchLogicCode = `
+                        const lowerKeywords = [${lowerKeywords.map(k => `'${k}'`).join(', ')}];
+                        const lowerText = textLower;
+                        return lowerKeywords.some(kw => lowerText.includes(kw));
+                    `;
+                } else {
+                    const rawKeywordsArr = keywordList.map(k => escapeStringForJs(k));
+                    matchLogicCode = `
+                        const keywordsArr = [${rawKeywordsArr.map(k => `'${k}'`).join(', ')}];
+                        return keywordsArr.some(kw => text.includes(kw));
+                    `;
+                }
+            } 
+            else { // regex 模式
+                const regexItems = [];
+                for (let kw of keywordList) {
+                    // 转义正则字符串内容, 但保留用户原意，生成 new RegExp
+                    let escapedKw = kw.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    regexItems.push(escapedKw);
+                }
+                const flags = caseInsensitive ? 'i' : '';
+                matchLogicCode = `
+                    const regexPatterns = [${regexItems.map(p => `new RegExp('${p}', '${flags}')`).join(', ')}];
+                    return regexPatterns.some(re => re.test(text));
+                `;
+            }
+            
+            // 构建完整脚本 (自执行函数，高性能，支持滚动)
+            const script = `(function(){
+    // ========== 高亮配置 ==========
+    const HIGHLIGHT_CONFIG = {
+        bgColor: "${bgColor}",
+        textColor: "${textColor}",
+        targetSelector: "${targetSelector.replace(/"/g, '\\"')}",
+        autoScroll: ${autoScroll},
+        matchRule: function(text, textLower) {
+            ${matchLogicCode}
+        }
+    };
+    
+    // 清除之前高亮 (基于标记类名)
+    const HIGHLIGHT_CLASS = "kw-highlight-js";
+    document.querySelectorAll('.' + HIGHLIGHT_CLASS).forEach(el => {
         el.style.backgroundColor = '';
         el.style.color = '';
         el.style.fontWeight = '';
-        el.classList.remove('highlight-keyword-mark');
+        el.classList.remove(HIGHLIGHT_CLASS);
     });
-
-    // 批量高亮匹配项
+    
+    // 获取所有待检测元素
+    let targets;
+    try {
+        targets = document.querySelectorAll(HIGHLIGHT_CONFIG.targetSelector);
+    } catch(e) {
+        console.warn("选择器无效，使用默认范围 td,span,div");
+        targets = document.querySelectorAll('td, span, div, [role="gridcell"]');
+    }
+    
     let matchCount = 0;
-    targetIds.forEach(id => {
-        document.querySelectorAll(targetSelectors).forEach(el => {
-            const text = (el.textContent || el.innerText || '').trim();
-            if (text === id) {
-                el.style.backgroundColor = highlightBg;
-                el.style.color = highlightColor;
-                el.style.fontWeight = 'bold';
-                el.classList.add('highlight-keyword-mark');
-                matchCount++;
-
-                // 自动滚动到第一个匹配项
-                if (!document.querySelector('.highlight-keyword-mark.scroll-to-view')) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    el.classList.add('scroll-to-view');
-                }
-            }
-        });
+    let firstMatched = null;
+    
+    targets.forEach(el => {
+        let rawText = (el.textContent || el.innerText || '').trim();
+        if(rawText === "") return;
+        let matched = false;
+        if(HIGHLIGHT_CONFIG.matchRule(rawText, rawText.toLowerCase())) {
+            matched = true;
+        }
+        if(matched) {
+            el.style.backgroundColor = HIGHLIGHT_CONFIG.bgColor;
+            el.style.color = HIGHLIGHT_CONFIG.textColor;
+            el.style.fontWeight = 'bold';
+            el.classList.add(HIGHLIGHT_CLASS);
+            matchCount++;
+            if(!firstMatched) firstMatched = el;
+        }
     });
-
-    console.log(\`高亮完成，共匹配到 \${matchCount} 个目标\`);
+    
+    if(HIGHLIGHT_CONFIG.autoScroll && firstMatched) {
+        firstMatched.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    
+    console.log(\`✅ 高亮工具执行完毕 | 匹配到 ${matchCount} 个元素 | 关键词规则已应用\`);
+    return matchCount;
 })();`;
-
-            // 写入输出框并自动复制
-            outputArea.value = consoleScript;
-            navigator.clipboard.writeText(consoleScript).then(() => {
-                alert('✅ 脚本已生成并复制到剪贴板！\n请在目标网页的控制台粘贴运行。');
-            }).catch(() => {
-                alert('⚠️ 脚本已生成，请手动复制输出框中的代码。');
-            });
+            return script;
         }
-
-        // 清空按钮
-        function clearAll() {
-            inputArea.value = '';
+        
+        // 工具函数: 转义字符串中的单引号/换行等，确保安全拼接
+        function escapeStringForJs(str) {
+            if (typeof str !== 'string') return '';
+            return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+        }
+        
+        // RUN & COPY 事件
+        async function onRunAndCopy() {
+            const script = generateConsoleScript();
+            if (!script) return;
+            outputArea.value = script;
+            try {
+                await navigator.clipboard.writeText(script);
+                alert('✅ 脚本已生成并复制到剪贴板！\n请前往目标网页 → 按F12打开控制台 → 粘贴运行 → 回车执行高亮。');
+            } catch (err) {
+                alert('⚠️ 自动复制失败，请手动选中输出框代码复制 (Ctrl+C)');
+            }
+        }
+        
+        // 清空 (保留默认配置只清空输入输出区)
+        function onClear() {
+            keywordTextarea.value = '';
             outputArea.value = '';
+            schedulePreview();  // 刷新预览 (清除高亮)
         }
-
+        
+        // 重置配置为默认值
+        function onResetConfig() {
+            matchModeSelect.value = 'exact';
+            caseSensitiveSelect.value = 'sensitive';
+            bgColorInput.value = '#ffff00';
+            textColorInput.value = '#000000';
+            targetSelectorInput.value = 'td, span, div, [role="gridcell"], p, li';
+            autoScrollSelect.value = 'true';
+            schedulePreview();  // 立即刷新预览效果
+        }
+        
+        // 初始化预览: 为预览区的 .demo-chip 增加类便于选择 (同时保证选择器可命中)
+        function initPreviewStructure() {
+            // 确保预览区内的 .demo-chip 元素可使用选择器命中
+            const chips = previewContainer.querySelectorAll('.demo-chip');
+            if (chips.length === 0 && previewContainer) {
+                // 如果结构未生成 (保证内容已有)
+            }
+            schedulePreview();
+        }
+        
         // 绑定事件
-        runBtn.addEventListener('click', generateHighlightScript);
-        emptyBtn.addEventListener('click', clearAll);
-    </script>
+        runBtn.addEventListener('click', onRunAndCopy);
+        clearBtn.addEventListener('click', onClear);
+        resetConfigBtn.addEventListener('click', onResetConfig);
+        
+        // 初始解析 & 预览刷新
+        initPreviewStructure();
+        // 首次生成初始示例脚本 (非强制，但为了让输出框不为空, 设置一个友好引导脚本)
+        const initScript = `// 请输入关键词并点击 [RUN and copy] 生成专属高亮脚本
+// 支持精确/包含/正则，自定义颜色选择器
+// 下方实时预览区会立刻展示效果`;
+        outputArea.value = initScript;
+        schedulePreview();
+    })();
+</script>
 </body>
 </html>
