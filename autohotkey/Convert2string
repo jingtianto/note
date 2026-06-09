@@ -1,0 +1,23 @@
+#Requires AutoHotkey v2.0
+
+original := A_Clipboard
+
+if !original {
+    MsgBox("剪贴板为空，请先复制内容再运行脚本。", "提示", 0x40)
+    ExitApp
+}
+
+; 替换所有换行（包括Windows的\r\n和Unix的\n）为逗号
+converted := StrReplace(original, "`r`n", ",")
+converted := StrReplace(converted, "`n", ",")
+converted := Trim(converted, ",") ; 去除首尾多余逗号
+
+A_Clipboard := converted
+
+MsgBox(
+    "转换完成！`n`n"
+    . "转换后内容：`n" . converted,
+    "转换成功", 0x40
+)
+
+ExitApp
