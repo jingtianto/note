@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>关键词高亮工具 | 控制台脚本生成 + 实时预览 (修复版)</title>
+    <title>动态高亮工具 | 支持懒加载/滚动新增内容</title>
     <style>
         * {
             box-sizing: border-box;
@@ -146,15 +146,22 @@
             margin-top: 12px;
             font-style: italic;
         }
+        .info-badge {
+            background: #dbeafe;
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 12px;
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="card">
-        <h1>🔍 精准高亮工具箱 · 修复版</h1>
+        <h1>🔍 动态高亮工具箱 · 支持懒加载/滚动加载</h1>
         <div class="sub">
-            🧩 生成高亮脚本，粘贴到任意网页控制台即可批量标记关键词。<br>
-            ✨ 下方「实时预览区」会立即展示效果，确保规则正确。
+            🧩 生成的高亮脚本会<strong>持续监听页面变化</strong>，新滚出来的内容也会自动高亮。<br>
+            ✨ 下方「实时预览」同样模拟动态效果 (点击模拟新增按钮测试)
         </div>
 
         <div class="label">📋 关键词列表</div>
@@ -169,9 +176,9 @@
             <div class="config-item">
                 <div class="label">🎯 匹配模式</div>
                 <select id="matchMode">
-                    <option value="exact">完全匹配 (精确等于)</option>
-                    <option value="contains">包含匹配 (文本包含关键词)</option>
-                    <option value="regex">正则表达式 (高级)</option>
+                    <option value="exact">完全匹配</option>
+                    <option value="contains">包含匹配</option>
+                    <option value="regex">正则表达式</option>
                 </select>
             </div>
             <div class="config-item">
@@ -203,22 +210,22 @@
         </div>
 
         <div class="button-bar">
-            <button id="runBtn" class="btn btn-primary">✨ 生成脚本 & 复制</button>
+            <button id="runBtn" class="btn btn-primary">✨ 生成动态高亮脚本 & 复制</button>
             <button id="clearBtn" class="btn btn-secondary">🗑️ 清空</button>
             <button id="resetConfigBtn" class="btn btn-secondary">🔄 重置配置</button>
         </div>
 
-        <div class="label">📜 控制台脚本 (已自动复制)</div>
-        <textarea id="outputArea" readonly rows="8" style="font-family: monospace; background:#f8fafc;" placeholder="点击【生成脚本&复制】后这里会出现代码..."></textarea>
+        <div class="label">📜 控制台脚本 (已自动复制，支持滚动加载新内容)</div>
+        <textarea id="outputArea" readonly rows="8" style="font-family: monospace; background:#f8fafc;" placeholder="点击【生成动态高亮脚本&复制】后这里会出现代码..."></textarea>
     </div>
 
     <div class="card preview-area" id="previewCard">
         <div class="preview-header">
-            <span>🎬 实时预览 (动态高亮模拟)</span>
-            <span>基于当前配置</span>
+            <span>🎬 实时预览 + 动态模拟 (点击下方按钮新增行，新行也会高亮)</span>
+            <button id="simulateAddRowBtn" style="background:#e0e7ff; border:none; border-radius:30px; padding:4px 12px; cursor:pointer;">➕ 模拟新增一行</button>
         </div>
         <div id="livePreviewContainer">
-            <div class="mock-table">
+            <div class="mock-table" id="dynamicMockTable">
                 <div class="mock-row"><div class="mock-cell">订单号</div><div class="mock-cell">175768</div></div>
                 <div class="mock-row"><div class="mock-cell">订单号2</div><div class="mock-cell">175769</div></div>
                 <div class="mock-row"><div class="mock-cell">关键词示例</div><div class="mock-cell">重点测试项目</div></div>
@@ -252,6 +259,7 @@
         const autoScrollSelect = document.getElementById('autoScroll');
         const previewContainer = document.getElementById('livePreviewContainer');
         const previewStatusMsg = document.getElementById('previewStatusMsg');
+        const simulateAddRowBtn = document.getElementById('simulateAddRowBtn');
 
         // 解析关键词 (去重)
         function parseKeywords(raw) {
@@ -262,7 +270,6 @@
             } else {
                 items = raw.split(/\r?\n/).map(s => s.trim()).filter(s => s !== '');
             }
-            // 去重
             const unique = [];
             const set = new Set();
             for (let it of items) {
@@ -310,13 +317,13 @@
                 for (let kw of keywords) {
                     try {
                         regexps.push(new RegExp(kw, caseInsensitive ? 'i' : ''));
-                    } catch(e) { /* ignore invalid regex */ }
+                    } catch(e) { /* ignore */ }
                 }
                 return (text) => regexps.some(re => re.test(text || ''));
             }
         }
 
-        // 实时预览刷新
+        // 实时预览刷新 (仅对预览容器内部元素高亮)
         function refreshPreview() {
             if (!previewContainer) return;
             const selector = targetSelectorInput.value.trim() || 'td, span, div, .demo-chip';
@@ -372,8 +379,18 @@
         listenElements.forEach(el => el.addEventListener('change', schedulePreview));
         keywordTextarea.addEventListener('input', schedulePreview);
         
-        // 生成控制台脚本 (修复转义与健壮性)
-        function generateScript() {
+        // 模拟新增一行 (测试动态高亮)
+        simulateAddRowBtn.addEventListener('click', () => {
+            const table = document.getElementById('dynamicMockTable');
+            const newRow = document.createElement('div');
+            newRow.className = 'mock-row';
+            newRow.innerHTML = `<div class="mock-cell">新加载项</div><div class="mock-cell">175769</div>`;
+            table.appendChild(newRow);
+            schedulePreview(); // 重新高亮整个预览区 (模拟观察者)
+        });
+        
+        // ------------------- 生成带 MutationObserver 的动态高亮脚本 -------------------
+        function generateDynamicScript() {
             const rawKeywords = keywordTextarea.value.trim();
             if (!rawKeywords) {
                 alert('❌ 请先输入需要高亮的关键词/ID！');
@@ -393,11 +410,10 @@
             const autoScroll = autoScrollSelect.value === 'true';
             const caseInsensitive = (caseSense === 'insensitive');
             
-            // 构建匹配逻辑的 JavaScript 代码片段
-            let matchLogicCode = '';
             const escapeStr = (s) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             const quotedKeywords = keywords.map(k => `'${escapeStr(k)}'`).join(', ');
             
+            let matchLogicCode = '';
             if (mode === 'exact') {
                 if (caseInsensitive) {
                     matchLogicCode = `
@@ -434,48 +450,86 @@
             }
             
             const script = `(function(){
-    const HIGHLIGHT_CONFIG = {
+    // ========== 高亮配置 ==========
+    const CONFIG = {
         bgColor: "${bgColor}",
         textColor: "${textColor}",
         targetSelector: "${targetSelector.replace(/"/g, '\\"')}",
-        autoScroll: ${autoScroll},
-        match: function(text, textLower) {
+        autoScrollFirst: ${autoScroll},
+        matchFn: function(text, textLower) {
             ${matchLogicCode}
         }
     };
-    const MARK_CLASS = "dynamic-highlighter";
-    document.querySelectorAll('.' + MARK_CLASS).forEach(el => {
-        el.style.backgroundColor = '';
-        el.style.color = '';
-        el.style.fontWeight = '';
-        el.classList.remove(MARK_CLASS);
-    });
-    let elements;
-    try {
-        elements = document.querySelectorAll(HIGHLIGHT_CONFIG.targetSelector);
-    } catch(e) {
-        elements = document.querySelectorAll('td, span, div, [role="gridcell"]');
+    const MARK_CLASS = "auto-highlight-js";
+    let hasScrolled = false;
+    
+    // 高亮一组元素 (自动跳过已有标记的元素，避免重复应用样式)
+    function highlightElements(elements) {
+        let matchCount = 0;
+        elements.forEach(el => {
+            // 已经高亮过的不重复处理 (避免覆盖样式)
+            if (el.classList.contains(MARK_CLASS)) return;
+            const rawText = (el.textContent || el.innerText || '').trim();
+            if (rawText === "") return;
+            const matched = CONFIG.matchFn(rawText, rawText.toLowerCase());
+            if (matched) {
+                el.style.backgroundColor = CONFIG.bgColor;
+                el.style.color = CONFIG.textColor;
+                el.style.fontWeight = 'bold';
+                el.classList.add(MARK_CLASS);
+                matchCount++;
+                if (CONFIG.autoScrollFirst && !hasScrolled) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    hasScrolled = true;
+                }
+            }
+        });
+        return matchCount;
     }
-    let matchCount = 0;
-    let firstMatch = null;
-    elements.forEach(el => {
-        let rawText = (el.textContent || el.innerText || '').trim();
-        if(rawText === "") return;
-        let matched = HIGHLIGHT_CONFIG.match(rawText, rawText.toLowerCase());
-        if(matched) {
-            el.style.backgroundColor = HIGHLIGHT_CONFIG.bgColor;
-            el.style.color = HIGHLIGHT_CONFIG.textColor;
-            el.style.fontWeight = 'bold';
-            el.classList.add(MARK_CLASS);
-            matchCount++;
-            if(!firstMatch) firstMatch = el;
+    
+    // 首次全量高亮
+    let allTargets;
+    try {
+        allTargets = document.querySelectorAll(CONFIG.targetSelector);
+    } catch(e) {
+        allTargets = document.querySelectorAll('td, span, div, [role="gridcell"]');
+    }
+    let initialMatched = highlightElements(Array.from(allTargets));
+    console.log(\`🔍 初始高亮完成，匹配到 \${initialMatched} 个元素\`);
+    
+    // 监听动态新增内容 (MutationObserver)
+    const observer = new MutationObserver((mutations) => {
+        let addedNodes = [];
+        for (let m of mutations) {
+            if (m.type === 'childList' && m.addedNodes.length) {
+                for (let node of m.addedNodes) {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        addedNodes.push(node);
+                    }
+                }
+            }
+        }
+        if (addedNodes.length === 0) return;
+        // 从新增的节点中查找符合选择器的子孙元素
+        let newTargets = [];
+        addedNodes.forEach(parent => {
+            if (parent.matches && parent.matches(CONFIG.targetSelector)) {
+                newTargets.push(parent);
+            }
+            const children = parent.querySelectorAll ? parent.querySelectorAll(CONFIG.targetSelector) : [];
+            newTargets.push(...Array.from(children));
+        });
+        if (newTargets.length) {
+            const addedMatches = highlightElements(newTargets);
+            if (addedMatches > 0) {
+                console.log(\`🔄 动态高亮新增内容，新增匹配 \${addedMatches} 个元素\`);
+            }
         }
     });
-    if(HIGHLIGHT_CONFIG.autoScroll && firstMatch) {
-        firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    console.log(\`🔍 高亮完成，匹配到 \${matchCount} 个元素\`);
-    return matchCount;
+    
+    observer.observe(document.body, { childList: true, subtree: true });
+    console.log("✨ 高亮观察者已启动，后续动态加载的内容将自动高亮");
+    return initialMatched;
 })();`;
             return script;
         }
@@ -483,15 +537,14 @@
         // 按钮：生成并复制
         async function onRun() {
             try {
-                const script = generateScript();
+                const script = generateDynamicScript();
                 if (!script) return;
                 outputArea.value = script;
-                // 复制到剪贴板
                 await navigator.clipboard.writeText(script);
-                alert('✅ 脚本已生成并复制到剪贴板！\n请到目标网页按F12 → Console → 粘贴 → 回车执行。');
+                alert('✅ 动态高亮脚本已生成并复制！\n特性：\n- 自动高亮现有内容\n- 监听新加载内容并自动高亮\n- 请到目标网页控制台粘贴运行');
             } catch (err) {
                 console.error(err);
-                alert('⚠️ 生成或复制失败，请手动复制输出框中的代码。\n错误详情：' + (err.message || '未知错误'));
+                alert('⚠️ 生成或复制失败，请手动复制输出框中的代码。\n错误：' + (err.message || '未知'));
             }
         }
         
@@ -511,7 +564,6 @@
             schedulePreview();
         }
         
-        // 绑定事件 (确保按钮有点击反馈)
         runBtn.addEventListener('click', (e) => {
             e.preventDefault();
             onRun();
@@ -519,9 +571,8 @@
         clearBtn.addEventListener('click', onClear);
         resetConfigBtn.addEventListener('click', onResetConfig);
         
-        // 初始化预览
         schedulePreview();
-        outputArea.value = '// 点击【生成脚本 & 复制】即可生成高亮代码';
+        outputArea.value = '// 点击【生成动态高亮脚本&复制】生成支持懒加载的高亮代码';
     })();
 </script>
 </body>
