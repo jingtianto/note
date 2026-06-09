@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>highlight keywords tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 24px;
+        }
+        h1 {
+            font-size: 24px;
+            text-align: center;
+            margin: 0 0 20px;
+            color: #333;
+        }
+        .format-info {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 16px;
+            line-height: 1.6;
+        }
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 14px;
+            resize: vertical;
+            box-sizing: border-box;
+            margin-bottom: 12px;
+        }
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        #runBtn {
+            background-color: #1677ff;
+            color: #fff;
+        }
+        #emptyBtn {
+            background-color: #8c8c8c;
+            color: #fff;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        #outputArea {
+            background-color: #f5f5f5;
+            font-family: Consolas, monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 highlight keywords tool</h1>
+        
+        <div class="format-info">
+            <strong>Format:</strong><br>
+            1. 逗号分隔: 175768,175769,12345<br>
+            2. 直接换行粘贴 (Excel 整列复制/粘贴)
+        </div>
+
+        <textarea id="inputArea" placeholder="请输入需要高亮的ID/关键词..."></textarea>
+
+        <div class="button-group">
+            <button id="runBtn">RUN and copy</button>
+            <button id="emptyBtn">empty</button>
+        </div>
+
+        <textarea id="outputArea" readonly placeholder="生成的控制台脚本将显示在这里..."></textarea>
+    </div>
+
+    <script>
+        const inputArea = document.getElementById('inputArea');
+        const outputArea = document.getElementById('outputArea');
+        const runBtn = document.getElementById('runBtn');
+        const emptyBtn = document.getElementById('emptyBtn');
+
+        // 生成控制台高亮脚本
+        function generateHighlightScript() {
+            const rawInput = inputArea.value.trim();
+            if (!rawInput) {
+                alert('请先输入需要高亮的ID/关键词！');
+                return;
+            }
+
+            // 解析输入（支持逗号分隔或换行分隔）
+            let idList = [];
+            if (rawInput.includes(',')) {
+                // 逗号分隔模式
+                idList = rawInput.split(',').map(item => item.trim()).filter(item => item);
+            } else {
+                // 换行分隔模式（Excel整列粘贴）
+                idList = rawInput.split(/\r?\n/).map(item => item.trim()).filter(item => item);
+            }
+
+            if (idList.length === 0) {
+                alert('未解析到有效的ID/关键词！');
+                return;
+            }
+
+            // 生成可直接在控制台运行的JS脚本
+            const consoleScript = `(function(){
+    // 配置区：可自定义高亮颜色和匹配规则
+    const targetIds = ${JSON.stringify(idList)};
+    const highlightBg = '#ffff00'; // 高亮背景色（黄色）
+    const highlightColor = '#000000'; // 文字颜色
+    const targetSelectors = 'td, span, div, [role="gridcell"]'; // 适配表格单元格
+
+    // 清除之前的高亮
+    document.querySelectorAll('.highlight-keyword-mark').forEach(el => {
+        el.style.backgroundColor = '';
+        el.style.color = '';
+        el.style.fontWeight = '';
+        el.classList.remove('highlight-keyword-mark');
+    });
+
+    // 批量高亮匹配项
+    let matchCount = 0;
+    targetIds.forEach(id => {
+        document.querySelectorAll(targetSelectors).forEach(el => {
+            const text = (el.textContent || el.innerText || '').trim();
+            if (text === id) {
+                el.style.backgroundColor = highlightBg;
+                el.style.color = highlightColor;
+                el.style.fontWeight = 'bold';
+                el.classList.add('highlight-keyword-mark');
+                matchCount++;
+
+                // 自动滚动到第一个匹配项
+                if (!document.querySelector('.highlight-keyword-mark.scroll-to-view')) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add('scroll-to-view');
+                }
+            }
+        });
+    });
+
+    console.log(\`高亮完成，共匹配到 \${matchCount} 个目标\`);
+})();`;
+
+            // 写入输出框并自动复制
+            outputArea.value = consoleScript;
+            navigator.clipboard.writeText(consoleScript).then(() => {
+                alert('✅ 脚本已生成并复制到剪贴板！\n请在目标网页的控制台粘贴运行。');
+            }).catch(() => {
+                alert('⚠️ 脚本已生成，请手动复制输出框中的代码。');
+            });
+        }
+
+        // 清空按钮
+        function clearAll() {
+            inputArea.value = '';
+            outputArea.value = '';
+        }
+
+        // 绑定事件
+        runBtn.addEventListener('click', generateHighlightScript);
+        emptyBtn.addEventListener('click', clearAll);
+    </script>
+</body>
+</html>
