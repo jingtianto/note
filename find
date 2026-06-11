@@ -1,0 +1,113 @@
+import xml.etree.ElementTree as ET
+import sys
+import os
+
+# -------------------------- 配置区 --------------------------
+# 请改成你的ARXML文件路径
+ARXML_FILE_PATH = "your_file.arxml"
+# 你要找的信号名（根据你的截图，是这个）
+TARGET_SIGNAL_SHORT_NAME = "privateExtendedQualifier"
+# AUTOSAR命名空间（大部分ARXML用这个）
+AUTOSAR_NS = "http://autosar.org/schema/r4.0"
+# -----------------------------------------------------------
+
+ET.register_namespace("", AUTOSAR_NS)
+
+def debug_log(msg, level="INFO"):
+    print(f"[{level}] {msg}")
+
+def main():
+    debug_log(f"===== 开始解析ARXML文件: {ARXML_FILE_PATH} =====")
+    debug_log(f"目标信号名: {TARGET_SIGNAL_SHORT_NAME}")
+
+    if not os.path.exists(ARXML_FILE_PATH):
+        debug_log(f"文件不存在: {ARXML_FILE_PATH}", "ERROR")
+        sys.exit(1)
+
+    try:
+        tree = ET.parse(ARXML_FILE_PATH)
+        root = tree.getroot()
+        debug_log("XML文件解析成功")
+    except Exception as e:
+        debug_log(f"XML解析失败: {str(e)}", "ERROR")
+        sys.exit(1)
+
+    # -------------------------- 步骤1：找所有的SIGNAL节点 --------------------------
+    debug_log("\n--- 步骤1：查找所有SIGNAL节点 ---")
+    signal_nodes = []
+    # 常见的SIGNAL路径：/AR-PACKAGES/AR-PACKAGE/ELEMENTS/SIGNAL
+    for signal in root.findall(f".//{{{AUTOSAR_NS}}}SIGNAL"):
+        short_name = signal.find(f".//{{{AUTOSAR_NS}}}SHORT-NAME")
+        if short_name is not None and short_name.text == TARGET_SIGNAL_SHORT_NAME:
+            signal_nodes.append(signal)
+            debug_log(f"找到匹配的SIGNAL节点，路径：{signal.get('id', '无ID')}")
+
+    if not signal_nodes:
+        debug_log("未找到直接匹配的SIGNAL节点，尝试查找SYSTEM-SIGNAL...", "WARNING")
+        for sys_signal in root.findall(f".//{{{AUTOSAR_NS}}}SYSTEM-SIGNAL"):
+            short_name = sys_signal.find(f".//{{{AUTOSAR_NS}}}SHORT-NAME")
+            if short_name is not None and short_name.text == TARGET_SIGNAL_SHORT_NAME:
+                signal_nodes.append(sys_signal)
+                debug_log(f"找到匹配的SYSTEM-SIGNAL节点，路径：{sys_signal.get('id', '无ID')}")
+
+    if not signal_nodes:
+        debug_log("完全未找到名为privateExtendedQualifier的信号节点", "ERROR")
+        sys.exit(1)
+
+    debug_log(f"共找到 {len(signal_nodes)} 个匹配的信号节点")
+
+    # -------------------------- 步骤2：解析每个信号的位置信息 --------------------------
+    for idx, signal in enumerate(signal_nodes):
+        debug_log(f"\n===== 解析信号节点 {idx+1}/{len(signal_nodes)} =====")
+        short_name = signal.find(f".//{{{AUTOSAR_NS}}}SHORT-NAME").text
+        debug_log(f"信号SHORT-NAME: {short_name}")
+
+        # 提取核心参数
+        start_pos_elem = signal.find(f".//{{{AUTOSAR_NS}}}START-POSITION")
+        length_elem = signal.find(f".//{{{AUTOSAR_NS}}}LENGTH")
+        byte_order_elem = signal.find(f".//{{{AUTOSAR_NS}}}BYTE-ORDER")
+
+        if start_pos_elem is None or length_elem is None:
+            debug_log("该信号节点缺少START-POSITION或LENGTH，跳过", "WARNING")
+            continue
+
+        try:
+            start_pos = int(start_pos_elem.text)
+            length = int(length_elem.text)
+            byte_order = byte_order_elem.text if byte_order_elem is not None else "UNKNOWN"
+            debug_log(f"原始参数 - START-POSITION: {start_pos}, LENGTH: {length}, BYTE-ORDER: {byte_order}")
+        except Exception as e:
+            debug_log(f"参数解析失败: {str(e)}", "ERROR")
+            continue
+
+        # 换算Byte和Bit位置
+        start_byte = start_pos // 8
+        start_bit_in_byte = start_pos % 8
+        end_pos = start_pos + length - 1
+        end_byte = end_pos // 8
+        end_bit_in_byte = end_pos % 8
+
+        debug_log("===== Payload位置计算结果 =====")
+        debug_log(f"信号在Payload中的起始Bit位: {start_pos}")
+        debug_log(f"信号长度: {length} Bit")
+        debug_log(f"字节序: {byte_order}")
+        debug_log(f"起始Byte索引(0-based): {start_byte}")
+        debug_log(f"起始Bit(在该Byte内): {start_bit_in_byte}")
+        debug_log(f"结束Byte索引(0-based): {end_byte}")
+        debug_log(f"结束Bit(在该Byte内): {end_bit_in_byte}")
+        debug_log(f"占用的Byte范围: Byte {start_byte} ~ Byte {end_byte}")
+        debug_log(f"占用的Bit范围: Bit {start_pos} ~ Bit {end_pos}")
+
+        # 额外输出结构体成员的情况（如果是在ApplicationDataType里的）
+        parent_record = signal.find(f"./..//{{{AUTOSAR_NS}}}APPLICATION-RECORD-ELEMENT")
+        if parent_record is not None:
+            debug_log("注意：该信号可能是结构体成员，需要结合PDU映射确认最终位置", "WARNING")
+
+    debug_log("\n===== 解析完成 =====")
+    debug_log("如果未找到预期结果，请检查：")
+    debug_log("1. 信号名是否正确（区分大小写）")
+    debug_log("2. ARXML文件路径是否正确")
+    debug_log("3. 信号是否在嵌套的结构体/PDU中，需要额外解析SIGNAL-TO-PDU-MAPPING")
+
+if __name__ == "__main__":
+    main()
