@@ -2,150 +2,255 @@ import xml.etree.ElementTree as ET
 import sys
 import os
 
-# -------------------------- 配置区 --------------------------
-# 请改成你的ARXML文件路径
+# ===================== 配置区 =====================
 ARXML_FILE_PATH = r"C:\Users\QXZ715A\Downloads\CN_ARXML_26-11_I490Release_v02.arxml"
-# 你要找的成员变量名
 TARGET_ELEMENT_NAME = "privateExtendedQualifier"
-# AUTOSAR命名空间
 AUTOSAR_NS = "http://autosar.org/schema/r4.0"
-# -----------------------------------------------------------
+NS_PREFIX = "{" + AUTOSAR_NS + "}"
+# ==================================================
 
+# 注册命名空间
 ET.register_namespace("", AUTOSAR_NS)
 
 def debug_log(msg, level="INFO"):
-    print(f"[{level}] {msg}")
+    """统一日志输出，带级别"""
+    print(f"[{level:6}] {msg}")
+
+def get_all_elements_with_path(root):
+    """
+    遍历整个XML，记录每个节点: 完整层级路径
+    返回: dict[elem] = 路径列表 [(tag, name, node), ...]
+    """
+    elements_map = {}
+    stack = [(root, [])]
+
+    while stack:
+        elem, path_list = stack.pop()
+        # 提取节点标签（去掉命名空间）
+        raw_tag = elem.tag
+        tag = raw_tag.split('}')[-1] if '}' in raw_tag else raw_tag
+
+        # 提取 SHORT-NAME
+        name_elem = elem.find(f"{NS_PREFIX}SHORT-NAME")
+        node_name = name_elem.text if name_elem is not None else "NO_SHORT_NAME"
+
+        # 当前节点完整路径
+        current_path = path_list + [(tag, node_name, elem)]
+        elements_map[elem] = current_path
+
+        # 子节点入栈（倒序保证原XML顺序）
+        for child in reversed(list(elem)):
+            stack.append((child, current_path))
+
+    return elements_map
+
+def get_base_bit_length(root, type_id, ns):
+    """根据类型ID，递归获取基础类型 BIT-LENGTH"""
+    type_node = root.find(f".//*[@ID='{type_id}']")
+    if type_node is None:
+        return None
+
+    # 优先查找 BIT-LENGTH
+    bit_len_elem = type_node.find(f"{ns}BIT-LENGTH")
+    if bit_len_elem is not None and bit_len_elem.text.isdigit():
+        return int(bit_len_elem.text)
+
+    # 递归查找 BASE-TYPE-REF
+    base_type_ref = type_node.find(f"{ns}BASE-TYPE-REF")
+    if base_type_ref is not None:
+        ref_id = base_type_ref.text.strip().split("/")[-1]
+        return get_base_bit_length(root, ref_id, ns)
+
+    return None
 
 def main():
-    debug_log(f"===== 开始解析ARXML文件: {ARXML_FILE_PATH} =====")
-    debug_log(f"目标成员变量名: {TARGET_ELEMENT_NAME}")
+    debug_log("=" * 70)
+    debug_log("ARXML 结构体成员 Bit/Byte 位置解析工具启动")
+    debug_log(f"目标文件: {ARXML_FILE_PATH}")
+    debug_log(f"目标成员: {TARGET_ELEMENT_NAME}")
+    debug_log(f"命名空间: {AUTOSAR_NS}")
+    debug_log("=" * 70)
 
-    if not os.path.exists(ARXML_FILE_PATH):
+    # 1. 检查文件是否存在
+    if not os.path.isfile(ARXML_FILE_PATH):
         debug_log(f"文件不存在: {ARXML_FILE_PATH}", "ERROR")
         sys.exit(1)
 
+    # 2. 解析XML文件
     try:
         tree = ET.parse(ARXML_FILE_PATH)
         root = tree.getroot()
-        debug_log("XML文件解析成功")
+        debug_log("XML 文件解析成功")
+    except ET.ParseError as e:
+        debug_log(f"XML 格式错误: {str(e)}", "ERROR")
+        sys.exit(1)
     except Exception as e:
-        debug_log(f"XML解析失败: {str(e)}", "ERROR")
+        debug_log(f"文件读取异常: {str(e)}", "ERROR")
         sys.exit(1)
 
-    # -------------------------- 步骤1：找所有APPLICATION-RECORD-ELEMENT --------------------------
-    debug_log("\n--- 步骤1：查找所有结构体成员（APPLICATION-RECORD-ELEMENT） ---")
-    target_elements = []
+    # 3. 全量遍历节点并记录路径
+    debug_log("\n[STEP 1] 全量遍历XML节点，构建路径映射...")
+    elem_path_map = get_all_elements_with_path(root)
+    debug_log(f"节点遍历完成，总计节点数: {len(elem_path_map)}")
 
-    # 遍历所有结构体成员
-    for elem in root.findall(f".//{{{AUTOSAR_NS}}}APPLICATION-RECORD-ELEMENT"):
-        short_name = elem.find(f".//{{{AUTOSAR_NS}}}SHORT-NAME")
-        if short_name is not None and short_name.text == TARGET_ELEMENT_NAME:
-            target_elements.append(elem)
-            # 打印完整路径
-            path = []
-            parent = elem
-            while parent is not None:
-                tag = parent.tag.split('}')[-1]
-                name_elem = parent.find(f".//{{{AUTOSAR_NS}}}SHORT-NAME")
-                name = name_elem.text if name_elem is not None else "NO_NAME"
-                path.append(f"{tag}({name})")
-                parent = parent.getparent()
-            path_str = " -> ".join(reversed(path))
-            debug_log(f"找到匹配的成员，完整层级路径：\n{path_str}")
+    # 4. 查找目标 APPLICATION-RECORD-ELEMENT
+    debug_log("\n[STEP 2] 查找结构体成员节点: " + TARGET_ELEMENT_NAME)
+    xpath_expr = f".//{NS_PREFIX}APPLICATION-RECORD-ELEMENT"
+    all_record_elems = root.findall(xpath_expr)
+    debug_log(f"全局结构体成员总数: {len(all_record_elems)}")
 
-    if not target_elements:
-        debug_log("未找到任何匹配的APPLICATION-RECORD-ELEMENT", "ERROR")
+    target_elems = []
+    for elem in all_record_elems:
+        sn_elem = elem.find(f"{NS_PREFIX}SHORT-NAME")
+        if sn_elem is not None and sn_elem.text == TARGET_ELEMENT_NAME:
+            target_elems.append(elem)
+            # 打印完整层级路径
+            full_path_list = elem_path_map[elem]
+            path_str = " -> ".join([f"{t}({n})" for t, n, _ in full_path_list])
+            debug_log(f"✅ 命中目标成员，完整层级:\n{path_str}")
+
+    if not target_elems:
+        debug_log("未找到目标结构体成员，程序退出", "ERROR")
         sys.exit(1)
 
-    debug_log(f"共找到 {len(target_elements)} 个匹配的结构体成员")
+    debug_log(f"\n共找到 {len(target_elems)} 个同名目标成员，开始逐个解析")
 
-    # -------------------------- 步骤2：解析每个成员的类型和绑定 --------------------------
-    for idx, elem in enumerate(target_elements):
-        debug_log(f"\n===== 解析成员 {idx+1}/{len(target_elements)} =====")
-        short_name = elem.find(f".//{{{AUTOSAR_NS}}}SHORT-NAME").text
-        debug_log(f"成员SHORT-NAME: {short_name}")
+    # 5. 逐个解析目标成员
+    for idx, curr_elem in enumerate(target_elems, 1):
+        debug_log("\n" + "-" * 60)
+        debug_log(f"===== 解析第 {idx} / {len(target_elems)} 个目标成员 =====")
+        sn = curr_elem.find(f"{NS_PREFIX}SHORT-NAME").text
+        debug_log(f"成员名称: {sn}")
 
-        # 1. 找绑定的数据类型
-        type_ref = elem.find(f".//{{{AUTOSAR_NS}}}TYPE-TREF")
+        # 5.1 查找 TYPE-TREF / TYPE-REF
+        type_ref = curr_elem.find(f"{NS_PREFIX}TYPE-TREF")
+        ref_text = ""
+        dest_type = ""
         if type_ref is not None:
-            type_dest = type_ref.get("DEST")
-            type_path = type_ref.text
-            debug_log(f"绑定的数据类型路径: {type_path} (DEST={type_dest})")
+            ref_text = type_ref.text.strip()
+            dest_type = type_ref.get("DEST", "N/A")
+            debug_log(f"类型引用(TYPE-TREF): {ref_text} , DEST={dest_type}")
         else:
-            debug_log("未找到TYPE-TREF，尝试找TYPE-REF...", "WARNING")
-            type_ref = elem.find(f".//{{{AUTOSAR_NS}}}TYPE-REF")
+            type_ref = curr_elem.find(f"{NS_PREFIX}TYPE-REF")
             if type_ref is not None:
-                type_dest = type_ref.get("DEST")
-                type_path = type_ref.text
-                debug_log(f"绑定的数据类型路径: {type_path} (DEST={type_dest})")
+                ref_text = type_ref.text.strip()
+                dest_type = type_ref.get("DEST", "N/A")
+                debug_log(f"类型引用(TYPE-REF): {ref_text} , DEST={dest_type}")
             else:
-                debug_log("该成员未绑定数据类型，跳过", "WARNING")
+                debug_log("未找到类型引用节点", "WARNING")
                 continue
 
-        # 2. 找CompuMethod绑定（枚举映射）
-        compu_method_ref = elem.find(f".//{{{AUTOSAR_NS}}}COMPU-METHOD-REF")
-        if compu_method_ref is not None:
-            cm_path = compu_method_ref.text
-            debug_log(f"绑定的CompuMethod路径: {cm_path}")
+        # 5.2 查找 CompuMethod 枚举转换方法
+        compu_ref = curr_elem.find(f"{NS_PREFIX}COMPU-METHOD-REF")
+        if compu_ref is not None:
+            debug_log(f"枚举转换方法(CompuMethod): {compu_ref.text.strip()}")
         else:
-            # 往上找数据类型的CompuMethod
-            app_data_type = root.find(f".//*[@ID='{type_path.split('/')[-1]}']")
-            if app_data_type is not None:
-                cm_ref = app_data_type.find(f".//{{{AUTOSAR_NS}}}COMPU-METHOD-REF")
-                if cm_ref is not None:
-                    debug_log(f"从数据类型找到绑定的CompuMethod: {cm_ref.text}")
+            debug_log("当前成员未直接绑定 CompuMethod")
 
-        # 3. 找该成员所在的顶层SIGNAL/PDU（关键！）
-        debug_log("\n--- 尝试向上追溯到顶层SIGNAL/PDU ---")
-        current = elem
-        found_signal = None
-        found_pdu = None
-        while current is not None:
-            tag = current.tag.split('}')[-1]
+        # 5.3 向上追溯父节点: SIGNAL / PDU / 结构体定义
+        debug_log("\n[TRACE] 向上追溯顶层 SIGNAL / PDU / 结构体")
+        path_list = elem_path_map[curr_elem]
+        top_signal = None
+        top_pdu = None
+        record_def_node = None
+
+        for tag, name, node in path_list:
             if tag == "SIGNAL":
-                found_signal = current
-                break
+                top_signal = node
             if tag == "PDU":
-                found_pdu = current
-                break
-            current = current.getparent()
+                top_pdu = node
+            if tag == "APPLICATION-RECORD-DEFINITION":
+                record_def_node = node
 
-        if found_signal is not None:
-            debug_log(f"追溯到顶层SIGNAL节点")
-            start_pos_elem = found_signal.find(f".//{{{AUTOSAR_NS}}}START-POSITION")
-            length_elem = found_signal.find(f".//{{{AUTOSAR_NS}}}LENGTH")
-            byte_order_elem = found_signal.find(f".//{{{AUTOSAR_NS}}}BYTE-ORDER")
+        # 5.4 解析顶层 SIGNAL 位置参数
+        sig_start_pos = None
+        sig_bit_len = None
+        byte_order = "UNKNOWN"
+        if top_signal is not None:
+            debug_log("追溯成功: 找到顶层 SIGNAL 节点")
+            sp_elem = top_signal.find(f"{NS_PREFIX}START-POSITION")
+            len_elem = top_signal.find(f"{NS_PREFIX}LENGTH")
+            bo_elem = top_signal.find(f"{NS_PREFIX}BYTE-ORDER")
 
-            if start_pos_elem is not None and length_elem is not None:
-                start_pos = int(start_pos_elem.text)
-                length = int(length_elem.text)
-                byte_order = byte_order_elem.text if byte_order_elem is not None else "UNKNOWN"
-                debug_log(f"顶层SIGNAL参数 - START-POSITION: {start_pos}, LENGTH: {length}, BYTE-ORDER: {byte_order}")
+            if sp_elem and sp_elem.text.isdigit():
+                sig_start_pos = int(sp_elem.text)
+            if len_elem and len_elem.text.isdigit():
+                sig_bit_len = int(len_elem.text)
+            if bo_elem:
+                byte_order = bo_elem.text.strip()
 
-                # 计算成员在结构体中的偏移（简化版，只考虑同类型的连续成员）
-                debug_log("\n--- 注意：以下是基础偏移计算，实际需结合结构体成员顺序和数据宽度 ---")
-                debug_log("⚠️  由于ARXML未直接存储成员偏移，以下为基于层级的估算：")
-                debug_log(f"1. 顶层SIGNAL起始位: {start_pos}")
-                debug_log(f"2. 成员长度: 8bit（根据你的截图enumBackingType=uint8）")
-                debug_log(f"3. 若该成员是结构体中第一个成员，则偏移为 0 bit")
-                debug_log(f"4. 实际偏移需按结构体成员顺序累加每个成员的bit长度")
-                debug_log(f"   估算的成员起始位: {start_pos}")
-                debug_log(f"   估算的成员结束位: {start_pos + 8 - 1}")
-                debug_log(f"   对应Byte位置: Byte {start_pos//8} (Bit {start_pos%8} ~ {start_pos%8 + 7})")
-            else:
-                debug_log("顶层SIGNAL缺少START-POSITION/LENGTH，无法计算偏移", "WARNING")
-
-        elif found_pdu is not None:
-            debug_log("追溯到顶层PDU节点，需要通过SIGNAL-TO-PDU-MAPPING查找偏移")
+            debug_log(f"顶层SIGNAL参数 -> START-POSITION: {sig_start_pos}")
+            debug_log(f"顶层SIGNAL参数 -> LENGTH: {sig_bit_len} Bit")
+            debug_log(f"顶层SIGNAL参数 -> BYTE-ORDER: {byte_order}")
         else:
-            debug_log("未追溯到顶层SIGNAL/PDU，该成员可能属于应用层结构体，未直接绑定到总线信号", "WARNING")
+            debug_log("未追溯到顶层 SIGNAL 节点", "WARNING")
 
-    debug_log("\n===== 解析完成 =====")
-    debug_log("⚠️  重要说明：")
-    debug_log("1. 你的privateExtendedQualifier是结构体成员，ARXML不直接存储它的偏移")
-    debug_log("2. 实际偏移 = 顶层信号的START-POSITION + 该成员在结构体中的累计偏移")
-    debug_log("3. 结构体累计偏移需要按成员顺序，累加每个成员的bit长度（比如uint8=8bit）")
-    debug_log("4. 你截图里显示enumBackingType=uint8，说明这个成员占1字节（8bit）")
+        # 5.5 计算结构体内部偏移（核心）
+        struct_offset_bit = 0
+        if record_def_node is not None:
+            debug_log("\n[CALC] 计算结构体内部成员累计偏移")
+            member_list = record_def_node.findall(f"{NS_PREFIX}APPLICATION-RECORD-ELEMENT")
+            debug_log(f"当前结构体成员总数: {len(member_list)}")
+
+            found_target = False
+            for mem in member_list:
+                mem_sn_elem = mem.find(f"{NS_PREFIX}SHORT-NAME")
+                mem_sn = mem_sn_elem.text if mem_sn_elem else "UNNAMED"
+
+                if mem_sn == TARGET_ELEMENT_NAME:
+                    found_target = True
+                    break
+
+                # 获取当前成员位宽
+                mem_tref = mem.find(f"{NS_PREFIX}TYPE-TREF")
+                bit_len = 8  # 默认兜底 uint8 = 8bit
+                if mem_tref:
+                    tid = mem_tref.text.strip().split("/")[-1]
+                    bl = get_base_bit_length(root, tid, NS_PREFIX)
+                    if bl is not None:
+                        bit_len = bl
+
+                struct_offset_bit += bit_len
+                debug_log(f"  前置成员: {mem_sn} , 位宽={bit_len} bit , 累计偏移={struct_offset_bit} bit")
+
+            if found_target:
+                debug_log(f"✅ 目标成员在结构体内部偏移: {struct_offset_bit} Bit")
+            else:
+                debug_log("遍历完结构体成员，未匹配到目标名称", "WARNING")
+                continue
+        else:
+            debug_log("未找到结构体定义 APPLICATION-RECORD-DEFINITION", "WARNING")
+            continue
+
+        # 5.6 最终 Payload Bit / Byte 计算
+        if sig_start_pos is not None:
+            final_start_bit = sig_start_pos + struct_offset_bit
+            member_bit_len = 8  # 枚举底层类型 uint8
+            final_end_bit = final_start_bit + member_bit_len - 1
+
+            # 0索引 Byte / 字节内 Bit
+            start_byte = final_start_bit // 8
+            start_bit_in_byte = final_start_bit % 8
+            end_byte = final_end_bit // 8
+            end_bit_in_byte = final_end_bit % 8
+
+            debug_log("\n" + "=" * 50)
+            debug_log("【最终 Payload 位置结果（0 索引）】")
+            debug_log(f"全局起始Bit        : {final_start_bit}")
+            debug_log(f"全局结束Bit        : {final_end_bit}")
+            debug_log(f"占用Bit长度        : {member_bit_len} Bit (1 Byte)")
+            debug_log(f"起始Byte编号       : {start_byte}")
+            debug_log(f"起始Byte内Bit位    : {start_bit_in_byte}")
+            debug_log(f"结束Byte编号       : {end_byte}")
+            debug_log(f"结束Byte内Bit位    : {end_bit_in_byte}")
+            debug_log(f"字节序             : {byte_order}")
+            debug_log("=" * 50)
+        else:
+            debug_log("缺少顶层 SIGNAL 起始位，无法计算 Payload 最终位置", "ERROR")
+
+    debug_log("\n" + "=" * 70)
+    debug_log("解析全部完成！")
+    debug_log("=" * 70)
 
 if __name__ == "__main__":
     main()
