@@ -1,9 +1,10 @@
 from bs4 import BeautifulSoup
 from lxml import etree
 import os
+import tkinter as tk
+from tkinter import filedialog
 
 def get_full_xpath(element):
-    """获取元素完整 XPath"""
     path_parts = []
     current = element
     while current is not None and current.tag is not None:
@@ -20,20 +21,15 @@ def add_xpath_to_html(html_path, save_path):
     with open(html_path, "r", encoding="utf-8", errors="ignore") as f:
         html_content = f.read()
 
-    # 用lxml解析用于精准获取XPath
     parser = etree.HTMLParser()
     tree = etree.fromstring(html_content, parser)
-    # 再用bs4做内容修改
     soup = BeautifulSoup(html_content, "html.parser")
 
-    # 遍历所有标签，给文本节点追加XPath
     all_elements = tree.iter()
     for elem in all_elements:
         if elem.text and elem.text.strip():
             xpath = get_full_xpath(elem)
-            # 拼接原文 + XPath
             new_text = f"{elem.text.strip()} 【XPath: {xpath}】"
-            # 同步修改bs4对应内容（简易适配静态HTML表格/文本）
             try:
                 bs_elem = soup.find(elem.tag, string=lambda t: t and elem.text.strip() in t)
                 if bs_elem:
@@ -41,37 +37,36 @@ def add_xpath_to_html(html_path, save_path):
             except:
                 continue
 
-    # 保存新文件
     new_html = soup.prettify(encoding="utf-8")
     with open(save_path, "wb") as f:
         f.write(new_html)
-    print(f"✅ 处理完成！新文件已保存至：{save_path}")
+    return True
 
 def main():
-    print("=" * 50)
-    print("        HTML 元素自动追加 Full XPath 工具")
-    print("=" * 50)
-    print("功能：读取HTML，在每段可见文本后追加对应完整XPath")
-    print("-" * 50)
+    root = tk.Tk()
+    root.withdraw()
+    root.title("HTML XPath追加工具")
 
-    # 手动输入文件路径
-    src_html = input("请输入原始HTML文件完整路径：").strip()
-    if not os.path.exists(src_html):
-        print("❌ 错误：文件不存在，请检查路径！")
-        input("按回车退出...")
+    print("请在弹窗中选择要处理的HTML文件...")
+    file_path = filedialog.askopenfilename(
+        title="选择HTML文件",
+        filetypes=[("HTML 文件", "*.html;*.htm"), ("所有文件", "*.*")]
+    )
+    if not file_path:
+        print("未选择文件，退出。")
         return
 
-    # 生成输出文件名（同目录下自动加 _with_xpath）
-    dir_name, file_name = os.path.split(src_html)
+    dir_name, file_name = os.path.split(file_path)
     name, ext = os.path.splitext(file_name)
     out_file = os.path.join(dir_name, f"{name}_with_xpath{ext}")
 
     try:
-        add_xpath_to_html(src_html, out_file)
+        add_xpath_to_html(file_path, out_file)
+        print(f"\n✅ 处理成功！\n文件已保存：{out_file}")
     except Exception as e:
-        print(f"❌ 处理失败：{str(e)}")
+        print(f"\n❌ 处理失败：{str(e)}")
 
-    input("\n按回车关闭窗口...")
+    input("\n按下回车关闭窗口...")
 
 if __name__ == "__main__":
     main()
