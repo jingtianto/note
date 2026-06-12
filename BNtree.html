@@ -1,72 +1,86 @@
 from bs4 import BeautifulSoup
-from lxml import etree
 import os
 import tkinter as tk
 from tkinter import filedialog
 
-def get_full_xpath(element):
-    path_parts = []
-    current = element
-    while current is not None and current.tag is not None:
-        parent = current.getparent()
-        if parent is None:
-            break
-        siblings = [s for s in parent.iterchildren(tag=current.tag)]
-        idx = siblings.index(current) + 1
-        path_parts.insert(0, f"{current.tag}[{idx}]")
-        current = parent
-    return "/" + "/".join(path_parts) if path_parts else ""
+def get_element_full_chain(elem):
+    """递归获取元素完整标签链路：html > body > table > tr > td"""
+    chain = []
+    current = elem
+    while current:
+        tag = current.name
+        if tag is not None:
+            chain.append(tag)
+        # 向上遍历父节点
+        current = current.parent
+    # 反转：从根节点到当前节点
+    chain.reverse()
+    return " > ".join(chain)
 
-def add_xpath_to_html(html_path, save_path):
+def process_html(html_path, save_path):
+    # 读取HTML文件
     with open(html_path, "r", encoding="utf-8", errors="ignore") as f:
         html_content = f.read()
 
-    parser = etree.HTMLParser()
-    tree = etree.fromstring(html_content, parser)
     soup = BeautifulSoup(html_content, "html.parser")
+    # 只筛选非空可见文本节点
+    text_nodes = soup.find_all(string=lambda t: t and t.strip())
 
-    all_elements = tree.iter()
-    for elem in all_elements:
-        if elem.text and elem.text.strip():
-            xpath = get_full_xpath(elem)
-            new_text = f"{elem.text.strip()} 【XPath: {xpath}】"
-            try:
-                bs_elem = soup.find(elem.tag, string=lambda t: t and elem.text.strip() in t)
-                if bs_elem:
-                    bs_elem.string = new_text
-            except:
-                continue
+    for text_node in text_nodes:
+        original_text = text_node.strip()
+        parent_elem = text_node.parent
+        # 获取完整标签层级
+        tag_chain = get_element_full_chain(parent_elem)
+        # 拼接新内容：[标签层级] 原文本
+        new_text = f"【{tag_chain}】 {original_text}"
+        # 替换原文本
+        text_node.replace_with(new_text)
 
-    new_html = soup.prettify(encoding="utf-8")
-    with open(save_path, "wb") as f:
+    # 格式化并保存新HTML
+    new_html = soup.prettify()
+    with open(save_path, "w", encoding="utf-8") as f:
         f.write(new_html)
     return True
 
 def main():
+    # 初始化GUI窗口并隐藏主界面
     root = tk.Tk()
     root.withdraw()
-    root.title("HTML XPath追加工具")
 
-    print("请在弹窗中选择要处理的HTML文件...")
+    print("===== HTML 完整标签层级标注工具 =====")
+    print("请在弹窗中选择需要处理的 HTML 文件\n")
+
+    # 弹出文件选择框
     file_path = filedialog.askopenfilename(
-        title="选择HTML文件",
-        filetypes=[("HTML 文件", "*.html;*.htm"), ("所有文件", "*.*")]
+        title="选择目标 HTML 文件",
+        filetypes=[
+            ("HTML 文件", "*.html;*.htm"),
+            ("所有文件", "*.*")
+        ]
     )
-    if not file_path:
-        print("未选择文件，退出。")
+
+    # 判断是否选中文件
+    if not file_path or not os.path.exists(file_path):
+        print("未选择有效文件，程序退出")
+        input("\n按回车键关闭窗口...")
         return
 
-    dir_name, file_name = os.path.split(file_path)
+    # 生成输出文件路径
+    dir_path, file_name = os.path.split(file_path)
     name, ext = os.path.splitext(file_name)
-    out_file = os.path.join(dir_name, f"{name}_with_xpath{ext}")
+    out_file_name = f"{name}_TagChain{ext}"
+    out_path = os.path.join(dir_path, out_file_name)
 
+    # 执行处理
     try:
-        add_xpath_to_html(file_path, out_file)
-        print(f"\n✅ 处理成功！\n文件已保存：{out_file}")
+        process_html(file_path, out_path)
+        print("✅ 处理完成！")
+        print(f"原文件路径：{file_path}")
+        print(f"新文件路径：{out_path}")
     except Exception as e:
-        print(f"\n❌ 处理失败：{str(e)}")
+        print(f"❌ 处理失败：{str(e)}")
 
-    input("\n按下回车关闭窗口...")
+    input("\n按回车键关闭窗口...")
 
 if __name__ == "__main__":
     main()
