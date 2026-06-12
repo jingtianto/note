@@ -1,0 +1,195 @@
+from bs4 import BeautifulSoup
+import os
+from dataclasses import dataclass, field
+from typing import List, Optional, Dict
+
+# ======================
+# 数据结构定义
+# ======================
+@dataclass
+class SignalNode:
+    name: str
+    data_type: str
+    bit_length: int = 0
+    start_bit: int = 0
+    children: List["SignalNode"] = field(default_factory=list)
+    is_array: bool = False
+    array_length: int = 1
+    parent: Optional["SignalNode"] = None
+
+    @property
+    def total_bits(self) -> int:
+        if self.children:
+            return sum(child.total_bits for child in self.children) * self.array_length
+        return self.bit_length * self.array_length
+
+    def __repr__(self, indent=0):
+        prefix = "  " * indent
+        info = f"{self.name} : {self.data_type}"
+        if self.is_array:
+            info += f" [{self.array_length}]"
+        info += f" (bit {self.start_bit} ~ {self.start_bit + self.total_bits - 1}, len={self.total_bits} bits)"
+        lines = [f"{prefix}{info}"]
+        for child in self.children:
+            lines.append(child.__repr__(indent + 1))
+        return "\n".join(lines)
+
+# ======================
+# 核心解析器
+# ======================
+class SomeIpSignalExtractor:
+    def __init__(self, html_dir: str = "."):
+        self.html_dir = html_dir
+        self.soup_cache: Dict[str, BeautifulSoup] = {}
+        self.current_bit_offset = 0
+
+    def _load_html(self, filename: str) -> BeautifulSoup:
+        """加载并缓存HTML文件"""
+        path = os.path.join(self.html_dir, filename)
+        with open(path, "r", encoding="utf-8") as f:
+            return BeautifulSoup(f.read(), "html.parser")
+
+    def parse_eventgroup(self, soup: BeautifulSoup) -> List[Dict]:
+        """解析Eventgroup表"""
+        eg_list = []
+        # 找到Eventgroups表格
+        for table in soup.find_all("table", class_="overviewviewtable"):
+            if "Eventgroups" in str(table.find("a")):
+                for tr in table.find_all("tr", class_="overviewviewtable v3"):
+                    tds = tr.find_all("td")
+                    if len(tds) < 3:
+                        continue
+                    eg_name = tds[0].get_text(strip=True)
+                    eg_id = tds[1].get_text(strip=True)
+                    refs_text = tds[2].get_text(strip=True)
+                    refs = []
+                    if refs_text:
+                        for ref_part in refs_text.split(";"):
+                            ref_part = ref_part.strip()
+                            if ref_part.startswith("E:"):
+                                refs.append(("Event", ref_part[2:].strip()))
+                            elif ref_part.startswith("F:"):
+                                refs.append(("Field", ref_part[2:].strip()))
+                    eg_list.append({"name": eg_name, "id": eg_id, "refs": refs})
+        return eg_list
+
+    def parse_signal_hierarchy(self, soup: BeautifulSoup, elem_name: str, parent: Optional[SignalNode] = None) -> Optional[SignalNode]:
+        """递归解析单个Event/Field的信号层级"""
+        # 找到对应的参数表
+        param_table = None
+        for table in soup.find_all("table", class_="parametertable"):
+            if elem_name in str(table):
+                param_table = table
+                break
+        if not param_table:
+            return None
+
+        root_node = SignalNode(name=elem_name, data_type="STRUCT", parent=parent)
+        self.current_bit_offset = 0
+
+        for tr in param_table.find_all("tr", class_="parametertable v3"):
+            tds = tr.find_all("td")
+            if len(tds) < 2:
+                continue
+            param_name = tds[0].get_text(strip=True)
+            data_type = tds[1].get_text(strip=True)
+            # 解析数组
+            is_array = False
+            array_len = 1
+            if "[" in data_type and "]" in data_type:
+                is_array = True
+                try:
+                    array_len = int(data_type.split("[")[1].split("]")[0])
+                except:
+                    array_len = 1
+            # 这里简化处理：假设基本类型bit长度（可根据实际类型扩展）
+            if "UINT8" in data_type:
+                bit_len = 8
+            elif "UINT16" in data_type:
+                bit_len = 16
+            elif "UINT32" in data_type:
+                bit_len = 32
+            elif "float" in data_type.lower() or "FLOAT32" in data_type:
+                bit_len = 32
+            elif "Struct" in data_type or "Container" in data_type:
+                bit_len = 0  # 结构体长度由子元素决定
+            else:
+                bit_len = 16  # 默认值，可根据实际调整
+
+            child_node = SignalNode(
+                name=param_name,
+                data_type=data_type,
+                bit_length=bit_len,
+                start_bit=self.current_bit_offset,
+                is_array=is_array,
+                array_length=array_len,
+                parent=root_node
+            )
+
+            # 递归解析结构体（如果有对应的HTML文件）
+            if "Struct" in data_type:
+                struct_file = f"{data_type}.html"
+                if os.path.exists(os.path.join(self.html_dir, struct_file)):
+                    struct_soup = self._load_html(struct_file)
+                    struct_child = self.parse_signal_hierarchy(struct_soup, data_type, child_node)
+                    if struct_child:
+                        child_node.children = struct_child.children
+                        child_node.bit_length = struct_child.total_bits
+
+            root_node.children.append(child_node)
+            self.current_bit_offset += child_node.total_bits
+
+        return root_node
+
+    def generate_byte_layout(self, root_node: SignalNode) -> str:
+        """生成字节占用位置示意图"""
+        lines = []
+        lines.append("=" * 80)
+        lines.append(f"Byte Layout for: {root_node.name} (Total: {root_node.total_bits} bits = {root_node.total_bits/8:.2f} bytes)")
+        lines.append("=" * 80)
+
+        def traverse(node: SignalNode, indent=0):
+            nonlocal lines
+            prefix = "  " * indent
+            start_byte = node.start_bit // 8
+            start_bit_in_byte = node.start_bit % 8
+            end_bit = node.start_bit + node.total_bits - 1
+            end_byte = end_bit // 8
+            end_bit_in_byte = end_bit % 8
+
+            range_str = f"Byte {start_byte}.{start_bit_in_byte} ~ Byte {end_byte}.{end_bit_in_byte}"
+            lines.append(f"{prefix}{node.name:<30} | {range_str:<30} | len={node.total_bits} bits ({node.total_bits/8:.2f} bytes)")
+
+            for child in node.children:
+                traverse(child, indent + 1)
+
+        traverse(root_node)
+        return "\n".join(lines)
+
+    def extract_all(self, main_html_file: str):
+        """主入口：提取并打印所有信号层级和布局"""
+        soup = self._load_html(main_html_file)
+        eg_list = self.parse_eventgroup(soup)
+
+        print("=" * 100)
+        print("SOME/IP Service Signal Extraction")
+        print("=" * 100)
+
+        for eg in eg_list:
+            print(f"\n[EventGroup] {eg['name']} (ID: {eg['id']})")
+            for elem_type, elem_name in eg["refs"]:
+                print(f"\n  [{elem_type}] {elem_name}")
+                root = self.parse_signal_hierarchy(soup, elem_name)
+                if root:
+                    print("\n  Hierarchy:")
+                    print(root.__repr__(indent=2))
+                    print("\n  Byte Layout:")
+                    print(self.generate_byte_layout(root))
+
+# ======================
+# 使用示例
+# ======================
+if __name__ == "__main__":
+    # 把你的HTML文件放在脚本同目录下，修改下面的文件名
+    extractor = SomeIpSignalExtractor(html_dir=".")
+    extractor.extract_all("DriverMonit_2.html")
