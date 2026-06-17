@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Excel/CSV批量检索优化工具（百兆大文件修复版）</title>
+<title>Excel/CSV批量检索优化工具（修复单行多列粘贴）</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif}
@@ -31,11 +31,10 @@ th{background:#f3f4f6;font-weight:600}
 </head>
 <body>
 <div class="card">
-<h3>一、粘贴检索内容（每行一条，Excel/CSV单列直接复制）</h3>
-<textarea id="searchInput" placeholder="示例：
-订单001
-客户编号
-直接粘贴一列数据，空行自动过滤"></textarea>
+<h3>一、粘贴检索内容（每行一条，Excel/CSV单行多列/单列直接复制）</h3>
+<textarea id="searchInput" placeholder="支持两种复制方式：
+1. 复制Excel一整列（纵向）：每行自动一条
+2. 复制Excel一整行（横向多单元格）：粘贴后自动拆分每条信号"></textarea>
 <div class="tip warn">⚠️ 多份100MB文件占用极高内存，关闭其他浏览器标签页再解析，避免页面崩溃</div>
 </div>
 
@@ -63,7 +62,7 @@ th{background:#f3f4f6;font-weight:600}
 </div>
 
 <script>
-// 全局配置 适配多100MB文件 + CSV兼容
+// 全局配置 适配多100MB文件 + CSV兼容 + 单行多列分割修复
 const MAX_FILE_SIZE = 130 * 1024 * 1024;
 const BATCH_RENDER = 150;
 let uploadFiles = [];
@@ -133,8 +132,6 @@ clearBtn.addEventListener('click',()=>{
   statusTip.textContent = '';
   progressWrap.style.display = 'none';
   progressBar.style.width = '0%';
-  // GC提示
-  window.gc && window.gc();
 });
 
 // HTML转义防XSS
@@ -192,10 +189,17 @@ searchBtn.addEventListener('click',async ()=>{
   statusTip.textContent = '初始化检索数据...';
 
   try{
-    // 处理检索关键词，彻底过滤空/纯空格
-    const keywords = raw.split('\n')
+    // ========== 核心修复：同时分割换行 + 制表符，兼容横向一行多列 ==========
+    // 1. 先把Excel横向复制产生的制表符 \t 全部替换成换行
+    let splitText = raw.replaceAll('\t','\n');
+    // 2. 按换行分割数组
+    const rawArr = splitText.split('\n');
+    // 3. 清理空格、过滤空字符串
+    const keywords = rawArr
       .map(v=>v.trim())
       .filter(v=>v.length > 0);
+    // ======================================================================
+
     const statMap = new Map();
     keywords.forEach(k=>statMap.set(k,{total:0,files:{}}));
 
@@ -271,7 +275,7 @@ searchBtn.addEventListener('click',async ()=>{
         }
       }
 
-      // 释放内存（修复只读ArrayBuffer赋值报错）
+      // 释放内存
       workbook = null;
       buf = null;
     }
