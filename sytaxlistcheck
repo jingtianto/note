@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Excel/CSV批量检索优化工具（修复单行多列粘贴）</title>
+<title>Excel/CSV批量检索【自适应表格+精确匹配开关】</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif}
@@ -18,29 +18,42 @@ textarea{width:100%;height:140px;padding:10px;border:1px solid #d1d5db;border-ra
 .btn{padding:10px 24px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:15px;margin-right:10px}
 .btn:disabled{background:#93c5fd;cursor:not-allowed}
 .btn-clear{background:#6b7280}
-table{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
-th,td{border:1px solid #e5e7eb;padding:10px;text-align:left}
-th{background:#f3f4f6;font-weight:600}
+table-wrap{width:100%;overflow-x:auto;display:block}
+.table-container{width:100%;overflow-x:auto;display:block;margin-top:10px;max-height:600px}
+table{min-width:100%;border-collapse:collapse;font-size:14px;table-layout:auto}
+th,td{border:1px solid #e5e7eb;padding:10px;text-align:left;vertical-align:top}
+th{background:#f3f4f6;font-weight:600;position:sticky;top:0;z-index:1}
+td:first-child{min-width:520px;max-width:650px;white-space:pre-wrap;word-break:break-all}
+td:nth-child(2),td:nth-child(3){width:100px;text-align:center;min-width:100px}
+td:last-child{min-width:260px;max-width:320px;word-break:break-all}
 .found-yes{color:#15803d;font-weight:500}
 .found-no{color:#dc2626}
 .tip{font-size:13px;color:#6b7280;margin-top:6px}
 .warn{color:#d97706;font-weight:500}
 .progress-wrap{width:100%;height:10px;background:#e5e7eb;border-radius:5px;margin:8px 0;display:none}
 .progress-bar{height:100%;width:0;background:#2563eb;border-radius:5px;transition:.1s linear}
+.switch-box{margin:8px 0 16px 0;display:flex;align-items:center;gap:8px}
+.switch-box label{cursor:pointer;font-size:14px;color:#333}
+input[type="checkbox"]{width:16px;height:16px;cursor:pointer}
 </style>
 </head>
 <body>
 <div class="card">
-<h3>一、粘贴检索内容（每行一条，Excel/CSV单行多列/单列直接复制）</h3>
-<textarea id="searchInput" placeholder="支持两种复制方式：
-1. 复制Excel一整列（纵向）：每行自动一条
-2. 复制Excel一整行（横向多单元格）：粘贴后自动拆分每条信号"></textarea>
-<div class="tip warn">⚠️ 多份100MB文件占用极高内存，关闭其他浏览器标签页再解析，避免页面崩溃</div>
+<h3>一、粘贴检索内容（支持Excel【横向一行 / 纵向一列】复制粘贴）</h3>
+<textarea id="searchInput" placeholder="直接从Excel复制：
+1. 复制一整行（多个单元格）→ 自动拆分逐个检索
+2. 复制一整列 → 自动逐行检索
+自动过滤空值、自动去重"></textarea>
+<div class="switch-box">
+    <input type="checkbox" id="exactMatchSwitch">
+    <label for="exactMatchSwitch">开启精确匹配（完全相等、区分大小写，关闭为模糊包含匹配）</label>
+</div>
+<div class="tip warn">⚠️ 多100MB文件请关闭多余浏览器标签，防止内存溢出</div>
 </div>
 
 <div class="card">
-<h3>二、拖拽文件（支持 .xlsx/.xls/.csv，单文件上限130MB，多文件批量拖拽）</h3>
-<div id="dropBox">拖拽表格文件到此上传</div>
+<h3>二、拖拽源文件（xlsx/xls/csv 单文件最大130MB）</h3>
+<div id="dropBox">拖拽多个表格文件到此处</div>
 <div class="progress-wrap" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
 <div class="file-list" id="fileList"></div>
 </div>
@@ -52,17 +65,24 @@ th{background:#f3f4f6;font-weight:600}
 </div>
 
 <div class="card">
-<h3>三、检索结果</h3>
+<h3>三、检索结果（每个信号独立统计，横向滚动查看完整内容）</h3>
+<div class="table-container">
 <table>
 <thead>
-<tr><th>检索内容</th><th>是否找到</th><th>总命中次数</th><th>匹配文件名称</th></tr>
+<tr>
+<th>检索信号</th>
+<th>是否找到</th>
+<th>命中总次数</th>
+<th>匹配文件</th>
+</tr>
 </thead>
 <tbody id="resultBody"></tbody>
 </table>
 </div>
+</div>
 
 <script>
-// 全局配置 适配多100MB文件 + CSV兼容 + 单行多列分割修复
+// 全局配置
 const MAX_FILE_SIZE = 130 * 1024 * 1024;
 const BATCH_RENDER = 150;
 let uploadFiles = [];
@@ -77,54 +97,69 @@ const resultBody = document.getElementById('resultBody');
 const statusTip = document.getElementById('statusTip');
 const progressWrap = document.getElementById('progressWrap');
 const progressBar = document.getElementById('progressBar');
+const exactMatchSwitch = document.getElementById('exactMatchSwitch');
 
-// 拖拽基础事件
-['dragenter','dragover','dragleave','drop'].forEach(evt=>{
-  dropBox.addEventListener(evt,e=>{e.preventDefault();e.stopPropagation()});
+// 拖拽事件
+['dragenter','dragover','dragleave','drop'].forEach(function(evt){
+  dropBox.addEventListener(evt,function(e){
+    e.preventDefault();
+    e.stopPropagation();
+  });
 });
-['dragenter','dragover'].forEach(evt=>dropBox.addEventListener(evt,()=>dropBox.classList.add('active')));
-['dragleave','drop'].forEach(evt=>dropBox.addEventListener(evt,()=>dropBox.classList.remove('active')));
+['dragenter','dragover'].forEach(function(evt){
+  dropBox.addEventListener(evt,function(){ dropBox.classList.add('active'); });
+});
+['dragleave','drop'].forEach(function(evt){
+  dropBox.addEventListener(evt,function(){ dropBox.classList.remove('active'); });
+});
 
-dropBox.addEventListener('drop',e=>{
-  const fs = e.dataTransfer.files;
+dropBox.addEventListener('drop',function(e){
+  var fs = e.dataTransfer.files;
   handleUpload(fs);
 });
 
-// 文件上传校验
+// 文件上传处理
 function handleUpload(files){
-  for(let i=0;i<files.length;i++){
-    const f = files[i];
+  for(var i = 0; i < files.length; i++){
+    var f = files[i];
     if(f.size > MAX_FILE_SIZE){
-      alert(`文件【${f.name}】超过130MB限制，无法加载`);
+      alert('文件【' + f.name + '】超过130MB限制，已跳过');
       continue;
     }
-    const lowName = f.name.toLowerCase();
-    const isSupport = lowName.endsWith('.xlsx') || lowName.endsWith('.xls') || lowName.endsWith('.csv');
+    var lowName = f.name.toLowerCase();
+    var isSupport = lowName.indexOf('.xlsx') > -1 || lowName.indexOf('.xls') > -1 || lowName.indexOf('.csv') > -1;
     if(!isSupport){
-      alert(`仅支持 xlsx / xls / csv，跳过：${f.name}`);
+      alert('仅支持 xlsx / xls / csv，跳过：' + f.name);
       continue;
     }
-    // 去重校验修复
-    const isExist = uploadFiles.some(item=>item.name === f.name && item.size === f.size);
-    if(isExist) continue;
+    // 精准去重
+    var exist = false;
+    for(var j = 0; j < uploadFiles.length; j++){
+      if(uploadFiles[j].name === f.name && uploadFiles[j].size === f.size){
+        exist = true;
+        break;
+      }
+    }
+    if(exist) continue;
+
     uploadFiles.push(f);
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.className = 'file-item';
-    div.textContent = `${f.name} (${formatSize(f.size)})`;
+    div.textContent = f.name + ' (' + formatSize(f.size) + ')';
     fileList.appendChild(div);
   }
-  statusTip.textContent = `已加载${uploadFiles.length}个表格文件`;
+  statusTip.textContent = '已加载 ' + uploadFiles.length + ' 个表格文件';
 }
 
 // 文件大小格式化
 function formatSize(b){
-  if(b < 1024) return b+'B';
-  if(b < 1048576) return (b/1024).toFixed(1)+'KB';
-  return (b/1048576).toFixed(1)+'MB';
+  if(b < 1024) return b + 'B';
+  if(b < 1048576) return (b / 1024).toFixed(1) + 'KB';
+  return (b / 1048576).toFixed(1) + 'MB';
 }
 
-// 一键清空（彻底释放内存）
-clearBtn.addEventListener('click',()=>{
+// 清空全部
+clearBtn.addEventListener('click',function(){
   uploadFiles = [];
   fileList.innerHTML = '';
   searchInput.value = '';
@@ -134,102 +169,114 @@ clearBtn.addEventListener('click',()=>{
   progressBar.style.width = '0%';
 });
 
-// HTML转义防XSS
+// HTML转义
 function escapeHtml(s){
   if(!s) return '';
   return String(s)
-    .replaceAll('&','&amp;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;')
-    .replaceAll("'",'&#039;');
+  .replace(/&/g,'&amp;')
+  .replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;')
+  .replace(/'/g,'&#039;');
 }
 
-// 读取文件ArrayBuffer，捕获读取异常
+// 读取文件
 function readFileAsArrayBuffer(file){
-  return new Promise((resolve,reject)=>{
-    const fr = new FileReader();
-    fr.onload = ()=>resolve(fr.result);
-    fr.onerror = (err)=>reject(new Error(`读取文件失败: ${file.name}`));
+  return new Promise(function(resolve,reject){
+    var fr = new FileReader();
+    fr.onload = function(){ resolve(fr.result); };
+    fr.onerror = function(){ reject(new Error('读取失败：' + file.name)); };
     fr.readAsArrayBuffer(file);
   });
 }
 
-// 解析CSV编码修复，自动处理GBK/UTF8
+// CSV编码修复（GBK兼容）
 async function decodeCSVBuffer(buf, fileName){
-  const lowName = fileName.toLowerCase();
-  if(!lowName.endsWith('.csv')) return buf;
+  var lowName = fileName.toLowerCase();
+  if(lowName.indexOf('.csv') === -1) return buf;
   try{
-    // 尝试GBK解码，中文不乱码
-    const decoder = new TextDecoder('gbk');
-    const text = decoder.decode(buf);
-    // 再转回UTF8二进制给XLSX解析
-    const uint8 = new TextEncoder().encode(text);
+    var decoder = new TextDecoder('gbk');
+    var text = decoder.decode(buf);
+    var uint8 = new TextEncoder().encode(text);
     return uint8.buffer;
   }catch(e){
     return buf;
   }
 }
 
-// 主线程微小让步，防止页面假死
-function sleep(ms=0){
-  return new Promise(res=>setTimeout(res,ms));
+// 线程让步
+function sleep(ms){
+  return new Promise(function(res){ setTimeout(res, ms || 0); });
 }
 
-// 主查询逻辑
-searchBtn.addEventListener('click',async ()=>{
-  const raw = searchInput.value.trim();
-  if(!raw){alert('请粘贴需要查找的内容');return;}
-  if(uploadFiles.length === 0){alert('请拖拽表格文件');return;}
+// 主检索逻辑
+searchBtn.addEventListener('click',async function(){
+  var raw = searchInput.value.trim();
+  if(!raw){ alert('请粘贴需要检索的内容！'); return; }
+  if(uploadFiles.length === 0){ alert('请拖拽表格源文件！'); return; }
+
+  // 获取匹配模式
+  const isExactMatch = exactMatchSwitch.checked;
 
   searchBtn.disabled = true;
   resultBody.innerHTML = '';
   progressWrap.style.display = 'block';
   progressBar.style.width = '0%';
-  statusTip.textContent = '初始化检索数据...';
+  statusTip.textContent = '初始化检索...';
 
   try{
-    // ========== 核心修复：同时分割换行 + 制表符，兼容横向一行多列 ==========
-    // 1. 先把Excel横向复制产生的制表符 \t 全部替换成换行
-    let splitText = raw.replaceAll('\t','\n');
-    // 2. 按换行分割数组
-    const rawArr = splitText.split('\n');
-    // 3. 清理空格、过滤空字符串
-    const keywords = rawArr
-      .map(v=>v.trim())
-      .filter(v=>v.length > 0);
-    // ======================================================================
+    // 核心修复：横竖粘贴自动拆分制表符
+    var splitText = raw.split('\t').join('\n');
+    var rawArr = splitText.split('\n');
+    // 清理空白 + 自动去重
+    var tempKeys = [];
+    for(var i = 0; i < rawArr.length; i++){
+      var val = rawArr[i].trim();
+      if(val) tempKeys.push(val);
+    }
+    var keywords = [];
+    var map = {};
+    for(var k = 0; k < tempKeys.length; k++){
+      if(!map[tempKeys[k]]){
+        map[tempKeys[k]] = true;
+        keywords.push(tempKeys[k]);
+      }
+    }
 
-    const statMap = new Map();
-    keywords.forEach(k=>statMap.set(k,{total:0,files:{}}));
+    // 初始化统计结构
+    var statMap = new Map();
+    for(var s = 0; s < keywords.length; s++){
+      statMap.set(keywords[s],{total:0,files:{}});
+    }
 
-    const totalFile = uploadFiles.length;
-    for(let fileIdx=0;fileIdx<totalFile;fileIdx++){
+    var totalFile = uploadFiles.length;
+    for(var fileIdx = 0; fileIdx < totalFile; fileIdx++){
       await sleep(1);
-      const file = uploadFiles[fileIdx];
-      statusTip.textContent = `正在解析【${file.name}】(${fileIdx+1}/${totalFile})`;
-      progressBar.style.width = `${(fileIdx/totalFile)*100}%`;
+      var file = uploadFiles[fileIdx];
+      var percent = ((fileIdx / totalFile) * 100).toFixed(1);
+      progressBar.style.width = percent + '%';
+      statusTip.textContent = '正在解析：【' + file.name + '】(' + (fileIdx+1) + '/' + totalFile + ')';
 
-      let buf;
+      var buf;
       try{
         buf = await readFileAsArrayBuffer(file);
         buf = await decodeCSVBuffer(buf, file.name);
-      }catch(readErr){
-        statusTip.textContent += ` 读取失败跳过:${file.name}`;
+      }catch(e){
+        statusTip.textContent += ' 读取失败跳过';
         continue;
       }
 
-      let workbook;
+      var workbook;
       try{
         workbook = XLSX.read(buf,{
           type:'array',
           cellNF:false,
           cellHTML:false,
           cellStyles:false,
-          raw:true // 原始值读取，提速
+          raw:true
         });
-      }catch(err){
-        statusTip.textContent += ` 文件损坏跳过:${file.name}`;
+      }catch(e){
+        statusTip.textContent += ' 文件损坏跳过';
         workbook = null;
         buf = null;
         continue;
@@ -242,29 +289,38 @@ searchBtn.addEventListener('click',async ()=>{
       }
 
       // 遍历工作表
-      const sheets = workbook.SheetNames;
-      for(const sheetName of sheets){
+      var sheets = workbook.SheetNames;
+      for(var si = 0; si < sheets.length; si++){
         await sleep(0);
-        const sheet = workbook.Sheets[sheetName];
-        const ref = sheet['!ref'];
+        var sheetName = sheets[si];
+        var sheet = workbook.Sheets[sheetName];
+        var ref = sheet['!ref'];
         if(!ref) continue;
-        const range = XLSX.utils.decode_range(ref);
+        var range = XLSX.utils.decode_range(ref);
 
-        // 逐行遍历
-        for(let r=range.s.r;r<=range.e.r;r++){
-          let hasContent = false;
-          for(let c=range.s.c;c<=range.e.c;c++){
-            const cellKey = XLSX.utils.encode_cell({r,c});
-            const cell = sheet[cellKey];
+        // 遍历行列
+        for(var r = range.s.r; r <= range.e.r; r++){
+          var hasContent = false;
+          for(var c = range.s.c; c <= range.e.c; c++){
+            var cellKey = XLSX.utils.encode_cell({r:r,c:c});
+            var cell = sheet[cellKey];
             if(!cell || cell.v === undefined || cell.v === null) continue;
 
-            const cellText = String(cell.v).trim();
-            if(cellText.length === 0) continue;
+            var cellText = String(cell.v).trim();
+            if(!cellText) continue;
             hasContent = true;
 
-            // 关键词匹配
-            for(const [key,info] of statMap.entries()){
-              if(cellText.includes(key)){
+            // 匹配分支：精确匹配 / 模糊包含
+            for(var [key,info] of statMap.entries()){
+              let hit = false;
+              if(isExactMatch){
+                // 精确匹配：完全相等、区分大小写
+                hit = (cellText === key);
+              }else{
+                // 模糊匹配：包含、不区分大小写
+                hit = (cellText.toLowerCase().indexOf(key.toLowerCase()) > -1);
+              }
+              if(hit){
                 info.total += 1;
                 if(!info.files[file.name]) info.files[file.name] = 0;
                 info.files[file.name] += 1;
@@ -275,41 +331,48 @@ searchBtn.addEventListener('click',async ()=>{
         }
       }
 
-      // 释放内存
+      // 强制释放内存
       workbook = null;
       buf = null;
     }
 
     progressBar.style.width = '100%';
-    statusTip.textContent = `解析全部${totalFile}个文件完成，正在渲染结果...`;
-    await sleep(50);
+    statusTip.textContent = '解析完成，渲染结果中...';
+    await sleep(30);
 
-    // 分批渲染表格
-    const keyList = Array.from(statMap.entries());
-    let tempHtml = '';
-    for(let i=0;i<keyList.length;i++){
-      const [key,info] = keyList[i];
-      const hitFiles = Object.keys(info.files);
-      const hit = info.total > 0;
-      tempHtml += `<tr>
-        <td>${escapeHtml(key)}</td>
-        <td class="${hit?'found-yes':'found-no'}">${hit?'已找到':'未找到'}</td>
-        <td>${info.total}</td>
-        <td>${hitFiles.length?escapeHtml(hitFiles.join('、')):'无'}</td>
-      </tr>`;
-      if((i+1)%BATCH_RENDER === 0){
-        resultBody.insertAdjacentHTML('beforeend',tempHtml);
+    // 分批渲染结果
+    var keyList = Array.from(statMap.entries());
+    var tempHtml = '';
+    for(var i = 0; i < keyList.length; i++){
+      var key = keyList[i][0];
+      var info = keyList[i][1];
+      var hitFiles = Object.keys(info.files);
+      var isHit = info.total > 0;
+
+      tempHtml += '<tr>'
+      + '<td>' + escapeHtml(key) + '</td>'
+      + '<td class="' + (isHit ? 'found-yes' : 'found-no') + '">' + (isHit ? '已找到' : '未找到') + '</td>'
+      + '<td>' + info.total + '</td>'
+      + '<td>' + (hitFiles.length ? escapeHtml(hitFiles.join('、')) : '无') + '</td>'
+      + '</tr>';
+
+      if((i+1) % BATCH_RENDER === 0){
+        resultBody.insertAdjacentHTML('beforeend', tempHtml);
         tempHtml = '';
         await sleep(0);
       }
     }
-    if(tempHtml) resultBody.insertAdjacentHTML('beforeend',tempHtml);
+    if(tempHtml){
+      resultBody.insertAdjacentHTML('beforeend', tempHtml);
+    }
 
-    statusTip.textContent = `检索完成！共${keywords.length}条检索词，${totalFile}个文件解析完毕`;
+    statusTip.textContent = '检索完成！共 ' + keywords.length + ' 条独立信号，' + totalFile + ' 个大文件检索完毕'
+        + (isExactMatch ? '【当前模式：精确匹配(区分大小写)】' : '【当前模式：模糊包含匹配】');
+
   }catch(err){
-    console.error('全局检索异常：', err);
-    statusTip.textContent = `检索异常：${err.message}`;
-    alert(`执行失败：${err.message}`);
+    console.error(err);
+    statusTip.textContent = '检索异常：' + err.message;
+    alert('执行出错：' + err.message);
   }finally{
     searchBtn.disabled = false;
   }
