@@ -2,193 +2,478 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>本地XLSX批量内容检索工具</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel批量关键词检索工具</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-        body { padding: 20px; max-width: 1400px; margin: 0 auto; background: #f5f7fa; }
-        .container { background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
-        h2 { margin-bottom: 16px; color: #111827; font-size: 20px; }
-        .row { margin-bottom: 18px; }
-        label { display: block; margin-bottom: 6px; font-weight: 500; color: #374151; }
-        textarea, input[type="file"] { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background: #fff; }
-        textarea { min-height: 130px; resize: vertical; line-height: 1.5; }
-        .btns { display: flex; gap: 12px; margin-top: 8px; }
-        button { padding: 10px 22px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: opacity 0.2s; }
-        button:disabled { opacity: 0.6; cursor: not-allowed; }
-        #startBtn { background: #2563eb; color: #fff; }
-        #clearBtn { background: #e5e7eb; color: #1f2937; }
-        .tip { font-size: 13px; color: #6b7280; margin-top: 5px; line-height: 1.4; }
-        #status { margin: 14px 0; color: #1d4ed8; font-weight: 500; min-height: 20px; }
-        #resultBox { margin-top: 20px; max-height: 650px; overflow-y: auto; border:1px solid #e5e7eb; padding:14px; border-radius:8px; background: #fafafa; }
-        .item { border-bottom: 1px solid #e5e7eb; padding:12px 0; }
-        .item:last-child { border-bottom: none; }
-        .file-path { color:#2563eb; font-weight:500; margin-bottom:6px; word-break: break-all; font-size:14px; }
-        .sheet-name { color:#059669; font-size:13px; margin-bottom:6px; }
-        .cell-info { font-size:13px; color:#374151; line-height:1.7; }
-        .keyword-tag { background:#fef3c7; color:#b45309; padding:2px 7px; border-radius:4px; margin-right:6px; display:inline-block; margin-bottom:4px; }
-        .error-log { color:#dc2626; font-size:13px; margin:6px 0; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: "Microsoft Yahei", sans-serif;
+        }
+        body {
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 24px;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        .title {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #1f2937;
+        }
+        .input-area {
+            margin-bottom: 16px;
+        }
+        .input-desc {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+        #keywordInput {
+            width: 100%;
+            height: 140px;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin: 16px 0;
+            align-items: center;
+        }
+        button {
+            padding: 10px 24px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        #startBtn {
+            background-color: #2563eb;
+            color: white;
+        }
+        #startBtn:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+        #clearResBtn {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+        #stopScanBtn {
+            background-color: #f87171;
+            color: white;
+            display: none;
+        }
+        .folder-select-wrap {
+            margin: 12px 0;
+        }
+        #folderTip {
+            color: #2563eb;
+            margin-top: 8px;
+        }
+        #fileInput {
+            display: none;
+        }
+        .progress-wrap {
+            margin: 20px 0;
+            display: none;
+        }
+        .progress-text {
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #374151;
+            word-break: break-all;
+        }
+        .progress-bar-bg {
+            width: 100%;
+            height: 12px;
+            background-color: #e5e7eb;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .progress-bar-inner {
+            height: 100%;
+            width: 0%;
+            background-color: #2563eb;
+            transition: width 0.3s;
+        }
+        .scan-summary {
+            margin: 16px 0;
+            padding: 12px;
+            background-color: #f0fdf4;
+            border-radius: 6px;
+            color: #065f46;
+            line-height: 1.6;
+        }
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .filter-btn {
+            padding: 6px 12px;
+            background: #eff6ff;
+            color: #2563eb;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            table-layout: auto;
+        }
+        th, td {
+            border: 1px solid #e5e7eb;
+            padding: 10px;
+            font-size: 13px;
+            text-align: left;
+            word-break: break-all;
+            vertical-align: top;
+        }
+        th {
+            background-color: #f9fafb;
+            font-weight: 600;
+        }
+        .no-hit-row {
+            background-color: #f3f4f6;
+            color: #6b7280;
+        }
+        .multi-hit-count {
+            color: #2563eb;
+            font-weight: bold;
+        }
     </style>
-    <!-- Excel解析库 -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 <div class="container">
-    <h2>XLSX批量内容检索（递归子文件夹）</h2>
+    <h2 class="title">Excel批量关键词检索工具</h2>
 
-    <div class="row">
-        <label>选择目标文件夹</label>
-        <input type="file" id="folderInput" webkitdirectory multiple>
-        <div class="tip">选中仓库根目录，自动扫描全部子文件夹内.xlsx文件</div>
-    </div>
-
-    <div class="row">
-        <label>检索关键词（一行一个，可直接粘贴Excel A列）</label>
+    <!-- 关键词输入区域 -->
+    <div class="input-area">
+        <div class="input-desc">检索关键词（一行一个，支持英文逗号,分隔多关键词；可直接粘贴Excel A列，自动去重、剔除空行）</div>
         <textarea id="keywordInput" placeholder="示例：
-订单001
-客户张三
-2026-06
-每行一个检索词，模糊匹配单元格包含内容"></textarea>
-        <div class="tip">自动过滤空行、重复关键词，不区分单元格数据类型</div>
+1757610,1778200
+1778199
+1757609"></textarea>
     </div>
 
-    <div class="btns">
-        <button id="startBtn">开始批量搜索</button>
-        <button id="clearBtn">清空全部结果</button>
+    <!-- 文件夹选择 -->
+    <div class="folder-select-wrap">
+        <input type="file" id="fileInput" webkitdirectory multiple />
+        <button id="selectFolderBtn">选择本地检索根文件夹</button>
+        <div id="folderTip">错误：请先选择本地文件夹</div>
     </div>
 
-    <div id="status"></div>
-    <div id="resultBox"></div>
+    <!-- 功能按钮 -->
+    <div class="btn-group">
+        <button id="startBtn" disabled>开始批量搜索</button>
+        <button id="clearResBtn">清空全部结果</button>
+        <button id="stopScanBtn">终止扫描</button>
+    </div>
+
+    <!-- 扫描进度区域 -->
+    <div class="progress-wrap" id="progressWrap">
+        <div class="progress-text" id="progressText">正在预扫描目录，统计文件总数...</div>
+        <div class="progress-bar-bg">
+            <div class="progress-bar-inner" id="progressBar"></div>
+        </div>
+    </div>
+
+    <!-- 扫描汇总信息 -->
+    <div class="scan-summary" id="summaryWrap" style="display: none;"></div>
+
+    <!-- 筛选按钮 -->
+    <div class="filter-buttons" id="filterWrap" style="display: none;">
+        <button class="filter-btn" data-filter="all">显示全部</button>
+        <button class="filter-btn" data-filter="noHit">仅显示无命中关键词</button>
+        <button class="filter-btn" data-filter="multiHit">仅显示多次命中关键词</button>
+    </div>
+
+    <!-- 检索结果表格 -->
+    <div id="resultTableWrap"></div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
-const folderInput = document.getElementById('folderInput');
-const keywordInput = document.getElementById('keywordInput');
-const startBtn = document.getElementById('startBtn');
-const clearBtn = document.getElementById('clearBtn');
-const statusEl = document.getElementById('status');
-const resultBox = document.getElementById('resultBox');
+    // 全局变量定义（全部提前声明，无变量提升隐患）
+    let selectedFolderName = null;
+    let scanAbortFlag = false;
+    const keywordGroupMap = new Map();
 
-// 清空面板
-clearBtn.onclick = () => {
-    resultBox.innerHTML = '';
-    statusEl.textContent = '';
-};
+    // 缓存DOM元素，一次性获取，无重复查询
+    const keywordInput = document.getElementById("keywordInput");
+    const fileInput = document.getElementById("fileInput");
+    const selectFolderBtn = document.getElementById("selectFolderBtn");
+    const folderTip = document.getElementById("folderTip");
+    const startBtn = document.getElementById("startBtn");
+    const clearResBtn = document.getElementById("clearResBtn");
+    const stopScanBtn = document.getElementById("stopScanBtn");
+    const progressWrap = document.getElementById("progressWrap");
+    const progressText = document.getElementById("progressText");
+    const progressBar = document.getElementById("progressBar");
+    const summaryWrap = document.getElementById("summaryWrap");
+    const filterWrap = document.getElementById("filterWrap");
+    const resultTableWrap = document.getElementById("resultTableWrap");
+    const filterBtns = document.querySelectorAll(".filter-btn");
 
-// 数字转Excel列名 A B C ... Z AA AB
-function getColName(num) {
-    let str = '';
-    let n = num;
-    while (n >= 0) {
-        str = String.fromCharCode((n % 26) + 65) + str;
-        n = Math.floor(n / 26) - 1;
-    }
-    return str;
-}
-
-// 主检索逻辑
-startBtn.onclick = async () => {
-    // 锁定按钮防止重复执行
-    startBtn.disabled = true;
-    resultBox.innerHTML = '';
-    statusEl.textContent = '初始化检索...';
-
-    const fileList = folderInput.files;
-    const rawText = keywordInput.value.trim();
-
-    // 参数校验
-    if (!fileList || fileList.length === 0) {
-        statusEl.textContent = '错误：请先选择本地文件夹';
-        startBtn.disabled = false;
-        return;
-    }
-    if (!rawText) {
-        statusEl.textContent = '错误：关键词输入框不能为空';
-        startBtn.disabled = false;
-        return;
-    }
-
-    // 处理关键词：分行、去空白、去重
-    const keywordArr = [...new Set(
-        rawText.split('\n')
-            .map(item => item.trim())
-            .filter(item => item !== '')
-    )];
-
-    // 过滤仅xlsx文件
-    const xlsxFiles = Array.from(fileList).filter(file => {
-        return file.name.toLowerCase().endsWith('.xlsx');
+    // 文件夹选择点击事件
+    selectFolderBtn.addEventListener("click", function() {
+        fileInput.click();
     });
 
-    let totalMatch = 0;
-    let errorCount = 0;
-
-    statusEl.textContent = `共读取文件${fileList.length}个，待扫描xlsx：${xlsxFiles.length}，检索关键词${keywordArr.length}个`;
-
-    // 循环解析每个Excel
-    for (const file of xlsxFiles) {
-        try {
-            const arrayBuf = await file.arrayBuffer();
-            const workbook = XLSX.read(arrayBuf, { type: 'array' });
-            const sheetNames = workbook.SheetNames;
-
-            // 遍历所有工作表
-            for (const sheetName of sheetNames) {
-                const sheet = workbook.Sheets[sheetName];
-                // 空表跳过
-                if (!sheet['!ref']) continue;
-                const range = XLSX.utils.decode_range(sheet['!ref']);
-
-                // 遍历单元格
-                for (let r = range.s.r; r <= range.e.r; r++) {
-                    for (let c = range.s.c; c <= range.e.c; c++) {
-                        const cellAddr = XLSX.utils.encode_cell({ r, c });
-                        const cell = sheet[cellAddr];
-                        // 空单元格跳过
-                        if (!cell || cell.v === undefined || cell.v === null) continue;
-
-                        // 统一转为字符串，避免数字/日期匹配异常
-                        const cellValue = String(cell.v);
-                        // 匹配当前单元格命中的关键词
-                        const hitWords = keywordArr.filter(kw => cellValue.includes(kw));
-
-                        if (hitWords.length > 0) {
-                            totalMatch += 1;
-                            const colLabel = getColName(c);
-                            const rowNum = r + 1;
-
-                            // 渲染单条结果
-                            const itemDiv = document.createElement('div');
-                            itemDiv.className = 'item';
-                            const tagHtml = hitWords.map(w => `<span class="keyword-tag">${w}</span>`).join('');
-                            itemDiv.innerHTML = `
-                                <div class="file-path">文件：${file.webkitRelativePath}</div>
-                                <div class="sheet-name">工作表：${sheetName}</div>
-                                <div class="cell-info">
-                                    单元格：${colLabel}${rowNum}<br/>
-                                    命中关键词：${tagHtml}<br/>
-                                    单元格内容：${cellValue}
-                                </div>
-                            `;
-                            resultBox.appendChild(itemDiv);
-                        }
-                    }
-                }
-            }
-        } catch (parseErr) {
-            errorCount += 1;
-            // 打印解析失败文件
-            const errTip = document.createElement('div');
-            errTip.className = 'error-log';
-            errTip.innerText = `解析失败：${file.webkitRelativePath}，原因：${parseErr.message}`;
-            resultBox.appendChild(errTip);
-            console.error(file.name, parseErr);
+    // 文件选择变更事件
+    fileInput.addEventListener("change", function(e) {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) {
+            folderTip.textContent = "错误：请先选择本地文件夹";
+            folderTip.style.color = "#2563eb";
+            startBtn.disabled = true;
+            selectedFolderName = null;
+            return;
         }
+        const firstFileRelPath = files[0].webkitRelativePath;
+        selectedFolderName = firstFileRelPath.split("/")[0];
+        folderTip.textContent = `已选中检索根目录：${selectedFolderName}`;
+        folderTip.style.color = "#059669";
+        startBtn.disabled = false;
+    });
+
+    /**
+     * 关键词解析函数
+     * 支持换行、英文逗号分隔，自动去空格、去重、过滤空值
+     * @param {string} rawText 原始输入文本
+     * @returns {string[]} 清洗后关键词数组
+     */
+    function parseKeywords(rawText) {
+        const lines = rawText.split(/\r?\n/);
+        const keywordSet = new Set();
+        lines.forEach(function(line) {
+            const lineTrim = line.trim();
+            if (!lineTrim) return;
+            const splitArr = lineTrim.split(",");
+            splitArr.forEach(function(k) {
+                const kTrim = k.trim();
+                if (kTrim) keywordSet.add(kTrim);
+            });
+        });
+        return Array.from(keywordSet);
     }
 
-    // 检索完成提示
-    statusEl.textContent = `扫描完成！共检索${xlsxFiles.length}个表格，匹配${totalMatch}处内容，解析失败文件${errorCount}个`;
-    startBtn.disabled = false;
-};
+    // 清空全部按钮事件
+    clearResBtn.addEventListener("click", function() {
+        keywordInput.value = "";
+        keywordGroupMap.clear();
+        summaryWrap.style.display = "none";
+        filterWrap.style.display = "none";
+        resultTableWrap.innerHTML = "";
+        progressWrap.style.display = "none";
+        scanAbortFlag = false;
+        stopScanBtn.style.display = "none";
+    });
+
+    // 终止扫描按钮事件
+    stopScanBtn.addEventListener("click", function() {
+        scanAbortFlag = true;
+        progressText.textContent += " 用户触发终止，正在停止...";
+    });
+
+    /**
+     * 渲染结果表格
+     * @param {string} filterType 筛选类型 all/noHit/multiHit
+     */
+    function renderResult(filterType = "all") {
+        const keywords = parseKeywords(keywordInput.value);
+        let htmlStr = `
+        <table>
+            <thead>
+                <tr>
+                    <th>检索关键词</th>
+                    <th>命中次数</th>
+                    <th>文件路径</th>
+                    <th>工作表</th>
+                    <th>单元格</th>
+                    <th>单元格内容</th>
+                </tr>
+            </thead>
+            <tbody>
+        `;
+        keywords.forEach(function(kw) {
+            const hitList = keywordGroupMap.get(kw) || [];
+            const hitCount = hitList.length;
+
+            // 筛选过滤，return仅跳出当前单次循环，不阻断后续关键词渲染
+            if (filterType === "noHit" && hitCount > 0) return;
+            if (filterType === "multiHit" && hitCount <= 1) return;
+
+            if (hitCount === 0) {
+                htmlStr += `
+                <tr class="no-hit-row">
+                    <td>${kw}</td>
+                    <td>0</td>
+                    <td>——无匹配文件——</td>
+                    <td>——</td>
+                    <td>——</td>
+                    <td>——</td>
+                </tr>
+                `;
+            } else {
+                hitList.forEach(function(item, idx) {
+                    const kwTdHtml = idx === 0 ? `<td rowspan="${hitCount}">${kw}</td>` : "";
+                    let countDisplay = hitCount;
+                    if (hitCount > 1) {
+                        countDisplay = `<span class="multi-hit-count">${hitCount}</span>`;
+                    }
+                    const countTdHtml = idx === 0 ? `<td rowspan="${hitCount}">${countDisplay}</td>` : "";
+                    htmlStr += `
+                    <tr>
+                        ${kwTdHtml}
+                        ${countTdHtml}
+                        <td>${item.filePath}</td>
+                        <td>${item.sheetName}</td>
+                        <td>${item.cellAddr}</td>
+                        <td>${item.cellValue}</td>
+                    </tr>
+                    `;
+                });
+            }
+        });
+        htmlStr += "</tbody></table>";
+        resultTableWrap.innerHTML = htmlStr;
+    }
+
+    // 筛选按钮绑定点击事件
+    filterBtns.forEach(function(btn) {
+        btn.addEventListener("click", function() {
+            const filterType = this.dataset.filter;
+            renderResult(filterType);
+        });
+    });
+
+    // 开始扫描主逻辑
+    startBtn.addEventListener("click", async function() {
+        const keywords = parseKeywords(keywordInput.value);
+        if (keywords.length === 0) {
+            alert("请输入至少一条检索关键词！");
+            return;
+        }
+
+        // 重置扫描状态
+        scanAbortFlag = false;
+        keywordGroupMap.clear();
+        keywords.forEach(function(k) {
+            keywordGroupMap.set(k, []);
+        });
+        summaryWrap.style.display = "none";
+        filterWrap.style.display = "none";
+        resultTableWrap.innerHTML = "";
+        progressWrap.style.display = "block";
+        stopScanBtn.style.display = "inline-block";
+        startBtn.disabled = true;
+
+        // 仅筛选xlsx文件，兼容大写后缀.XLSX
+        const allFiles = Array.from(fileInput.files).filter(function(f) {
+            return f.name.toLowerCase().endsWith(".xlsx");
+        });
+        const totalFileNum = allFiles.length;
+        let scanedNum = 0;
+        let matchTotal = 0;
+        let failFileNum = 0;
+
+        progressText.textContent = `总待扫描表格：${totalFileNum} 个，开始解析...`;
+
+        // 循环遍历所有Excel文件
+        for (const file of allFiles) {
+            if (scanAbortFlag === true) break;
+            scanedNum++;
+            const percent = Math.floor((scanedNum / totalFileNum) * 100);
+            progressBar.style.width = `${percent}%`;
+            progressText.textContent = `正在解析第${scanedNum}/${totalFileNum} | 文件：${file.webkitRelativePath} | 已匹配命中：${matchTotal}条`;
+
+            try {
+                const buf = await file.arrayBuffer();
+                const workbook = XLSX.read(buf, { type: "array" });
+                workbook.SheetNames.forEach(function(sheetName) {
+                    const sheet = workbook.Sheets[sheetName];
+                    // 空表格无单元格范围，直接跳过
+                    if (!sheet["!ref"]) return;
+                    const range = XLSX.utils.decode_range(sheet["!ref"]);
+                    // 逐行逐列遍历单元格
+                    for (let r = range.s.r; r <= range.e.r; r++) {
+                        for (let c = range.s.c; c <= range.e.c; c++) {
+                            const cellAddr = XLSX.utils.encode_cell({ r, c });
+                            const cell = sheet[cellAddr];
+                            if (!cell || cell.v === undefined) continue;
+                            const cellVal = String(cell.v).trim();
+                            // 匹配关键词写入分组
+                            keywords.forEach(function(kw) {
+                                if (cellVal === kw) {
+                                    matchTotal++;
+                                    keywordGroupMap.get(kw).push({
+                                        filePath: file.webkitRelativePath,
+                                        sheetName: sheetName,
+                                        cellAddr: cellAddr,
+                                        cellValue: cellVal
+                                    });
+                                }
+                            });
+                        }
+                    }
+                });
+            } catch (err) {
+                failFileNum++;
+                progressText.textContent += ` 警告：文件${file.name}解析失败`;
+                console.error("Excel解析异常", file.name, err);
+            }
+            // 每扫描10个文件刷新一次表格预览
+            if (scanedNum % 10 === 0) {
+                renderResult();
+            }
+            // 释放浏览器渲染线程，防止页面卡死
+            await new Promise(function(resolve) {
+                setTimeout(resolve, 5);
+            });
+        }
+
+        // 扫描结束重置UI状态
+        progressWrap.style.display = "none";
+        stopScanBtn.style.display = "none";
+        startBtn.disabled = false;
+
+        // 统计命中/未命中关键词数量
+        let hitKwCount = 0;
+        let noHitKwCount = 0;
+        keywordGroupMap.forEach(function(list) {
+            if (list.length > 0) {
+                hitKwCount++;
+            } else {
+                noHitKwCount++;
+            }
+        });
+
+        // 输出扫描汇总信息
+        summaryWrap.style.display = "block";
+        summaryWrap.innerHTML = `
+            ✅ 扫描全部完成<br>
+            总扫描表格数：${totalFileNum}<br>
+            解析失败文件：${failFileNum}<br>
+            累计匹配单元格：${matchTotal}条<br>
+            检索关键词总数：${keywords.length}个<br>
+            有命中关键词：${hitKwCount}个 | 无命中关键词：${noHitKwCount}个
+        `;
+        filterWrap.style.display = "flex";
+        renderResult();
+    });
 </script>
 </body>
 </html>
