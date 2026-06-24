@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>本地XLSX批量内容检索工具</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { padding: 20px; max-width: 1400px; margin: 0 auto; background: #f5f7fa; }
+        .container { background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+        h2 { margin-bottom: 16px; color: #111827; font-size: 20px; }
+        .row { margin-bottom: 18px; }
+        label { display: block; margin-bottom: 6px; font-weight: 500; color: #374151; }
+        textarea, input[type="file"] { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background: #fff; }
+        textarea { min-height: 130px; resize: vertical; line-height: 1.5; }
+        .btns { display: flex; gap: 12px; margin-top: 8px; }
+        button { padding: 10px 22px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: opacity 0.2s; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        #startBtn { background: #2563eb; color: #fff; }
+        #clearBtn { background: #e5e7eb; color: #1f2937; }
+        .tip { font-size: 13px; color: #6b7280; margin-top: 5px; line-height: 1.4; }
+        #status { margin: 14px 0; color: #1d4ed8; font-weight: 500; min-height: 20px; }
+        #resultBox { margin-top: 20px; max-height: 650px; overflow-y: auto; border:1px solid #e5e7eb; padding:14px; border-radius:8px; background: #fafafa; }
+        .item { border-bottom: 1px solid #e5e7eb; padding:12px 0; }
+        .item:last-child { border-bottom: none; }
+        .file-path { color:#2563eb; font-weight:500; margin-bottom:6px; word-break: break-all; font-size:14px; }
+        .sheet-name { color:#059669; font-size:13px; margin-bottom:6px; }
+        .cell-info { font-size:13px; color:#374151; line-height:1.7; }
+        .keyword-tag { background:#fef3c7; color:#b45309; padding:2px 7px; border-radius:4px; margin-right:6px; display:inline-block; margin-bottom:4px; }
+        .error-log { color:#dc2626; font-size:13px; margin:6px 0; }
+    </style>
+    <!-- Excel解析库 -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="container">
+    <h2>XLSX批量内容检索（递归子文件夹）</h2>
+
+    <div class="row">
+        <label>选择目标文件夹</label>
+        <input type="file" id="folderInput" webkitdirectory multiple>
+        <div class="tip">选中仓库根目录，自动扫描全部子文件夹内.xlsx文件</div>
+    </div>
+
+    <div class="row">
+        <label>检索关键词（一行一个，可直接粘贴Excel A列）</label>
+        <textarea id="keywordInput" placeholder="示例：
+订单001
+客户张三
+2026-06
+每行一个检索词，模糊匹配单元格包含内容"></textarea>
+        <div class="tip">自动过滤空行、重复关键词，不区分单元格数据类型</div>
+    </div>
+
+    <div class="btns">
+        <button id="startBtn">开始批量搜索</button>
+        <button id="clearBtn">清空全部结果</button>
+    </div>
+
+    <div id="status"></div>
+    <div id="resultBox"></div>
+</div>
+
+<script>
+const folderInput = document.getElementById('folderInput');
+const keywordInput = document.getElementById('keywordInput');
+const startBtn = document.getElementById('startBtn');
+const clearBtn = document.getElementById('clearBtn');
+const statusEl = document.getElementById('status');
+const resultBox = document.getElementById('resultBox');
+
+// 清空面板
+clearBtn.onclick = () => {
+    resultBox.innerHTML = '';
+    statusEl.textContent = '';
+};
+
+// 数字转Excel列名 A B C ... Z AA AB
+function getColName(num) {
+    let str = '';
+    let n = num;
+    while (n >= 0) {
+        str = String.fromCharCode((n % 26) + 65) + str;
+        n = Math.floor(n / 26) - 1;
+    }
+    return str;
+}
+
+// 主检索逻辑
+startBtn.onclick = async () => {
+    // 锁定按钮防止重复执行
+    startBtn.disabled = true;
+    resultBox.innerHTML = '';
+    statusEl.textContent = '初始化检索...';
+
+    const fileList = folderInput.files;
+    const rawText = keywordInput.value.trim();
+
+    // 参数校验
+    if (!fileList || fileList.length === 0) {
+        statusEl.textContent = '错误：请先选择本地文件夹';
+        startBtn.disabled = false;
+        return;
+    }
+    if (!rawText) {
+        statusEl.textContent = '错误：关键词输入框不能为空';
+        startBtn.disabled = false;
+        return;
+    }
+
+    // 处理关键词：分行、去空白、去重
+    const keywordArr = [...new Set(
+        rawText.split('\n')
+            .map(item => item.trim())
+            .filter(item => item !== '')
+    )];
+
+    // 过滤仅xlsx文件
+    const xlsxFiles = Array.from(fileList).filter(file => {
+        return file.name.toLowerCase().endsWith('.xlsx');
+    });
+
+    let totalMatch = 0;
+    let errorCount = 0;
+
+    statusEl.textContent = `共读取文件${fileList.length}个，待扫描xlsx：${xlsxFiles.length}，检索关键词${keywordArr.length}个`;
+
+    // 循环解析每个Excel
+    for (const file of xlsxFiles) {
+        try {
+            const arrayBuf = await file.arrayBuffer();
+            const workbook = XLSX.read(arrayBuf, { type: 'array' });
+            const sheetNames = workbook.SheetNames;
+
+            // 遍历所有工作表
+            for (const sheetName of sheetNames) {
+                const sheet = workbook.Sheets[sheetName];
+                // 空表跳过
+                if (!sheet['!ref']) continue;
+                const range = XLSX.utils.decode_range(sheet['!ref']);
+
+                // 遍历单元格
+                for (let r = range.s.r; r <= range.e.r; r++) {
+                    for (let c = range.s.c; c <= range.e.c; c++) {
+                        const cellAddr = XLSX.utils.encode_cell({ r, c });
+                        const cell = sheet[cellAddr];
+                        // 空单元格跳过
+                        if (!cell || cell.v === undefined || cell.v === null) continue;
+
+                        // 统一转为字符串，避免数字/日期匹配异常
+                        const cellValue = String(cell.v);
+                        // 匹配当前单元格命中的关键词
+                        const hitWords = keywordArr.filter(kw => cellValue.includes(kw));
+
+                        if (hitWords.length > 0) {
+                            totalMatch += 1;
+                            const colLabel = getColName(c);
+                            const rowNum = r + 1;
+
+                            // 渲染单条结果
+                            const itemDiv = document.createElement('div');
+                            itemDiv.className = 'item';
+                            const tagHtml = hitWords.map(w => `<span class="keyword-tag">${w}</span>`).join('');
+                            itemDiv.innerHTML = `
+                                <div class="file-path">文件：${file.webkitRelativePath}</div>
+                                <div class="sheet-name">工作表：${sheetName}</div>
+                                <div class="cell-info">
+                                    单元格：${colLabel}${rowNum}<br/>
+                                    命中关键词：${tagHtml}<br/>
+                                    单元格内容：${cellValue}
+                                </div>
+                            `;
+                            resultBox.appendChild(itemDiv);
+                        }
+                    }
+                }
+            }
+        } catch (parseErr) {
+            errorCount += 1;
+            // 打印解析失败文件
+            const errTip = document.createElement('div');
+            errTip.className = 'error-log';
+            errTip.innerText = `解析失败：${file.webkitRelativePath}，原因：${parseErr.message}`;
+            resultBox.appendChild(errTip);
+            console.error(file.name, parseErr);
+        }
+    }
+
+    // 检索完成提示
+    statusEl.textContent = `扫描完成！共检索${xlsxFiles.length}个表格，匹配${totalMatch}处内容，解析失败文件${errorCount}个`;
+    startBtn.disabled = false;
+};
+</script>
+</body>
+</html>
