@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Excel批量关键词检索工具</title>
-    <!-- 使用 SheetJS 解析 Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js">
     </script>
     <style>
@@ -203,6 +202,10 @@
             font-size: 12px;
             white-space: nowrap;
         }
+        .keyword-tag.miss {
+            background: #f3f4f6;
+            color: #9ca3af;
+        }
         .file-tag {
             display: inline-block;
             background: #f0fdf4;
@@ -228,6 +231,49 @@
             color: #9ca3af;
             font-size: 14px;
         }
+        .hit-miss-stats {
+            background: #f9fafb;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 20px;
+            border: 1px solid #e5e7eb;
+        }
+        .hit-miss-stats .stat-item {
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+        }
+        .hit-miss-stats .stat-item .label {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .hit-miss-stats .stat-item .value {
+            font-weight: 600;
+            font-size: 15px;
+        }
+        .hit-miss-stats .stat-item .value.hit {
+            color: #2563eb;
+        }
+        .hit-miss-stats .stat-item .value.miss {
+            color: #9ca3af;
+        }
+        .miss-keywords {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .miss-keywords .keyword-tag {
+            background: #f3f4f6;
+            color: #9ca3af;
+        }
+        .inline-block {
+            display: inline-block;
+        }
         @media (max-width: 640px) {
             .container {
                 padding: 14px;
@@ -245,6 +291,11 @@
             }
             .stats-bar {
                 gap: 12px;
+            }
+            .hit-miss-stats {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
             }
         }
     </style>
@@ -330,8 +381,9 @@
                 fileMap: {},
                 totalFiles: 0,
                 totalHits: 0,
-                keywordList: [],
-                fileList: []
+                keywordList: [], // 命中关键词
+                fileList: [],
+                allKeywords: [] // 全部输入关键词（去重后）
             };
             let currentView = 'keyword';
 
@@ -379,7 +431,7 @@
                     const sheet = workbook.Sheets[sheetName];
                     if (!sheet) continue;
                     const ref = sheet['!ref'];
-                    if (!ref) continue; // 空 sheet
+                    if (!ref) continue;
                     const range = XLSX.utils.decode_range(ref);
                     for (let R = range.s.r; R <= range.e.r; R++) {
                         for (let C = range.s.c; C <= range.e.c; C++) {
@@ -464,7 +516,6 @@
                                 if (!kwGroups[m.keyword]) kwGroups[m.keyword] = [];
                                 kwGroups[m.keyword].push(m);
                             }
-                            // 更新 keywordMap
                             for (const [kw, items] of Object.entries(kwGroups)) {
                                 if (keywordMap[kw]) {
                                     keywordMap[kw].push({
@@ -480,7 +531,6 @@
                                     }];
                                 }
                             }
-                            // 更新 fileMap
                             fileMap[filePath] = {
                                 file: filePath,
                                 keywords: Object.keys(kwGroups).map(kw => ({
@@ -508,7 +558,8 @@
                     totalFiles: processed,
                     totalHits,
                     keywordList,
-                    fileList
+                    fileList,
+                    allKeywords: keywords // 保存全部输入关键词
                 };
 
                 isScanning = false;
@@ -552,40 +603,80 @@
                 }
             }
 
+            // ---------- 关键词视图（包含命中/未命中统计） ----------
             function renderKeywordView() {
-                const { keywordMap, keywordList } = resultData;
-                if (keywordList.length === 0) {
-                    tableContainer.innerHTML = `<div class="no-data-msg">暂无匹配数据</div>`;
-                    return;
-                }
-                let html = `<table>
-                        <thead><tr><th style="width:18%;">🔑 关键词</th><th>📁 匹配的 Excel 文件（命中次数）</th></tr></thead>
-                        <tbody>`;
-                for (const kw of keywordList) {
-                    const entries = keywordMap[kw] || [];
-                    const totalKwHits = entries.reduce((sum, e) => sum + e.count, 0);
-                    html += `<tr>
-                            <td><strong>${escapeHtml(kw)}</strong> <span class="count-badge">${totalKwHits}</span></td>
-                            <td>`;
-                    if (entries.length === 0) {
-                        html += `<span style="color:#9ca3af;">无</span>`;
-                    } else {
-                        for (const entry of entries) {
-                            const sheetsStr = entry.sheets && entry.sheets.length > 0 ?
-                                ` (Sheet: ${entry.sheets.join(', ')})` :
-                                '';
-                            html += `<div style="display:block;margin-bottom:4px;background:#f3f4f6;padding:4px 8px;border-radius:4px;">
-                                    <span style="font-weight:500;">📄 ${escapeHtml(entry.file)}</span>
-                                    <span class="count-badge">${entry.count} 次${sheetsStr}</span>
-                                </div>`;
-                        }
+                const { keywordMap, keywordList, allKeywords } = resultData;
+                const hitKeywords = keywordList || [];
+                const totalKeywords = allKeywords || [];
+                const missKeywords = totalKeywords.filter(k => !hitKeywords.includes(k));
+
+                let html = '';
+
+                // 统计卡片
+                html += `<div class="hit-miss-stats">
+                            <div class="stat-item">
+                                <span class="label">📌 总关键词</span>
+                                <span class="value">${totalKeywords.length}</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="label">✅ 命中</span>
+                                <span class="value hit">${hitKeywords.length}</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="label">❌ 未命中</span>
+                                <span class="value miss">${missKeywords.length}</span>
+                            </div>
+                        </div>`;
+
+                // 如果有未命中的，显示列表
+                if (missKeywords.length > 0) {
+                    html += `<div style="margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+                                <span style="font-size:13px;color:#6b7280;">未命中关键词：</span>
+                                <span class="miss-keywords">`;
+                    for (const kw of missKeywords) {
+                        html += `<span class="keyword-tag miss">${escapeHtml(kw)}</span>`;
                     }
-                    html += `</td></tr>`;
+                    html += `</span></div>`;
+                } else if (totalKeywords.length > 0) {
+                    html += `<div style="margin-bottom:12px;color:#065f46;font-size:14px;">🎉 所有关键词均有命中！</div>`;
                 }
-                html += `</tbody></table>`;
+
+                // 命中的详细表格
+                if (hitKeywords.length === 0) {
+                    // 如果总关键词>0但全部未命中，仍显示统计，但表格显示"暂无命中数据"
+                    html += `<div class="no-data-msg">暂无命中数据</div>`;
+                } else {
+                    html += `<table>
+                            <thead><tr><th style="width:18%;">🔑 关键词</th><th>📁 匹配的 Excel 文件（命中次数）</th></tr></thead>
+                            <tbody>`;
+                    for (const kw of hitKeywords) {
+                        const entries = keywordMap[kw] || [];
+                        const totalKwHits = entries.reduce((sum, e) => sum + e.count, 0);
+                        html += `<tr>
+                                <td><strong>${escapeHtml(kw)}</strong> <span class="count-badge">${totalKwHits}</span></td>
+                                <td>`;
+                        if (entries.length === 0) {
+                            html += `<span style="color:#9ca3af;">无</span>`;
+                        } else {
+                            for (const entry of entries) {
+                                const sheetsStr = entry.sheets && entry.sheets.length > 0 ?
+                                    ` (Sheet: ${entry.sheets.join(', ')})` :
+                                    '';
+                                html += `<div style="display:block;margin-bottom:4px;background:#f3f4f6;padding:4px 8px;border-radius:4px;">
+                                        <span style="font-weight:500;">📄 ${escapeHtml(entry.file)}</span>
+                                        <span class="count-badge">${entry.count} 次${sheetsStr}</span>
+                                    </div>`;
+                            }
+                        }
+                        html += `</td></tr>`;
+                    }
+                    html += `</tbody></table>`;
+                }
+
                 tableContainer.innerHTML = html;
             }
 
+            // ---------- 文件视图 ----------
             function renderFileView() {
                 const { fileMap, fileList } = resultData;
                 if (fileList.length === 0) {
@@ -617,7 +708,8 @@
             }
 
             function updateStats() {
-                statKeywords.textContent = resultData.keywordList.length;
+                const totalKw = resultData.allKeywords ? resultData.allKeywords.length : 0;
+                statKeywords.textContent = totalKw;
                 statFiles.textContent = resultData.fileList.length;
                 statHits.textContent = resultData.totalHits;
             }
@@ -633,7 +725,6 @@
                 if (isScanning) {
                     if (!confirm('扫描正在进行，确定要终止并清空结果吗？')) return;
                     stopRequested = true;
-                    // 等待扫描线程检测到停止
                     setTimeout(() => {
                         isScanning = false;
                         startBtn.disabled = false;
@@ -647,7 +738,8 @@
                     totalFiles: 0,
                     totalHits: 0,
                     keywordList: [],
-                    fileList: []
+                    fileList: [],
+                    allKeywords: []
                 };
                 resultArea.style.display = 'none';
                 scanSummary.style.display = 'none';
@@ -720,7 +812,6 @@
                 });
             });
 
-            // 关键词输入实时控制开始按钮
             keywordInput.addEventListener('input', () => {
                 if (selectedFiles.length > 0 && !isScanning) {
                     const kw = parseKeywords(keywordInput.value);
