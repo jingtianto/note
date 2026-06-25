@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Excel批量关键词检索工具</title>
+    <!-- 使用 SheetJS 解析 Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js">
+    </script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: "Microsoft Yahei", sans-serif;
+        }
+        body {
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 24px;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        }
+        .title {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #1f2937;
+        }
+        .input-area {
+            margin-bottom: 16px;
+        }
+        .input-desc {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+        #keywordInput {
+            width: 100%;
+            height: 140px;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin: 16px 0;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 24px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        #startBtn {
+            background-color: #2563eb;
+            color: white;
+        }
+        #startBtn:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+        #clearResBtn {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+        #stopScanBtn {
+            background-color: #f87171;
+            color: white;
+            display: none;
+        }
+        .folder-select-wrap {
+            margin: 12px 0;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+        #folderTip {
+            color: #2563eb;
+            font-size: 14px;
+        }
+        #folderTip.error {
+            color: #dc2626;
+        }
+        #fileInput {
+            display: none;
+        }
+        .progress-wrap {
+            margin: 20px 0;
+            display: none;
+        }
+        .progress-text {
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #374151;
+            word-break: break-all;
+        }
+        .progress-bar-bg {
+            width: 100%;
+            height: 12px;
+            background-color: #e5e7eb;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .progress-bar-inner {
+            height: 100%;
+            width: 0%;
+            background-color: #2563eb;
+            transition: width 0.3s;
+        }
+        .scan-summary {
+            margin: 16px 0;
+            padding: 12px;
+            background-color: #f0fdf4;
+            border-radius: 6px;
+            color: #065f46;
+            line-height: 1.6;
+        }
+
+        .view-toggle {
+            display: flex;
+            gap: 12px;
+            margin: 18px 0 12px 0;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 10px;
+        }
+        .view-toggle button {
+            background: transparent;
+            border: none;
+            padding: 8px 18px;
+            font-size: 14px;
+            color: #6b7280;
+            cursor: pointer;
+            border-radius: 20px;
+            transition: 0.2s;
+            font-weight: 500;
+        }
+        .view-toggle button.active {
+            background: #2563eb;
+            color: #fff;
+        }
+        .view-toggle button:hover:not(.active) {
+            background: #f3f4f6;
+        }
+
+        .stats-bar {
+            display: flex;
+            gap: 24px;
+            padding: 10px 0 6px 0;
+            font-size: 13px;
+            color: #4b5563;
+            flex-wrap: wrap;
+        }
+        .stats-bar span strong {
+            color: #1f2937;
+        }
+
+        .table-scroll {
+            max-height: 600px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th,
+        td {
+            border: 1px solid #e5e7eb;
+            padding: 10px 12px;
+            text-align: left;
+            word-break: break-all;
+            vertical-align: top;
+        }
+        th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        .keyword-tag {
+            display: inline-block;
+            background: #eff6ff;
+            color: #2563eb;
+            padding: 2px 10px;
+            border-radius: 12px;
+            margin: 2px 4px 2px 0;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        .file-tag {
+            display: inline-block;
+            background: #f0fdf4;
+            color: #065f46;
+            padding: 2px 10px;
+            border-radius: 12px;
+            margin: 2px 4px 2px 0;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        .count-badge {
+            display: inline-block;
+            background: #e5e7eb;
+            color: #374151;
+            padding: 0 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+        .no-data-msg {
+            padding: 30px 0;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 14px;
+        }
+        @media (max-width: 640px) {
+            .container {
+                padding: 14px;
+            }
+            .btn-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .folder-select-wrap {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .view-toggle {
+                flex-wrap: wrap;
+            }
+            .stats-bar {
+                gap: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 class="title">📊 Excel批量关键词检索工具</h2>
+
+        <div class="input-area">
+            <div class="input-desc">检索关键词（一行一个，支持英文逗号 , 分隔多关键词；自动去重、剔除空行）</div>
+            <textarea id="keywordInput" placeholder="示例：
+        1757610,1778200
+        1778199
+        1757609"></textarea>
+        </div>
+
+        <div class="folder-select-wrap">
+            <input type="file" id="fileInput" webkitdirectory multiple />
+            <button id="selectFolderBtn">📁 选择本地检索根文件夹</button>
+            <div id="folderTip" class="error">⚠️ 请先选择本地文件夹</div>
+        </div>
+
+        <div class="btn-group">
+            <button id="startBtn" disabled>🚀 开始批量搜索</button>
+            <button id="clearResBtn">🗑️ 清空全部结果</button>
+            <button id="stopScanBtn">⏹️ 终止扫描</button>
+        </div>
+
+        <div class="progress-wrap" id="progressWrap">
+            <div class="progress-text" id="progressText">正在预扫描目录，统计文件总数...</div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-inner" id="progressBar"></div>
+            </div>
+        </div>
+
+        <div class="scan-summary" id="scanSummary" style="display:none;"></div>
+
+        <div id="resultArea" style="display:none;">
+            <div class="view-toggle">
+                <button class="active" data-view="keyword">🔑 按关键词统计</button>
+                <button data-view="file">📄 按 Excel 文件统计</button>
+            </div>
+            <div class="stats-bar" id="statsBar">
+                <span>📌 关键词总数：<strong id="statKeywords">0</strong></span>
+                <span>📁 匹配文件数：<strong id="statFiles">0</strong></span>
+                <span>🔍 总命中次数：<strong id="statHits">0</strong></span>
+            </div>
+            <div class="table-scroll" id="tableContainer">
+                <div class="no-data-msg">暂无数据</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            // DOM 引用
+            const keywordInput = document.getElementById('keywordInput');
+            const fileInput = document.getElementById('fileInput');
+            const selectFolderBtn = document.getElementById('selectFolderBtn');
+            const folderTip = document.getElementById('folderTip');
+            const startBtn = document.getElementById('startBtn');
+            const clearResBtn = document.getElementById('clearResBtn');
+            const stopScanBtn = document.getElementById('stopScanBtn');
+            const progressWrap = document.getElementById('progressWrap');
+            const progressText = document.getElementById('progressText');
+            const progressBar = document.getElementById('progressBar');
+            const scanSummary = document.getElementById('scanSummary');
+            const resultArea = document.getElementById('resultArea');
+            const tableContainer = document.getElementById('tableContainer');
+            const statKeywords = document.getElementById('statKeywords');
+            const statFiles = document.getElementById('statFiles');
+            const statHits = document.getElementById('statHits');
+
+            // 状态
+            let selectedFiles = [];
+            let isScanning = false;
+            let stopRequested = false;
+
+            let resultData = {
+                keywordMap: {},
+                fileMap: {},
+                totalFiles: 0,
+                totalHits: 0,
+                keywordList: [],
+                fileList: []
+            };
+            let currentView = 'keyword';
+
+            // 工具函数
+            function getFileExtension(name) {
+                const i = name.lastIndexOf('.');
+                return i > 0 ? name.substring(i + 1).toLowerCase() : '';
+            }
+
+            function isExcelFile(name) {
+                const ext = getFileExtension(name);
+                return ['xlsx', 'xls', 'xlsm', 'xlsb'].includes(ext);
+            }
+
+            function parseKeywords(text) {
+                const lines = text.split(/\r?\n/);
+                const set = new Set();
+                for (let line of lines) {
+                    line = line.trim();
+                    if (!line) continue;
+                    const parts = line.split(',').map(s => s.trim()).filter(s => s);
+                    for (let p of parts) {
+                        if (p) set.add(p);
+                    }
+                }
+                return Array.from(set);
+            }
+
+            function readFileAsBuffer(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = (e) => reject(e.target.error);
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+
+            // 搜索 Excel，返回匹配数组
+            function searchExcel(data, keywords) {
+                const workbook = XLSX.read(data, { type: 'array', cellDates: false });
+                const matches = [];
+                const sheetNames = workbook.SheetNames;
+
+                for (const sheetName of sheetNames) {
+                    const sheet = workbook.Sheets[sheetName];
+                    if (!sheet) continue;
+                    const ref = sheet['!ref'];
+                    if (!ref) continue; // 空 sheet
+                    const range = XLSX.utils.decode_range(ref);
+                    for (let R = range.s.r; R <= range.e.r; R++) {
+                        for (let C = range.s.c; C <= range.e.c; C++) {
+                            const addr = XLSX.utils.encode_cell({ r: R, c: C });
+                            const cell = sheet[addr];
+                            if (!cell) continue;
+                            const val = cell.v;
+                            if (val === undefined || val === null) continue;
+                            const strVal = String(val);
+                            if (!strVal) continue;
+                            for (const kw of keywords) {
+                                if (strVal.includes(kw)) {
+                                    matches.push({
+                                        keyword: kw,
+                                        sheet: sheetName,
+                                        cell: addr,
+                                        value: strVal
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                return matches;
+            }
+
+            // 核心搜索
+            async function performSearch() {
+                const rawText = keywordInput.value;
+                const keywords = parseKeywords(rawText);
+                if (keywords.length === 0) {
+                    alert('请至少输入一个有效关键词。');
+                    return;
+                }
+                if (selectedFiles.length === 0) {
+                    alert('请先选择包含 Excel 文件的文件夹。');
+                    return;
+                }
+                const excelFiles = selectedFiles.filter(f => isExcelFile(f.name));
+                if (excelFiles.length === 0) {
+                    alert('所选文件夹中没有找到 Excel 文件（.xlsx / .xls）。');
+                    return;
+                }
+
+                stopRequested = false;
+                isScanning = true;
+                startBtn.disabled = true;
+                stopScanBtn.style.display = 'inline-block';
+                stopScanBtn.disabled = false;
+                stopScanBtn.textContent = '⏹️ 终止扫描';
+                progressWrap.style.display = 'block';
+                resultArea.style.display = 'none';
+                scanSummary.style.display = 'none';
+
+                const keywordMap = {};
+                const fileMap = {};
+                let totalHits = 0;
+                let processed = 0;
+                const total = excelFiles.length;
+
+                for (const kw of keywords) {
+                    keywordMap[kw] = [];
+                }
+
+                progressText.textContent = `正在搜索 ${total} 个 Excel 文件...`;
+                progressBar.style.width = '0%';
+
+                for (let i = 0; i < excelFiles.length; i++) {
+                    if (stopRequested) {
+                        progressText.textContent = '⏹️ 扫描已终止。';
+                        break;
+                    }
+                    const file = excelFiles[i];
+                    const filePath = file.webkitRelativePath || file.name;
+
+                    try {
+                        const buffer = await readFileAsBuffer(file);
+                        const matches = searchExcel(buffer, keywords);
+                        if (matches.length > 0) {
+                            const kwGroups = {};
+                            for (const m of matches) {
+                                if (!kwGroups[m.keyword]) kwGroups[m.keyword] = [];
+                                kwGroups[m.keyword].push(m);
+                            }
+                            // 更新 keywordMap
+                            for (const [kw, items] of Object.entries(kwGroups)) {
+                                if (keywordMap[kw]) {
+                                    keywordMap[kw].push({
+                                        file: filePath,
+                                        count: items.length,
+                                        sheets: [...new Set(items.map(m => m.sheet))]
+                                    });
+                                } else {
+                                    keywordMap[kw] = [{
+                                        file: filePath,
+                                        count: items.length,
+                                        sheets: [...new Set(items.map(m => m.sheet))]
+                                    }];
+                                }
+                            }
+                            // 更新 fileMap
+                            fileMap[filePath] = {
+                                file: filePath,
+                                keywords: Object.keys(kwGroups).map(kw => ({
+                                    keyword: kw,
+                                    count: kwGroups[kw].length
+                                }))
+                            };
+                            totalHits += matches.length;
+                        }
+                        processed++;
+                        const pct = Math.round((processed / total) * 100);
+                        progressBar.style.width = pct + '%';
+                        progressText.textContent = `进度 ${processed}/${total} (${pct}%) — 当前: ${file.name}`;
+                    } catch (err) {
+                        console.warn('读取文件失败:', file.name, err);
+                    }
+                }
+
+                const keywordList = Object.keys(keywordMap).filter(k => keywordMap[k].length > 0).sort();
+                const fileList = Object.keys(fileMap).sort();
+
+                resultData = {
+                    keywordMap,
+                    fileMap,
+                    totalFiles: processed,
+                    totalHits,
+                    keywordList,
+                    fileList
+                };
+
+                isScanning = false;
+                startBtn.disabled = false;
+                stopScanBtn.style.display = 'none';
+
+                if (keywordList.length === 0 && fileList.length === 0) {
+                    progressText.textContent = '✅ 搜索完成，未找到任何匹配。';
+                    scanSummary.style.display = 'block';
+                    scanSummary.innerHTML = `
+                            <strong>🔍 搜索完成</strong><br/>
+                            共扫描 ${processed} 个 Excel 文件，关键词 ${keywords.length} 个，未发现匹配项。
+                        `;
+                    resultArea.style.display = 'none';
+                } else {
+                    progressText.textContent = `✅ 搜索完成！共 ${keywordList.length} 个关键词命中 ${fileList.length} 个文件，总命中 ${totalHits} 次。`;
+                    scanSummary.style.display = 'block';
+                    scanSummary.innerHTML = `
+                            <strong>✅ 搜索完成</strong><br/>
+                            扫描文件：${processed} 个 Excel 文件 &nbsp;|&nbsp;
+                            关键词总数：${keywords.length} 个 &nbsp;|&nbsp;
+                            命中关键词：${keywordList.length} 个 &nbsp;|&nbsp;
+                            匹配文件数：${fileList.length} 个 &nbsp;|&nbsp;
+                            总命中次数：${totalHits} 次
+                        `;
+                    resultArea.style.display = 'block';
+                    renderView(currentView);
+                }
+                updateStats();
+            }
+
+            function renderView(view) {
+                currentView = view;
+                document.querySelectorAll('.view-toggle button').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.view === view);
+                });
+                if (view === 'keyword') {
+                    renderKeywordView();
+                } else {
+                    renderFileView();
+                }
+            }
+
+            function renderKeywordView() {
+                const { keywordMap, keywordList } = resultData;
+                if (keywordList.length === 0) {
+                    tableContainer.innerHTML = `<div class="no-data-msg">暂无匹配数据</div>`;
+                    return;
+                }
+                let html = `<table>
+                        <thead><tr><th style="width:18%;">🔑 关键词</th><th>📁 匹配的 Excel 文件（命中次数）</th></tr></thead>
+                        <tbody>`;
+                for (const kw of keywordList) {
+                    const entries = keywordMap[kw] || [];
+                    const totalKwHits = entries.reduce((sum, e) => sum + e.count, 0);
+                    html += `<tr>
+                            <td><strong>${escapeHtml(kw)}</strong> <span class="count-badge">${totalKwHits}</span></td>
+                            <td>`;
+                    if (entries.length === 0) {
+                        html += `<span style="color:#9ca3af;">无</span>`;
+                    } else {
+                        for (const entry of entries) {
+                            const sheetsStr = entry.sheets && entry.sheets.length > 0 ?
+                                ` (Sheet: ${entry.sheets.join(', ')})` :
+                                '';
+                            html += `<div style="display:block;margin-bottom:4px;background:#f3f4f6;padding:4px 8px;border-radius:4px;">
+                                    <span style="font-weight:500;">📄 ${escapeHtml(entry.file)}</span>
+                                    <span class="count-badge">${entry.count} 次${sheetsStr}</span>
+                                </div>`;
+                        }
+                    }
+                    html += `</td></tr>`;
+                }
+                html += `</tbody></table>`;
+                tableContainer.innerHTML = html;
+            }
+
+            function renderFileView() {
+                const { fileMap, fileList } = resultData;
+                if (fileList.length === 0) {
+                    tableContainer.innerHTML = `<div class="no-data-msg">暂无匹配数据</div>`;
+                    return;
+                }
+                let html = `<table>
+                        <thead><tr><th style="width:35%;">📄 Excel 文件</th><th>🔑 命中的关键词（次数）</th></tr></thead>
+                        <tbody>`;
+                for (const filePath of fileList) {
+                    const entry = fileMap[filePath];
+                    if (!entry) continue;
+                    const keywords = entry.keywords || [];
+                    const totalFileHits = keywords.reduce((sum, k) => sum + k.count, 0);
+                    html += `<tr>
+                            <td><strong>${escapeHtml(filePath)}</strong> <span class="count-badge">${totalFileHits}</span></td>
+                            <td>`;
+                    if (keywords.length === 0) {
+                        html += `<span style="color:#9ca3af;">无</span>`;
+                    } else {
+                        for (const k of keywords) {
+                            html += `<span class="keyword-tag">${escapeHtml(k.keyword)} <span class="count-badge">${k.count}</span></span>`;
+                        }
+                    }
+                    html += `</td></tr>`;
+                }
+                html += `</tbody></table>`;
+                tableContainer.innerHTML = html;
+            }
+
+            function updateStats() {
+                statKeywords.textContent = resultData.keywordList.length;
+                statFiles.textContent = resultData.fileList.length;
+                statHits.textContent = resultData.totalHits;
+            }
+
+            function escapeHtml(str) {
+                if (!str) return '';
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            }
+
+            function clearAll() {
+                if (isScanning) {
+                    if (!confirm('扫描正在进行，确定要终止并清空结果吗？')) return;
+                    stopRequested = true;
+                    // 等待扫描线程检测到停止
+                    setTimeout(() => {
+                        isScanning = false;
+                        startBtn.disabled = false;
+                        stopScanBtn.style.display = 'none';
+                        stopScanBtn.disabled = false;
+                    }, 500);
+                }
+                resultData = {
+                    keywordMap: {},
+                    fileMap: {},
+                    totalFiles: 0,
+                    totalHits: 0,
+                    keywordList: [],
+                    fileList: []
+                };
+                resultArea.style.display = 'none';
+                scanSummary.style.display = 'none';
+                progressWrap.style.display = 'none';
+                progressBar.style.width = '0%';
+                progressText.textContent = '';
+                tableContainer.innerHTML = '<div class="no-data-msg">暂无数据</div>';
+                statKeywords.textContent = '0';
+                statFiles.textContent = '0';
+                statHits.textContent = '0';
+                startBtn.disabled = false;
+                stopScanBtn.style.display = 'none';
+                isScanning = false;
+                stopRequested = false;
+            }
+
+            // 事件绑定
+            selectFolderBtn.addEventListener('click', () => fileInput.click());
+
+            fileInput.addEventListener('change', (e) => {
+                const files = e.target.files;
+                if (files.length === 0) {
+                    selectedFiles = [];
+                    folderTip.textContent = '⚠️ 未选择任何文件夹';
+                    folderTip.className = 'error';
+                    startBtn.disabled = true;
+                    return;
+                }
+                const fileList = [];
+                let folderName = '';
+                for (let i = 0; i < files.length; i++) {
+                    const f = files[i];
+                    fileList.push(f);
+                    if (i === 0) {
+                        const path = f.webkitRelativePath || f.name;
+                        const parts = path.split('/');
+                        folderName = parts.length > 1 ? parts[0] : path;
+                    }
+                }
+                selectedFiles = fileList;
+                const excelCount = fileList.filter(f => isExcelFile(f.name)).length;
+                folderTip.textContent = `📁 已选文件夹: ${folderName}  (共 ${fileList.length} 个文件，其中 Excel ${excelCount} 个)`;
+                folderTip.className = '';
+                const kw = parseKeywords(keywordInput.value);
+                startBtn.disabled = (kw.length === 0);
+            });
+
+            startBtn.addEventListener('click', performSearch);
+
+            clearResBtn.addEventListener('click', clearAll);
+
+            stopScanBtn.addEventListener('click', () => {
+                if (isScanning) {
+                    stopRequested = true;
+                    stopScanBtn.disabled = true;
+                    stopScanBtn.textContent = '⏹️ 正在终止...';
+                    setTimeout(() => {
+                        stopScanBtn.disabled = false;
+                        stopScanBtn.textContent = '⏹️ 终止扫描';
+                    }, 2000);
+                }
+            });
+
+            document.querySelectorAll('.view-toggle button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const view = btn.dataset.view;
+                    if (view !== currentView && resultArea.style.display !== 'none') {
+                        renderView(view);
+                    }
+                });
+            });
+
+            // 关键词输入实时控制开始按钮
+            keywordInput.addEventListener('input', () => {
+                if (selectedFiles.length > 0 && !isScanning) {
+                    const kw = parseKeywords(keywordInput.value);
+                    startBtn.disabled = kw.length === 0;
+                }
+            });
+
+            // 初始状态
+            startBtn.disabled = true;
+            folderTip.textContent = '⚠️ 请先选择本地文件夹';
+            folderTip.className = 'error';
+            tableContainer.innerHTML = '<div class="no-data-msg">暂无数据</div>';
+
+            console.log('Excel 批量关键词检索工具已加载 ✅');
+        })();
+    </script>
+</body>
+</html>
