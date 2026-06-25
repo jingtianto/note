@@ -125,7 +125,14 @@
             background-color: #f0fdf4;
             border-radius: 6px;
             color: #065f46;
-            line-height: 1.6;
+            line-height: 1.8;
+        }
+        .scan-summary strong {
+            font-size: 15px;
+        }
+        .scan-summary .stat-item {
+            display: inline-block;
+            margin-right: 24px;
         }
 
         .view-toggle {
@@ -154,23 +161,12 @@
             background: #f3f4f6;
         }
 
-        .stats-bar {
-            display: flex;
-            gap: 24px;
-            padding: 10px 0 6px 0;
-            font-size: 13px;
-            color: #4b5563;
-            flex-wrap: wrap;
-        }
-        .stats-bar span strong {
-            color: #1f2937;
-        }
-
-        .table-scroll {
-            max-height: 600px;
-            overflow-y: auto;
+        /* 表格容器 - 无滚动条，完全展开 */
+        .table-wrap {
+            margin-top: 6px;
             border: 1px solid #e5e7eb;
             border-radius: 6px;
+            overflow: hidden;
         }
         table {
             width: 100%;
@@ -188,9 +184,6 @@
         th {
             background-color: #f9fafb;
             font-weight: 600;
-            position: sticky;
-            top: 0;
-            z-index: 2;
         }
         .keyword-tag {
             display: inline-block;
@@ -205,16 +198,6 @@
         .keyword-tag.miss {
             background: #f3f4f6;
             color: #9ca3af;
-        }
-        .file-tag {
-            display: inline-block;
-            background: #f0fdf4;
-            color: #065f46;
-            padding: 2px 10px;
-            border-radius: 12px;
-            margin: 2px 4px 2px 0;
-            font-size: 12px;
-            white-space: nowrap;
         }
         .count-badge {
             display: inline-block;
@@ -271,9 +254,6 @@
             background: #f3f4f6;
             color: #9ca3af;
         }
-        .inline-block {
-            display: inline-block;
-        }
         @media (max-width: 640px) {
             .container {
                 padding: 14px;
@@ -289,13 +269,14 @@
             .view-toggle {
                 flex-wrap: wrap;
             }
-            .stats-bar {
-                gap: 12px;
-            }
             .hit-miss-stats {
                 flex-direction: column;
                 align-items: stretch;
                 gap: 8px;
+            }
+            .scan-summary .stat-item {
+                display: block;
+                margin-right: 0;
             }
         }
     </style>
@@ -331,6 +312,7 @@
             </div>
         </div>
 
+        <!-- 精简后的扫描摘要（唯一统计信息） -->
         <div class="scan-summary" id="scanSummary" style="display:none;"></div>
 
         <div id="resultArea" style="display:none;">
@@ -338,12 +320,8 @@
                 <button class="active" data-view="keyword">🔑 按关键词统计</button>
                 <button data-view="file">📄 按 Excel 文件统计</button>
             </div>
-            <div class="stats-bar" id="statsBar">
-                <span>📌 关键词总数：<strong id="statKeywords">0</strong></span>
-                <span>📁 匹配文件数：<strong id="statFiles">0</strong></span>
-                <span>🔍 总命中次数：<strong id="statHits">0</strong></span>
-            </div>
-            <div class="table-scroll" id="tableContainer">
+            <!-- 表格容器，无滚动条 -->
+            <div class="table-wrap" id="tableContainer">
                 <div class="no-data-msg">暂无数据</div>
             </div>
         </div>
@@ -367,9 +345,6 @@
             const scanSummary = document.getElementById('scanSummary');
             const resultArea = document.getElementById('resultArea');
             const tableContainer = document.getElementById('tableContainer');
-            const statKeywords = document.getElementById('statKeywords');
-            const statFiles = document.getElementById('statFiles');
-            const statHits = document.getElementById('statHits');
 
             // 状态
             let selectedFiles = [];
@@ -559,19 +534,22 @@
                     totalHits,
                     keywordList,
                     fileList,
-                    allKeywords: keywords // 保存全部输入关键词
+                    allKeywords: keywords
                 };
 
                 isScanning = false;
                 startBtn.disabled = false;
                 stopScanBtn.style.display = 'none';
 
+                // 显示精简的扫描摘要（仅此一份）
                 if (keywordList.length === 0 && fileList.length === 0) {
                     progressText.textContent = '✅ 搜索完成，未找到任何匹配。';
                     scanSummary.style.display = 'block';
                     scanSummary.innerHTML = `
                             <strong>🔍 搜索完成</strong><br/>
-                            共扫描 ${processed} 个 Excel 文件，关键词 ${keywords.length} 个，未发现匹配项。
+                            <span class="stat-item">📁 扫描文件：${processed} 个</span>
+                            <span class="stat-item">🔑 关键词总数：${keywords.length} 个</span>
+                            <span class="stat-item">❌ 未发现匹配项</span>
                         `;
                     resultArea.style.display = 'none';
                 } else {
@@ -579,16 +557,15 @@
                     scanSummary.style.display = 'block';
                     scanSummary.innerHTML = `
                             <strong>✅ 搜索完成</strong><br/>
-                            扫描文件：${processed} 个 Excel 文件 &nbsp;|&nbsp;
-                            关键词总数：${keywords.length} 个 &nbsp;|&nbsp;
-                            命中关键词：${keywordList.length} 个 &nbsp;|&nbsp;
-                            匹配文件数：${fileList.length} 个 &nbsp;|&nbsp;
-                            总命中次数：${totalHits} 次
+                            <span class="stat-item">📁 扫描文件：${processed} 个</span>
+                            <span class="stat-item">🔑 关键词总数：${keywords.length} 个</span>
+                            <span class="stat-item">✅ 命中关键词：${keywordList.length} 个</span>
+                            <span class="stat-item">📄 匹配文件数：${fileList.length} 个</span>
+                            <span class="stat-item">🔍 总命中次数：${totalHits} 次</span>
                         `;
                     resultArea.style.display = 'block';
                     renderView(currentView);
                 }
-                updateStats();
             }
 
             function renderView(view) {
@@ -612,7 +589,7 @@
 
                 let html = '';
 
-                // 统计卡片
+                // 命中/未命中统计卡片（补充细分信息）
                 html += `<div class="hit-miss-stats">
                             <div class="stat-item">
                                 <span class="label">📌 总关键词</span>
@@ -628,7 +605,7 @@
                             </div>
                         </div>`;
 
-                // 如果有未命中的，显示列表
+                // 未命中列表
                 if (missKeywords.length > 0) {
                     html += `<div style="margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
                                 <span style="font-size:13px;color:#6b7280;">未命中关键词：</span>
@@ -641,9 +618,8 @@
                     html += `<div style="margin-bottom:12px;color:#065f46;font-size:14px;">🎉 所有关键词均有命中！</div>`;
                 }
 
-                // 命中的详细表格
+                // 命中详细表格
                 if (hitKeywords.length === 0) {
-                    // 如果总关键词>0但全部未命中，仍显示统计，但表格显示"暂无命中数据"
                     html += `<div class="no-data-msg">暂无命中数据</div>`;
                 } else {
                     html += `<table>
@@ -707,13 +683,6 @@
                 tableContainer.innerHTML = html;
             }
 
-            function updateStats() {
-                const totalKw = resultData.allKeywords ? resultData.allKeywords.length : 0;
-                statKeywords.textContent = totalKw;
-                statFiles.textContent = resultData.fileList.length;
-                statHits.textContent = resultData.totalHits;
-            }
-
             function escapeHtml(str) {
                 if (!str) return '';
                 const div = document.createElement('div');
@@ -747,9 +716,6 @@
                 progressBar.style.width = '0%';
                 progressText.textContent = '';
                 tableContainer.innerHTML = '<div class="no-data-msg">暂无数据</div>';
-                statKeywords.textContent = '0';
-                statFiles.textContent = '0';
-                statHits.textContent = '0';
                 startBtn.disabled = false;
                 stopScanBtn.style.display = 'none';
                 isScanning = false;
