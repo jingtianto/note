@@ -187,6 +187,17 @@
             background: #94a3b8;
             cursor: not-allowed;
         }
+        .btn-load-result {
+            background: #0b5e42;
+            color: #fff;
+        }
+        .btn-load-result:hover {
+            background: #065f46;
+        }
+        .btn-load-result:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
         .file-input-hidden {
             display: none;
         }
@@ -207,7 +218,7 @@
             font-size: 13px;
             color: #1f2937;
             gap: 8px;
-            max-width: 460px;
+            max-width: 500px;
         }
         .path-tag .name {
             overflow: hidden;
@@ -232,6 +243,9 @@
         }
         .path-tag .count.json {
             background: #8b5cf6;
+        }
+        .path-tag .count.result {
+            background: #0b5e42;
         }
         @keyframes pulse {
             0%,
@@ -268,6 +282,10 @@
             background: #ede9fe;
             color: #7c3aed;
         }
+        .path-tag .status-tag.result {
+            background: #d1fae5;
+            color: #065f46;
+        }
         .path-tag .tag-type {
             font-size: 10px;
             padding: 0 6px;
@@ -282,6 +300,10 @@
         .path-tag .tag-type.json {
             background: #ede9fe;
             color: #7c3aed;
+        }
+        .path-tag .tag-type.result {
+            background: #d1fae5;
+            color: #065f46;
         }
 
         .btn-group {
@@ -714,7 +736,7 @@
         <div class="loading-overlay" id="loadingOverlay">
             <div class="loading-box">
                 <div class="spinner"></div>
-                <div class="msg" id="loadingMsg">正在扫描文件夹...</div>
+                <div class="msg" id="loadingMsg">正在处理...</div>
                 <div class="sub-msg" id="loadingSubMsg">请稍候</div>
             </div>
         </div>
@@ -739,12 +761,14 @@
 
         <div class="path-manager">
             <div class="label-row">
-                <span>📁 数据源（文件夹 或 JSON清单）</span>
+                <span>📁 数据源</span>
                 <div class="btn-group-row">
                     <button class="btn-add-path" id="addPathBtn">📂 添加文件夹</button>
                     <button class="btn-load-json" id="loadJsonBtn">📋 加载 JSON 清单</button>
+                    <button class="btn-load-result" id="loadResultBtn">📊 加载搜索结果 JSON</button>
                     <input type="file" id="folderPicker" class="file-input-hidden" webkitdirectory multiple />
                     <input type="file" id="jsonPicker" class="file-input-hidden" accept=".json" />
+                    <input type="file" id="resultPicker" class="file-input-hidden" accept=".json" />
                 </div>
             </div>
             <div class="path-tags" id="pathTags">
@@ -792,8 +816,10 @@
             var pkTags = document.getElementById('pkTags');
             var folderPicker = document.getElementById('folderPicker');
             var jsonPicker = document.getElementById('jsonPicker');
+            var resultPicker = document.getElementById('resultPicker');
             var addPathBtn = document.getElementById('addPathBtn');
             var loadJsonBtn = document.getElementById('loadJsonBtn');
+            var loadResultBtn = document.getElementById('loadResultBtn');
             var pathTags = document.getElementById('pathTags');
             var keywordSearchBtn = document.getElementById('keywordSearchBtn');
             var fullScanBtn = document.getElementById('fullScanBtn');
@@ -819,6 +845,7 @@
             var currentView = 'keyword';
             var isCounting = false;
             var hasResult = false;
+            var isResultFromJson = false;
 
             // 结果存储
             var resultData = {
@@ -995,6 +1022,8 @@
                 var all = [];
                 for (var pi = 0; pi < folderPaths.length; pi++) {
                     var p = folderPaths[pi];
+                    if (p.source === 'result') continue;
+                    if (!p.files) continue;
                     var files = p.files;
                     for (var fi = 0; fi < files.length; fi++) {
                         var f = files[fi];
@@ -1037,10 +1066,10 @@
             function countFilesAsync(folderIndex) {
                 var p = folderPaths[folderIndex];
                 if (!p || p.counted) return;
-                if (p.source === 'json') {
+                if (p.source === 'json' || p.source === 'result') {
                     p.counted = true;
-                    p.totalCount = p.files.length;
-                    p.excelCount = p.files.filter(function(f) { return isExcelFile(f.name); }).length;
+                    p.totalCount = p.files ? p.files.length : 0;
+                    p.excelCount = p.files ? p.files.filter(function(f) { return isExcelFile(f.name); }).length : 0;
                     updatePathTags();
                     updateButtons();
                     return;
@@ -1165,6 +1194,139 @@
                 reader.readAsText(file);
             }
 
+            // ---- 加载搜索结果 JSON ----
+            function loadResultJsonFile(file) {
+                showLoading('正在加载搜索结果...', '请稍候');
+
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        var data = JSON.parse(e.target.result);
+                        var results = data.results || [];
+
+                        if (results.length === 0) {
+                            hideLoading();
+                            alert('搜索结果 JSON 中没有命中记录。');
+                            return;
+                        }
+
+                        var ids = data.ids || [];
+                        var totalHits = data.total_hits || 0;
+                        var totalFiles = data.total_files_scanned || 0;
+
+                        var keywordMap = {};
+                        var fileMap = {};
+
+                        for (var ri = 0; ri < results.length; ri++) {
+                            var result = results[ri];
+                            var filePath = result.file;
+                            var lastModified = result.last_modified || Date.now();
+
+                            fileMap[filePath] = {
+                                file: filePath,
+                                keywords: result.keywords || [],
+                                lastModified: lastModified
+                            };
+
+                            var keywords = result.keywords || [];
+                            for (var ki = 0; ki < keywords.length; ki++) {
+                                var kw = keywords[ki].keyword;
+                                var count = keywords[ki].count || 0;
+                                var sheets = keywords[ki].sheets || [];
+
+                                if (!keywordMap[kw]) {
+                                    keywordMap[kw] = [];
+                                }
+
+                                var exists = false;
+                                for (var ei = 0; ei < keywordMap[kw].length; ei++) {
+                                    if (keywordMap[kw][ei].file === filePath) {
+                                        exists = true;
+                                        break;
+                                    }
+                                }
+
+                                if (!exists) {
+                                    keywordMap[kw].push({
+                                        file: filePath,
+                                        count: count,
+                                        sheets: sheets,
+                                        lastModified: lastModified
+                                    });
+                                }
+                            }
+                        }
+
+                        var keywordList = Object.keys(keywordMap).filter(function(k) {
+                            return keywordMap[k].length > 0;
+                        }).sort();
+                        var fileList = Object.keys(fileMap).sort();
+
+                        resultData = {
+                            keywordMap: keywordMap,
+                            fileMap: fileMap,
+                            totalFiles: totalFiles,
+                            totalHits: totalHits,
+                            keywordList: keywordList,
+                            fileList: fileList,
+                            allKeywords: ids
+                        };
+
+                        hasResult = true;
+                        isResultFromJson = true;
+                        resultArea.style.display = 'block';
+                        exportBtn.disabled = false;
+
+                        scanSummary.style.display = 'block';
+                        scanSummary.innerHTML =
+                            '<strong>📊 搜索结果加载成功</strong><br/>' +
+                            '<span class="stat-item">📁 扫描文件：' + totalFiles + ' 个</span>' +
+                            '<span class="stat-item">🔑 ID 总数：' + ids.length + ' 个</span>' +
+                            '<span class="stat-item">✅ 命中 ID：' + keywordList.length + ' 个</span>' +
+                            '<span class="stat-item">📄 匹配文件数：' + fileList.length + ' 个</span>' +
+                            '<span class="stat-item">🔍 总命中次数：' + totalHits + ' 次</span>';
+
+                        progressText.textContent = '✅ 搜索结果加载完成！共 ' + keywordList.length + ' 个 ID 命中 ' +
+                            fileList.length + ' 个文件，总命中 ' + totalHits + ' 次。';
+
+                        // 移除已存在的同名结果源
+                        for (var pi = folderPaths.length - 1; pi >= 0; pi--) {
+                            if (folderPaths[pi].source === 'result') {
+                                folderPaths.splice(pi, 1);
+                            }
+                        }
+
+                        var resultName = file.name;
+                        var newFolder = {
+                            name: resultName,
+                            files: [],
+                            counted: true,
+                            totalCount: results.length,
+                            excelCount: results.length,
+                            _countingStarted: true,
+                            source: 'result',
+                            jsonData: data
+                        };
+                        folderPaths.push(newFolder);
+                        updatePathTags();
+
+                        hideLoading();
+                        renderView(currentView);
+                        showToast('✅ 搜索结果加载成功：' + fileList.length + ' 个匹配文件');
+
+                    } catch (err) {
+                        hideLoading();
+                        alert('JSON 解析失败: ' + err.message);
+                        console.error(err);
+                    }
+                };
+                reader.onerror = function() {
+                    hideLoading();
+                    alert('读取 JSON 文件失败');
+                };
+                reader.readAsText(file);
+            }
+
             // ---- 重置扫描状态 ----
             function resetScanState() {
                 isScanning = false;
@@ -1179,12 +1341,22 @@
 
             // ---- 核心搜索 ----
             async function performSearch(searchMode) {
-                if (folderPaths.length === 0) {
-                    alert('请至少选择一个数据源（文件夹或 JSON 清单）。');
+                // 检查是否有可用的数据源（排除 result 类型）
+                var hasFolderSource = false;
+                for (var pi = 0; pi < folderPaths.length; pi++) {
+                    if (folderPaths[pi].source !== 'result') {
+                        hasFolderSource = true;
+                        break;
+                    }
+                }
+
+                if (!hasFolderSource) {
+                    alert('请至少添加一个文件夹或 JSON 清单作为数据源（搜索结果 JSON 不能用于重新搜索）。');
                     return;
                 }
 
                 for (var pi = 0; pi < folderPaths.length; pi++) {
+                    if (folderPaths[pi].source === 'result') continue;
                     if (!folderPaths[pi].counted) {
                         alert('请等待数据源 "' + folderPaths[pi].name + '" 统计完成后再搜索。');
                         return;
@@ -1216,6 +1388,7 @@
                 scanSummary.style.display = 'none';
                 progressBar.style.width = '0%';
                 hasResult = false;
+                isResultFromJson = false;
                 exportBtn.disabled = true;
 
                 try {
@@ -1341,6 +1514,7 @@
                     };
 
                     hasResult = true;
+                    isResultFromJson = false;
                     resetScanState();
 
                     if (searchIds.length > 0 && keywordList.length === 0 && fileList.length === 0) {
@@ -1637,7 +1811,7 @@
             // ---- 导出 Excel ----
             function exportExcel() {
                 if (!hasResult) {
-                    alert('请先执行搜索。');
+                    alert('请先执行搜索或加载搜索结果。');
                     return;
                 }
 
@@ -1799,6 +1973,7 @@
                     allKeywords: []
                 };
                 hasResult = false;
+                isResultFromJson = false;
                 exportBtn.disabled = true;
                 resultArea.style.display = 'none';
                 scanSummary.style.display = 'none';
@@ -1850,18 +2025,26 @@
                     tag.setAttribute('data-index', i);
 
                     var isJson = p.source === 'json';
+                    var isResult = p.source === 'result';
                     var countText = '统计中...';
                     var countClass = 'count loading';
                     var statusText = '⏳ 统计中...';
                     var statusClass = 'status-tag';
-                    var typeText = isJson ? '📋 JSON' : '📂 文件夹';
-                    var typeClass = isJson ? 'tag-type json' : 'tag-type folder';
+                    var typeText = isResult ? '📊 结果' : (isJson ? '📋 JSON' : '📂 文件夹');
+                    var typeClass = isResult ? 'tag-type result' : (isJson ? 'tag-type json' : 'tag-type folder');
 
                     if (p.counted) {
-                        countText = p.totalCount + ' / ' + p.excelCount + ' Excel';
-                        countClass = isJson ? 'count json' : 'count done';
-                        statusText = isJson ? '✅ 已加载' : '✅ 就绪';
-                        statusClass = isJson ? 'status-tag json' : 'status-tag done';
+                        if (isResult) {
+                            countText = p.totalCount + ' 个匹配文件';
+                            countClass = 'count result';
+                            statusText = '✅ 已加载';
+                            statusClass = 'status-tag result';
+                        } else {
+                            countText = p.totalCount + ' / ' + p.excelCount + ' Excel';
+                            countClass = isJson ? 'count json' : 'count done';
+                            statusText = isJson ? '✅ 已加载' : '✅ 就绪';
+                            statusClass = isJson ? 'status-tag json' : 'status-tag done';
+                        }
                     }
 
                     tag.innerHTML =
@@ -1895,10 +2078,19 @@
             // ---- 按钮状态更新 ----
             function updateButtons() {
                 var hasPaths = folderPaths.length > 0;
+                // 检查是否有非 result 类型的数据源
+                var hasSearchableSource = false;
+                for (var i = 0; i < folderPaths.length; i++) {
+                    if (folderPaths[i].source !== 'result') {
+                        hasSearchableSource = true;
+                        break;
+                    }
+                }
                 var hasIds = parseIds(idInput.value).length > 0;
                 var hasPk = pathKeywords.length > 0;
                 var allCounted = true;
                 for (var i = 0; i < folderPaths.length; i++) {
+                    if (folderPaths[i].source === 'result') continue;
                     if (!folderPaths[i].counted) {
                         allCounted = false;
                         break;
@@ -1906,8 +2098,8 @@
                 }
                 var pathsReady = hasPaths && allCounted;
 
-                keywordSearchBtn.disabled = !pathsReady || !hasIds || !hasPk || isScanning;
-                fullScanBtn.disabled = !pathsReady || isScanning;
+                keywordSearchBtn.disabled = !hasSearchableSource || !pathsReady || !hasIds || !hasPk || isScanning;
+                fullScanBtn.disabled = !hasSearchableSource || !pathsReady || isScanning;
                 addPathBtn.disabled = folderPaths.length >= 8;
                 addPkBtn.disabled = !pkInput.value.trim();
             }
@@ -1975,7 +2167,8 @@
                     }
 
                     for (var pi = 0; pi < folderPaths.length; pi++) {
-                        if (folderPaths[pi].name === folderName && folderPaths[pi].source !== 'json') {
+                        if (folderPaths[pi].name === folderName && folderPaths[pi].source !== 'json' && folderPaths[pi]
+                            .source !== 'result') {
                             hideLoading();
                             alert('文件夹 "' + folderName + '" 已添加，请勿重复添加。');
                             folderPicker.value = '';
@@ -2001,7 +2194,7 @@
                 }, 100);
             });
 
-            // ---- 加载 JSON ----
+            // ---- 加载 JSON 清单 ----
             loadJsonBtn.addEventListener('click', function() {
                 jsonPicker.click();
             });
@@ -2017,6 +2210,24 @@
                 }
                 loadJsonFile(file);
                 jsonPicker.value = '';
+            });
+
+            // ---- 加载搜索结果 JSON ----
+            loadResultBtn.addEventListener('click', function() {
+                resultPicker.click();
+            });
+
+            resultPicker.addEventListener('change', function(e) {
+                var files = e.target.files;
+                if (files.length === 0) return;
+                var file = files[0];
+                if (!file.name.endsWith('.json')) {
+                    alert('请选择 JSON 文件。');
+                    resultPicker.value = '';
+                    return;
+                }
+                loadResultJsonFile(file);
+                resultPicker.value = '';
             });
 
             // ---- ID 输入更新按钮 ----
