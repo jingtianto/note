@@ -30,26 +30,112 @@
             margin-bottom: 20px;
             color: #1f2937;
         }
-        .input-area {
-            margin-bottom: 16px;
-        }
-        .input-desc {
+        .section-title {
             font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 6px;
+        }
+        .section-desc {
+            font-size: 13px;
             color: #6b7280;
             margin-bottom: 8px;
         }
-        #keywordInput {
+        .input-area {
+            margin-bottom: 16px;
+        }
+        #idInput {
             width: 100%;
-            height: 120px;
+            height: 100px;
             padding: 12px;
             border: 1px solid #d1d5db;
             border-radius: 6px;
             font-size: 14px;
             resize: vertical;
         }
-        .path-manager {
+        /* 关键路径管理 */
+        .path-keyword-manager {
             margin: 16px 0;
-            padding: 12px;
+            padding: 12px 16px;
+            background: #f9fafb;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        .path-keyword-manager .row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .path-keyword-manager .row input {
+            flex: 1;
+            min-width: 160px;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .path-keyword-manager .row input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+        .btn-add-pk {
+            background: #2563eb;
+            color: #fff;
+            padding: 8px 18px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+        .btn-add-pk:hover {
+            background: #1d4ed8;
+        }
+        .btn-add-pk:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+        .pk-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+            min-height: 32px;
+            align-items: center;
+        }
+        .pk-tag {
+            display: inline-flex;
+            align-items: center;
+            background: #e5e7eb;
+            border-radius: 16px;
+            padding: 4px 10px 4px 14px;
+            font-size: 13px;
+            color: #1f2937;
+            gap: 6px;
+        }
+        .pk-tag .del {
+            cursor: pointer;
+            font-weight: bold;
+            color: #6b7280;
+            font-size: 16px;
+            line-height: 1;
+            padding: 0 2px;
+        }
+        .pk-tag .del:hover {
+            color: #dc2626;
+        }
+        .pk-empty-tip {
+            font-size: 13px;
+            color: #9ca3af;
+        }
+
+        /* 文件夹选择 */
+        .path-manager {
+            margin: 12px 0;
+            padding: 12px 16px;
             background: #f9fafb;
             border-radius: 8px;
             border: 1px solid #e5e7eb;
@@ -58,7 +144,6 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
             flex-wrap: wrap;
             gap: 8px;
         }
@@ -71,6 +156,7 @@
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
+            margin-top: 8px;
             min-height: 36px;
             align-items: center;
         }
@@ -125,6 +211,10 @@
         .btn-add-path:hover:not(:disabled) {
             background: #1d4ed8;
         }
+        .file-input-hidden {
+            display: none;
+        }
+
         .btn-group {
             display: flex;
             gap: 12px;
@@ -165,9 +255,7 @@
             color: white;
             display: none;
         }
-        .file-input-hidden {
-            display: none;
-        }
+
         .progress-wrap {
             margin: 20px 0;
             display: none;
@@ -366,6 +454,10 @@
                 flex-direction: column;
                 align-items: stretch;
             }
+            .path-keyword-manager .row {
+                flex-direction: column;
+                align-items: stretch;
+            }
             .view-toggle {
                 flex-wrap: wrap;
             }
@@ -388,11 +480,27 @@
     <div class="container">
         <h2 class="title">📊 Excel批量关键词检索工具（增强版）</h2>
 
+        <!-- ID 输入区 -->
         <div class="input-area">
-            <div class="input-desc">检索关键词（一行一个，支持英文逗号分隔；全量搜索忽略此框）</div>
-            <textarea id="keywordInput" placeholder="示例：&#10;1757610,1778200&#10;1778199&#10;NA6-26"></textarea>
+            <div class="section-title">🔑 ID 列表</div>
+            <div class="section-desc">在 Excel 内容中检索的 ID（一行一个，支持英文逗号分隔；全量搜索忽略此框）</div>
+            <textarea id="idInput" placeholder="示例：&#10;1757610,1778200&#10;1778199&#10;1530042"></textarea>
         </div>
 
+        <!-- 关键路径管理 -->
+        <div class="path-keyword-manager">
+            <div class="section-title">📌 关键路径</div>
+            <div class="section-desc">用于筛选文件夹范围（路径包含任一关键词即纳入），不区分大小写</div>
+            <div class="row">
+                <input type="text" id="pkInput" placeholder="输入关键路径词，如 NA6-26" />
+                <button class="btn-add-pk" id="addPkBtn">➕ 添加</button>
+            </div>
+            <div class="pk-tags" id="pkTags">
+                <span class="pk-empty-tip">暂无关键路径，请添加</span>
+            </div>
+        </div>
+
+        <!-- 文件夹选择 -->
         <div class="path-manager">
             <div class="label-row">
                 <span>📁 已选文件夹（最多8个）</span>
@@ -401,12 +509,14 @@
                     <input type="file" id="folderPicker" class="file-input-hidden" webkitdirectory multiple />
                 </div>
             </div>
-            <div class="path-tags" id="pathTags"></div>
+            <div class="path-tags" id="pathTags">
+                <span style="font-size:13px;color:#9ca3af;">暂未选择文件夹</span>
+            </div>
         </div>
 
         <div class="btn-group">
             <button id="keywordSearchBtn" disabled>🔍 关键词优先搜索</button>
-            <button id="fullScanBtn" disabled>📂 全量搜索（忽略关键词）</button>
+            <button id="fullScanBtn" disabled>📂 全量搜索（忽略ID和关键路径）</button>
             <button id="clearResBtn">🗑️ 清空全部结果</button>
             <button id="stopScanBtn">⏹️ 终止扫描</button>
         </div>
@@ -422,7 +532,7 @@
 
         <div id="resultArea" style="display:none;">
             <div class="view-toggle">
-                <button class="active" data-view="keyword">🔑 按关键词统计</button>
+                <button class="active" data-view="keyword">🔑 按ID统计</button>
                 <button data-view="file">📄 按 Excel 文件统计</button>
             </div>
             <div class="table-wrap" id="tableContainer">
@@ -436,7 +546,10 @@
             'use strict';
 
             // DOM refs
-            var keywordInput = document.getElementById('keywordInput');
+            var idInput = document.getElementById('idInput');
+            var pkInput = document.getElementById('pkInput');
+            var addPkBtn = document.getElementById('addPkBtn');
+            var pkTags = document.getElementById('pkTags');
             var folderPicker = document.getElementById('folderPicker');
             var addPathBtn = document.getElementById('addPathBtn');
             var pathTags = document.getElementById('pathTags');
@@ -453,6 +566,7 @@
 
             // 状态
             var folderPaths = [];
+            var pathKeywords = [];
             var isScanning = false;
             var stopRequested = false;
             var currentView = 'keyword';
@@ -479,7 +593,7 @@
                 return ['xlsx', 'xls', 'xlsm', 'xlsb'].indexOf(ext) !== -1;
             }
 
-            function parseKeywords(text) {
+            function parseIds(text) {
                 if (!text || !text.trim()) return [];
                 var lines = text.split(/\r?\n/);
                 var set = {};
@@ -530,7 +644,7 @@
             }
 
             // ---- 搜索 Excel ----
-            function searchExcel(data, keywords) {
+            function searchExcel(data, ids) {
                 var workbook = XLSX.read(data, { type: 'array', cellDates: false });
                 var matches = [];
                 var sheetNames = workbook.SheetNames;
@@ -551,10 +665,10 @@
                             if (val === undefined || val === null) continue;
                             var strVal = String(val);
                             if (!strVal) continue;
-                            for (var ki = 0; ki < keywords.length; ki++) {
-                                var kw = keywords[ki];
-                                if (strVal.indexOf(kw) !== -1) {
-                                    matches.push({ keyword: kw, sheet: sheetName, cell: addr, value: strVal });
+                            for (var ki = 0; ki < ids.length; ki++) {
+                                var id = ids[ki];
+                                if (strVal.indexOf(id) !== -1) {
+                                    matches.push({ keyword: id, sheet: sheetName, cell: addr, value: strVal });
                                 }
                             }
                         }
@@ -583,60 +697,23 @@
                 return all;
             }
 
-            // ---- 关键词优先搜索：查找包含关键词的目录 ----
-            function findKeywordFolders(keyword) {
-                var kwLower = keyword.toLowerCase();
-                var matchedFolders = [];
-                for (var pi = 0; pi < folderPaths.length; pi++) {
-                    var p = folderPaths[pi];
-                    var files = p.files;
-                    for (var fi = 0; fi < files.length; fi++) {
-                        var f = files[fi];
-                        var fullPath = f.webkitRelativePath || f.name;
-                        var parts = fullPath.split('/');
-                        for (var di = 0; di < parts.length - 1; di++) {
-                            if (parts[di].toLowerCase().indexOf(kwLower) !== -1) {
-                                matchedFolders.push({
-                                    root: p,
-                                    folderPath: parts.slice(0, di + 1).join('/'),
-                                    file: f
-                                });
-                                break;
-                            }
-                        }
-                    }
-                }
-                var seen = {};
-                var unique = [];
-                for (var mi = 0; mi < matchedFolders.length; mi++) {
-                    var item = matchedFolders[mi];
-                    var key = item.root.name + '|' + item.folderPath;
-                    if (!seen[key]) {
-                        seen[key] = true;
-                        unique.push(item);
-                    }
-                }
-                return unique;
-            }
+            // ---- 按关键路径筛选文件夹 ----
+            function filterFilesByPathKeywords(allFiles) {
+                if (pathKeywords.length === 0) return allFiles;
 
-            // ---- 从匹配的文件夹中收集 Excel 文件 ----
-            function collectFilesFromMatchedFolders(matchedFolders) {
-                var fileSet = {};
                 var result = [];
-                for (var mi = 0; mi < matchedFolders.length; mi++) {
-                    var item = matchedFolders[mi];
-                    var root = item.root;
-                    var folderPath = item.folderPath;
-                    var files = root.files;
-                    for (var fi = 0; fi < files.length; fi++) {
-                        var f = files[fi];
-                        var fp = f.webkitRelativePath || f.name;
-                        if (fp.indexOf(folderPath + '/') === 0 && isExcelFile(f.name)) {
-                            if (!fileSet[fp]) {
-                                fileSet[fp] = true;
-                                result.push({ file: f, path: fp });
-                            }
+                for (var fi = 0; fi < allFiles.length; fi++) {
+                    var item = allFiles[fi];
+                    var pathLower = item.path.toLowerCase();
+                    var matched = false;
+                    for (var ki = 0; ki < pathKeywords.length; ki++) {
+                        if (pathLower.indexOf(pathKeywords[ki].toLowerCase()) !== -1) {
+                            matched = true;
+                            break;
                         }
+                    }
+                    if (matched) {
+                        result.push(item);
                     }
                 }
                 return result;
@@ -657,30 +734,19 @@
             // ---- 核心搜索 ----
             async function performSearch(searchMode) {
                 if (folderPaths.length === 0) {
-                    alert('请至少添加一个文件夹路径。');
+                    alert('请至少选择一个文件夹。');
                     return;
                 }
 
-                var keywords = [];
-                var matchedFolderItems = null;
-
+                var ids = [];
                 if (searchMode === 'keyword') {
-                    var rawText = keywordInput.value;
-                    keywords = parseKeywords(rawText);
-                    if (keywords.length === 0) {
-                        alert('关键词优先搜索需要至少一个关键词。');
+                    ids = parseIds(idInput.value);
+                    if (ids.length === 0) {
+                        alert('关键词优先搜索需要至少输入一个 ID。');
                         return;
                     }
-                    var kwLower = keywords[0].toLowerCase();
-                    for (var pi = 0; pi < folderPaths.length; pi++) {
-                        if (folderPaths[pi].name.toLowerCase().indexOf(kwLower) !== -1) {
-                            alert('根目录 "' + folderPaths[pi].name + '" 包含关键词 "' + keywords[0] + '"，请调整关键词或使用全量搜索。');
-                            return;
-                        }
-                    }
-                    matchedFolderItems = findKeywordFolders(keywords[0]);
-                    if (matchedFolderItems.length === 0) {
-                        alert('未找到包含关键词的文件夹，请尝试其他关键词或使用全量搜索。');
+                    if (pathKeywords.length === 0) {
+                        alert('关键词优先搜索需要至少添加一个关键路径。');
                         return;
                     }
                 }
@@ -698,23 +764,24 @@
                 progressBar.style.width = '0%';
 
                 try {
-                    var excelFiles = [];
-                    if (searchMode === 'keyword') {
-                        var collected = collectFilesFromMatchedFolders(matchedFolderItems);
-                        excelFiles = collected;
-                    } else {
-                        var allFiles = collectAllExcelFiles();
-                        excelFiles = allFiles;
-                    }
+                    // 收集所有 Excel 文件
+                    var allFiles = collectAllExcelFiles();
+
+                    // 按关键路径筛选
+                    var excelFiles = (searchMode === 'keyword') ?
+                        filterFilesByPathKeywords(allFiles) :
+                        allFiles;
 
                     if (excelFiles.length === 0) {
-                        progressText.textContent = '未找到任何 Excel 文件。';
+                        progressText.textContent = searchMode === 'keyword' ?
+                            '未找到匹配关键路径的 Excel 文件。' :
+                            '未找到任何 Excel 文件。';
                         progressWrap.style.display = 'none';
                         resetScanState();
                         return;
                     }
 
-                    var searchKeywords = (searchMode === 'keyword') ? keywords : [];
+                    var searchIds = (searchMode === 'keyword') ? ids : [];
 
                     var keywordMap = {};
                     var fileMap = {};
@@ -722,9 +789,9 @@
                     var processed = 0;
                     var total = excelFiles.length;
 
-                    if (searchKeywords.length > 0) {
-                        for (var kwi = 0; kwi < searchKeywords.length; kwi++) {
-                            keywordMap[searchKeywords[kwi]] = [];
+                    if (searchIds.length > 0) {
+                        for (var kwi = 0; kwi < searchIds.length; kwi++) {
+                            keywordMap[searchIds[kwi]] = [];
                         }
                     }
 
@@ -742,7 +809,7 @@
 
                         try {
                             var buffer = await readFileAsBuffer(file);
-                            var matches = (searchKeywords.length > 0) ? searchExcel(buffer, searchKeywords) : [];
+                            var matches = (searchIds.length > 0) ? searchExcel(buffer, searchIds) : [];
                             if (matches.length > 0) {
                                 var kwGroups = {};
                                 for (var mi2 = 0; mi2 < matches.length; mi2++) {
@@ -784,7 +851,7 @@
                                     lastModified: lastModified
                                 };
                                 totalHits += matches.length;
-                            } else if (searchKeywords.length === 0) {
+                            } else if (searchIds.length === 0) {
                                 if (!fileMap[path]) {
                                     fileMap[path] = {
                                         file: path,
@@ -817,21 +884,21 @@
                         totalHits: totalHits,
                         keywordList: keywordList,
                         fileList: fileList,
-                        allKeywords: searchKeywords
+                        allKeywords: searchIds
                     };
 
                     resetScanState();
 
-                    if (searchKeywords.length > 0 && keywordList.length === 0 && fileList.length === 0) {
-                        progressText.textContent = '✅ 搜索完成，未找到任何匹配。';
+                    if (searchIds.length > 0 && keywordList.length === 0 && fileList.length === 0) {
+                        progressText.textContent = '✅ 搜索完成，未找到任何匹配的 ID。';
                         scanSummary.style.display = 'block';
                         scanSummary.innerHTML =
                             '<strong>🔍 搜索完成</strong><br/>' +
                             '<span class="stat-item">📁 扫描文件：' + processed + ' 个</span>' +
-                            '<span class="stat-item">🔑 关键词总数：' + searchKeywords.length + ' 个</span>' +
+                            '<span class="stat-item">🔑 ID 总数：' + searchIds.length + ' 个</span>' +
                             '<span class="stat-item">❌ 未发现匹配项</span>';
                         resultArea.style.display = 'none';
-                    } else if (searchKeywords.length === 0 && fileList.length > 0) {
+                    } else if (searchIds.length === 0 && fileList.length > 0) {
                         progressText.textContent = '✅ 全量扫描完成，共 ' + fileList.length + ' 个 Excel 文件。';
                         scanSummary.style.display = 'block';
                         scanSummary.innerHTML =
@@ -841,14 +908,14 @@
                         resultArea.style.display = 'block';
                         renderView(currentView);
                     } else {
-                        progressText.textContent = '✅ 搜索完成！共 ' + keywordList.length + ' 个关键词命中 ' + fileList.length +
+                        progressText.textContent = '✅ 搜索完成！共 ' + keywordList.length + ' 个 ID 命中 ' + fileList.length +
                             ' 个文件，总命中 ' + totalHits + ' 次。';
                         scanSummary.style.display = 'block';
                         scanSummary.innerHTML =
                             '<strong>✅ 搜索完成</strong><br/>' +
                             '<span class="stat-item">📁 扫描文件：' + processed + ' 个</span>' +
-                            '<span class="stat-item">🔑 关键词总数：' + searchKeywords.length + ' 个</span>' +
-                            '<span class="stat-item">✅ 命中关键词：' + keywordList.length + ' 个</span>' +
+                            '<span class="stat-item">🔑 ID 总数：' + searchIds.length + ' 个</span>' +
+                            '<span class="stat-item">✅ 命中 ID：' + keywordList.length + ' 个</span>' +
                             '<span class="stat-item">📄 匹配文件数：' + fileList.length + ' 个</span>' +
                             '<span class="stat-item">🔍 总命中次数：' + totalHits + ' 次</span>';
                         resultArea.style.display = 'block';
@@ -905,7 +972,7 @@
                 var html = '';
 
                 html += '<div class="hit-miss-stats">' +
-                    '<div class="stat-item"><span class="label">📌 总关键词</span><span class="value">' + totalKeywords
+                    '<div class="stat-item"><span class="label">📌 总 ID</span><span class="value">' + totalKeywords
                     .length + '</span></div>' +
                     '<div class="stat-item"><span class="label">✅ 命中</span><span class="value hit">' + hitKeywords
                     .length + '</span></div>' +
@@ -915,21 +982,21 @@
 
                 if (missKeywords.length > 0) {
                     html += '<div style="margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">' +
-                        '<span style="font-size:13px;color:#6b7280;">未命中关键词：</span>' +
+                        '<span style="font-size:13px;color:#6b7280;">未命中 ID：</span>' +
                         '<span class="miss-keywords">';
                     for (var mki = 0; mki < missKeywords.length; mki++) {
                         html += '<span class="keyword-tag miss">' + escapeHtml(missKeywords[mki]) + '</span>';
                     }
                     html += '</span></div>';
                 } else if (totalKeywords.length > 0) {
-                    html += '<div style="margin-bottom:12px;color:#065f46;font-size:14px;">🎉 所有关键词均有命中！</div>';
+                    html += '<div style="margin-bottom:12px;color:#065f46;font-size:14px;">🎉 所有 ID 均有命中！</div>';
                 }
 
                 if (hitKeywords.length === 0) {
                     html += '<div class="no-data-msg">暂无命中数据</div>';
                 } else {
                     html += '<table>' +
-                        '<thead><tr><th style="width:18%;">🔑 关键词</th><th>📁 匹配的 Excel 文件（命中次数 / 最后修改）</th></tr></thead>' +
+                        '<thead><tr><th style="width:18%;">🔑 ID</th><th>📁 匹配的 Excel 文件（命中次数 / 最后修改）</th></tr></thead>' +
                         '<tbody>';
                     for (var hki = 0; hki < hitKeywords.length; hki++) {
                         var kw = hitKeywords[hki];
@@ -1004,7 +1071,7 @@
                 }
 
                 var html = '<table>' +
-                    '<thead><tr><th style="width:35%;">📄 Excel 文件（最后修改）</th><th>🔑 命中的关键词（次数）</th></tr></thead>' +
+                    '<thead><tr><th style="width:35%;">📄 Excel 文件（最后修改）</th><th>🔑 命中的 ID（次数）</th></tr></thead>' +
                     '<tbody>';
 
                 for (var fi = 0; fi < fileList.length; fi++) {
@@ -1029,7 +1096,7 @@
                         '<td>';
 
                     if (keywords.length === 0) {
-                        html += '<span style="color:#9ca3af;">无匹配关键词</span>';
+                        html += '<span style="color:#9ca3af;">无匹配 ID</span>';
                     } else {
                         for (var ki3 = 0; ki3 < keywords.length; ki3++) {
                             var k = keywords[ki3];
@@ -1065,14 +1132,13 @@
                     if (!confirm('扫描正在进行，确定要终止并清空结果吗？')) return;
                     stopRequested = true;
                     var waitCount = 0;
-                    var maxWait = 50; // 最多等待5秒 (50 * 100ms)
+                    var maxWait = 50;
                     var checkStop = function() {
                         if (isScanning && waitCount < maxWait) {
                             waitCount++;
                             setTimeout(checkStop, 100);
                         } else {
                             if (isScanning) {
-                                // 超时强制重置
                                 isScanning = false;
                                 stopRequested = false;
                             }
@@ -1105,9 +1171,40 @@
                 resetScanState();
             }
 
+            // ---- 关键路径管理 ----
+            function updatePkTags() {
+                pkTags.innerHTML = '';
+                if (pathKeywords.length === 0) {
+                    pkTags.innerHTML = '<span class="pk-empty-tip">暂无关键路径，请添加</span>';
+                    return;
+                }
+                for (var i = 0; i < pathKeywords.length; i++) {
+                    var tag = document.createElement('span');
+                    tag.className = 'pk-tag';
+                    tag.innerHTML =
+                        '<span>' + escapeHtml(pathKeywords[i]) + '</span>' +
+                        '<span class="del" data-index="' + i + '">✕</span>';
+                    pkTags.appendChild(tag);
+                }
+                var dels = pkTags.querySelectorAll('.del');
+                for (var di = 0; di < dels.length; di++) {
+                    dels[di].addEventListener('click', function() {
+                        var idx = parseInt(this.dataset.index, 10);
+                        pathKeywords.splice(idx, 1);
+                        updatePkTags();
+                        updateButtons();
+                    });
+                }
+                updateButtons();
+            }
+
             // ---- 路径管理 ----
             function updatePathTags() {
                 pathTags.innerHTML = '';
+                if (folderPaths.length === 0) {
+                    pathTags.innerHTML = '<span style="font-size:13px;color:#9ca3af;">暂未选择文件夹</span>';
+                    return;
+                }
                 for (var i = 0; i < folderPaths.length; i++) {
                     var p = folderPaths[i];
                     var tag = document.createElement('span');
@@ -1123,7 +1220,7 @@
                         '<span class="del" data-index="' + i + '">✕</span>';
                     pathTags.appendChild(tag);
                 }
-                var dels = document.querySelectorAll('.path-tag .del');
+                var dels = pathTags.querySelectorAll('.del');
                 for (var di = 0; di < dels.length; di++) {
                     dels[di].addEventListener('click', function() {
                         var idx = parseInt(this.dataset.index, 10);
@@ -1136,13 +1233,48 @@
                 updateButtons();
             }
 
+            // ---- 按钮状态更新 ----
             function updateButtons() {
                 var hasPaths = folderPaths.length > 0;
-                var hasKeywords = parseKeywords(keywordInput.value).length > 0;
-                keywordSearchBtn.disabled = !hasPaths || !hasKeywords || isScanning;
+                var hasIds = parseIds(idInput.value).length > 0;
+                var hasPk = pathKeywords.length > 0;
+                keywordSearchBtn.disabled = !hasPaths || !hasIds || !hasPk || isScanning;
                 fullScanBtn.disabled = !hasPaths || isScanning;
                 addPathBtn.disabled = folderPaths.length >= 8;
+                addPkBtn.disabled = !pkInput.value.trim();
             }
+
+            // ---- 添加关键路径 ----
+            addPkBtn.addEventListener('click', function() {
+                var val = pkInput.value.trim();
+                if (!val) return;
+                // 去重
+                var exists = false;
+                for (var i = 0; i < pathKeywords.length; i++) {
+                    if (pathKeywords[i].toLowerCase() === val.toLowerCase()) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (exists) {
+                    alert('关键路径 "' + val + '" 已存在。');
+                    pkInput.value = '';
+                    return;
+                }
+                pathKeywords.push(val);
+                pkInput.value = '';
+                updatePkTags();
+                updateButtons();
+            });
+
+            pkInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addPkBtn.click();
+                }
+            });
+
+            pkInput.addEventListener('input', updateButtons);
 
             // ---- 添加文件夹 ----
             addPathBtn.addEventListener('click', function() {
@@ -1180,7 +1312,10 @@
                 doClear();
             });
 
-            // ---- 按钮事件 ----
+            // ---- ID 输入更新按钮 ----
+            idInput.addEventListener('input', updateButtons);
+
+            // ---- 搜索按钮 ----
             keywordSearchBtn.addEventListener('click', function() {
                 performSearch('keyword');
             });
@@ -1214,10 +1349,8 @@
                 });
             }
 
-            // ---- 关键词输入更新按钮状态 ----
-            keywordInput.addEventListener('input', updateButtons);
-
             // ---- 初始化 ----
+            updatePkTags();
             updatePathTags();
             tableContainer.innerHTML = '<div class="no-data-msg">暂无数据</div>';
             console.log('Excel 批量关键词检索工具（增强版）已加载 ✅');
