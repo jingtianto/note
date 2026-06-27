@@ -53,7 +53,6 @@
             font-size: 14px;
             resize: vertical;
         }
-        /* 关键路径管理 */
         .path-keyword-manager {
             margin: 16px 0;
             padding: 12px 16px;
@@ -132,7 +131,6 @@
             color: #9ca3af;
         }
 
-        /* 文件夹选择 */
         .path-manager {
             margin: 12px 0;
             padding: 12px 16px;
@@ -152,43 +150,45 @@
             font-weight: 500;
             color: #374151;
         }
-        .path-manager .paste-row {
+        .path-manager .btn-group-row {
             display: flex;
-            gap: 10px;
-            align-items: center;
-            margin-top: 8px;
+            gap: 8px;
             flex-wrap: wrap;
+            align-items: center;
         }
-        .path-manager .paste-row input {
-            flex: 1;
-            min-width: 200px;
-            padding: 8px 12px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            font-size: 13px;
-        }
-        .path-manager .paste-row input:focus {
-            outline: none;
-            border-color: #2563eb;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-        }
-        .btn-paste-path {
-            background: #8b5cf6;
-            color: #fff;
-            padding: 8px 18px;
-            border-radius: 6px;
+        .path-manager .btn-group-row button {
+            padding: 6px 16px;
+            border-radius: 20px;
             border: none;
-            font-size: 14px;
+            font-size: 13px;
             cursor: pointer;
             transition: 0.2s;
             white-space: nowrap;
         }
-        .btn-paste-path:hover {
-            background: #7c3aed;
+        .btn-add-path {
+            background: #2563eb;
+            color: #fff;
         }
-        .btn-paste-path:disabled {
+        .btn-add-path:disabled {
             background: #94a3b8;
             cursor: not-allowed;
+        }
+        .btn-add-path:hover:not(:disabled) {
+            background: #1d4ed8;
+        }
+        .btn-load-json {
+            background: #8b5cf6;
+            color: #fff;
+        }
+        .btn-load-json:hover {
+            background: #7c3aed;
+        }
+        .btn-load-json:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+        .file-input-hidden {
+            display: none;
         }
         .path-tags {
             display: flex;
@@ -207,7 +207,7 @@
             font-size: 13px;
             color: #1f2937;
             gap: 8px;
-            max-width: 420px;
+            max-width: 460px;
         }
         .path-tag .name {
             overflow: hidden;
@@ -226,6 +226,12 @@
         .path-tag .count.loading {
             background: #fbbf24;
             animation: pulse 1s infinite;
+        }
+        .path-tag .count.done {
+            background: #22c55e;
+        }
+        .path-tag .count.json {
+            background: #8b5cf6;
         }
         @keyframes pulse {
             0%,
@@ -258,25 +264,24 @@
             background: #d1fae5;
             color: #065f46;
         }
-        .btn-add-path {
-            background: #2563eb;
-            color: #fff;
-            padding: 6px 16px;
-            border-radius: 20px;
-            border: none;
-            font-size: 13px;
-            cursor: pointer;
-            transition: 0.2s;
+        .path-tag .status-tag.json {
+            background: #ede9fe;
+            color: #7c3aed;
         }
-        .btn-add-path:disabled {
-            background: #94a3b8;
-            cursor: not-allowed;
+        .path-tag .tag-type {
+            font-size: 10px;
+            padding: 0 6px;
+            border-radius: 4px;
+            background: #e5e7eb;
+            color: #6b7280;
         }
-        .btn-add-path:hover:not(:disabled) {
-            background: #1d4ed8;
+        .path-tag .tag-type.folder {
+            background: #dbeafe;
+            color: #2563eb;
         }
-        .file-input-hidden {
-            display: none;
+        .path-tag .tag-type.json {
+            background: #ede9fe;
+            color: #7c3aed;
         }
 
         .btn-group {
@@ -318,6 +323,17 @@
             background-color: #f87171;
             color: white;
             display: none;
+        }
+        #exportBtn {
+            background-color: #0b5e42;
+            color: white;
+        }
+        #exportBtn:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+        #exportBtn:hover:not(:disabled) {
+            background-color: #065f46;
         }
 
         .progress-wrap {
@@ -364,6 +380,8 @@
             margin: 18px 0 12px 0;
             border-bottom: 1px solid #e5e7eb;
             padding-bottom: 10px;
+            flex-wrap: wrap;
+            align-items: center;
         }
         .view-toggle button {
             background: transparent;
@@ -383,6 +401,27 @@
         .view-toggle button:hover:not(.active) {
             background: #f3f4f6;
         }
+        .view-toggle .spacer {
+            flex: 1;
+        }
+        .view-toggle .btn-export {
+            background: #0b5e42;
+            color: #fff;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .view-toggle .btn-export:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+        .view-toggle .btn-export:hover:not(:disabled) {
+            background: #065f46;
+        }
+
         .table-wrap {
             margin-top: 6px;
             border: 1px solid #e5e7eb;
@@ -526,6 +565,97 @@
         .toast.show {
             opacity: 1;
         }
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9998;
+            justify-content: center;
+            align-items: center;
+        }
+        .loading-overlay.show {
+            display: flex;
+        }
+        .loading-box {
+            background: #fff;
+            padding: 40px 48px;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        .loading-box .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e5e7eb;
+            border-top-color: #2563eb;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        .loading-box .msg {
+            margin-top: 16px;
+            font-size: 15px;
+            color: #374151;
+        }
+        .loading-box .sub-msg {
+            margin-top: 6px;
+            font-size: 13px;
+            color: #9ca3af;
+        }
+
+        .btn-copy {
+            background: #e5e7eb;
+            border: none;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            cursor: pointer;
+            color: #374151;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+        .btn-copy:hover {
+            background: #d1d5db;
+        }
+        .btn-copy:active {
+            background: #2563eb;
+            color: #fff;
+        }
+        .miss-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        .miss-header .label {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .miss-header .btn-copy {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+        .miss-header .btn-copy:hover {
+            background: #bfdbfe;
+        }
+
+        .action-col {
+            width: 70px;
+            text-align: center;
+            white-space: nowrap;
+        }
+
         @media (max-width: 640px) {
             .container {
                 padding: 14px;
@@ -538,7 +668,7 @@
                 flex-direction: column;
                 align-items: stretch;
             }
-            .path-manager .paste-row {
+            .path-manager .btn-group-row {
                 flex-direction: column;
                 align-items: stretch;
             }
@@ -561,6 +691,17 @@
             .path-tag {
                 max-width: 100%;
             }
+            .loading-box {
+                margin: 20px;
+                padding: 30px 24px;
+            }
+            .action-col {
+                width: 50px;
+            }
+            .action-col .btn-copy {
+                font-size: 10px;
+                padding: 2px 6px;
+            }
         }
     </style>
 </head>
@@ -570,14 +711,20 @@
 
         <div class="toast" id="toast"></div>
 
-        <!-- ID 输入区 -->
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-box">
+                <div class="spinner"></div>
+                <div class="msg" id="loadingMsg">正在扫描文件夹...</div>
+                <div class="sub-msg" id="loadingSubMsg">请稍候</div>
+            </div>
+        </div>
+
         <div class="input-area">
             <div class="section-title">🔑 ID 列表</div>
             <div class="section-desc">在 Excel 内容中检索的 ID（一行一个，支持英文逗号分隔；全量搜索忽略此框）</div>
             <textarea id="idInput" placeholder="示例：&#10;1757610,1778200&#10;1778199&#10;1530042"></textarea>
         </div>
 
-        <!-- 关键路径管理 -->
         <div class="path-keyword-manager">
             <div class="section-title">📌 关键路径</div>
             <div class="section-desc">用于筛选文件夹范围（路径包含任一关键词即纳入），不区分大小写</div>
@@ -590,17 +737,18 @@
             </div>
         </div>
 
-        <!-- 文件夹选择 -->
         <div class="path-manager">
             <div class="label-row">
-                <span>📁 已选文件夹（最多8个）</span>
-                <div>
-                    <button class="btn-add-path" id="addPathBtn">➕ 添加文件夹</button>
+                <span>📁 数据源（文件夹 或 JSON清单）</span>
+                <div class="btn-group-row">
+                    <button class="btn-add-path" id="addPathBtn">📂 添加文件夹</button>
+                    <button class="btn-load-json" id="loadJsonBtn">📋 加载 JSON 清单</button>
                     <input type="file" id="folderPicker" class="file-input-hidden" webkitdirectory multiple />
+                    <input type="file" id="jsonPicker" class="file-input-hidden" accept=".json" />
                 </div>
             </div>
             <div class="path-tags" id="pathTags">
-                <span style="font-size:13px;color:#9ca3af;">暂未选择文件夹</span>
+                <span style="font-size:13px;color:#9ca3af;">暂未选择数据源</span>
             </div>
         </div>
 
@@ -624,6 +772,8 @@
             <div class="view-toggle">
                 <button class="active" data-view="keyword">🔑 按ID统计</button>
                 <button data-view="file">📄 按 Excel 文件统计</button>
+                <span class="spacer"></span>
+                <button class="btn-export" id="exportBtn" disabled>📥 导出 Excel</button>
             </div>
             <div class="table-wrap" id="tableContainer">
                 <div class="no-data-msg">暂无数据</div>
@@ -641,12 +791,15 @@
             var addPkBtn = document.getElementById('addPkBtn');
             var pkTags = document.getElementById('pkTags');
             var folderPicker = document.getElementById('folderPicker');
+            var jsonPicker = document.getElementById('jsonPicker');
             var addPathBtn = document.getElementById('addPathBtn');
+            var loadJsonBtn = document.getElementById('loadJsonBtn');
             var pathTags = document.getElementById('pathTags');
             var keywordSearchBtn = document.getElementById('keywordSearchBtn');
             var fullScanBtn = document.getElementById('fullScanBtn');
             var clearResBtn = document.getElementById('clearResBtn');
             var stopScanBtn = document.getElementById('stopScanBtn');
+            var exportBtn = document.getElementById('exportBtn');
             var progressWrap = document.getElementById('progressWrap');
             var progressText = document.getElementById('progressText');
             var progressBar = document.getElementById('progressBar');
@@ -654,6 +807,9 @@
             var resultArea = document.getElementById('resultArea');
             var tableContainer = document.getElementById('tableContainer');
             var toast = document.getElementById('toast');
+            var loadingOverlay = document.getElementById('loadingOverlay');
+            var loadingMsg = document.getElementById('loadingMsg');
+            var loadingSubMsg = document.getElementById('loadingSubMsg');
 
             // 状态
             var folderPaths = [];
@@ -661,7 +817,8 @@
             var isScanning = false;
             var stopRequested = false;
             var currentView = 'keyword';
-            var isCounting = false; // 是否正在后台统计文件数
+            var isCounting = false;
+            var hasResult = false;
 
             // 结果存储
             var resultData = {
@@ -674,11 +831,11 @@
                 allKeywords: []
             };
 
-            // ---- Toast 提示 ----
+            // ---- Toast ----
             var toastTimer = null;
 
             function showToast(msg, duration) {
-                duration = duration || 3000;
+                duration = duration || 2000;
                 toast.textContent = msg;
                 toast.classList.add('show');
                 if (toastTimer) {
@@ -687,6 +844,47 @@
                 toastTimer = setTimeout(function() {
                     toast.classList.remove('show');
                 }, duration);
+            }
+
+            // ---- 复制功能 ----
+            function copyToClipboard(text) {
+                if (!text) return;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(function() {
+                        showToast('✅ 已复制: ' + text.slice(0, 50) + (text.length > 50 ? '...' : ''));
+                    }).catch(function() {
+                        fallbackCopy(text);
+                    });
+                } else {
+                    fallbackCopy(text);
+                }
+            }
+
+            function fallbackCopy(text) {
+                var textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('✅ 已复制: ' + text.slice(0, 50) + (text.length > 50 ? '...' : ''));
+                } catch (err) {
+                    alert('复制失败，请手动复制。');
+                }
+                document.body.removeChild(textarea);
+            }
+
+            // ---- Loading Overlay ----
+            function showLoading(msg, subMsg) {
+                loadingMsg.textContent = msg || '正在处理...';
+                loadingSubMsg.textContent = subMsg || '请稍候';
+                loadingOverlay.classList.add('show');
+            }
+
+            function hideLoading() {
+                loadingOverlay.classList.remove('show');
             }
 
             // ---- 工具函数 ----
@@ -750,6 +948,14 @@
                 return div.innerHTML;
             }
 
+            function getFilePath(file) {
+                return file._path || file.webkitRelativePath || file.name;
+            }
+
+            function getFileModified(file) {
+                return file._modified || file.lastModified || Date.now();
+            }
+
             // ---- 搜索 Excel ----
             function searchExcel(data, ids) {
                 var workbook = XLSX.read(data, { type: 'array', cellDates: false });
@@ -784,7 +990,7 @@
                 return matches;
             }
 
-            // ---- 收集所有 Excel 文件（直接从 folderPaths 中获取） ----
+            // ---- 收集所有 Excel 文件 ----
             function collectAllExcelFiles() {
                 var all = [];
                 for (var pi = 0; pi < folderPaths.length; pi++) {
@@ -795,8 +1001,9 @@
                         if (isExcelFile(f.name)) {
                             all.push({
                                 file: f,
-                                path: f.webkitRelativePath || f.name,
-                                rootName: p.name
+                                path: getFilePath(f),
+                                rootName: p.name,
+                                source: p.source || 'folder'
                             });
                         }
                     }
@@ -804,7 +1011,7 @@
                 return all;
             }
 
-            // ---- 按关键路径筛选文件夹 ----
+            // ---- 按关键路径筛选 ----
             function filterFilesByPathKeywords(allFiles) {
                 if (pathKeywords.length === 0) return allFiles;
 
@@ -826,10 +1033,18 @@
                 return result;
             }
 
-            // ---- 后台统计文件数量（分批处理，不阻塞UI） ----
+            // ---- 后台统计 ----
             function countFilesAsync(folderIndex) {
                 var p = folderPaths[folderIndex];
-                if (!p) return;
+                if (!p || p.counted) return;
+                if (p.source === 'json') {
+                    p.counted = true;
+                    p.totalCount = p.files.length;
+                    p.excelCount = p.files.filter(function(f) { return isExcelFile(f.name); }).length;
+                    updatePathTags();
+                    updateButtons();
+                    return;
+                }
 
                 isCounting = true;
                 var files = p.files;
@@ -847,17 +1062,14 @@
                     }
                     processed = end;
 
-                    // 更新UI进度
                     var tag = document.querySelector('.path-tag[data-index="' + folderIndex + '"] .count');
                     if (tag) {
                         tag.textContent = processed + '/' + total + ' (Excel: ' + excelCount + ')';
                     }
 
                     if (processed < total) {
-                        // 继续下一批
                         setTimeout(processBatch, 50);
                     } else {
-                        // 统计完成
                         p.excelCount = excelCount;
                         p.totalCount = total;
                         p.counted = true;
@@ -866,7 +1078,6 @@
                             tag.textContent = total + ' / ' + excelCount + ' Excel';
                             tag.className = 'count done';
                         }
-                        // 更新状态标签
                         var statusTag = document.querySelector('.path-tag[data-index="' + folderIndex + '"] .status-tag');
                         if (statusTag) {
                             statusTag.textContent = '✅ 就绪';
@@ -877,8 +1088,81 @@
                     }
                 }
 
-                // 立即开始第一批
                 setTimeout(processBatch, 100);
+            }
+
+            // ---- 加载 JSON 清单 ----
+            function loadJsonFile(file) {
+                showLoading('正在解析 JSON 清单...', '请稍候');
+
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        var data = JSON.parse(e.target.result);
+                        var files = data.files || [];
+
+                        if (files.length === 0) {
+                            hideLoading();
+                            alert('JSON 文件中没有找到文件列表。');
+                            return;
+                        }
+
+                        var fileList = [];
+                        for (var fi = 0; fi < files.length; fi++) {
+                            var item = files[fi];
+                            var pathStr = item.path || '';
+                            var name = item.name || pathStr.split('/').pop().split('\\').pop() || '未知文件';
+                            var mockFile = {
+                                name: name,
+                                size: item.size || 0,
+                                type: 'application/octet-stream',
+                                lastModified: item.modified || (item.modified_str ? new Date(item.modified_str)
+                                    .getTime() : Date.now()),
+                                _path: item.path || '',
+                                _modified: item.modified || (item.modified_str ? new Date(item.modified_str)
+                                    .getTime() : Date.now()),
+                                webkitRelativePath: item.path || ''
+                            };
+                            mockFile.slice = function() { return null; };
+                            fileList.push(mockFile);
+                        }
+
+                        var jsonName = file.name;
+                        for (var pi = 0; pi < folderPaths.length; pi++) {
+                            if (folderPaths[pi].name === jsonName && folderPaths[pi].source === 'json') {
+                                hideLoading();
+                                alert('JSON 清单 "' + jsonName + '" 已加载，请勿重复加载。');
+                                return;
+                            }
+                        }
+
+                        var newFolder = {
+                            name: jsonName,
+                            files: fileList,
+                            counted: true,
+                            totalCount: fileList.length,
+                            excelCount: fileList.filter(function(f) { return isExcelFile(f.name); }).length,
+                            _countingStarted: true,
+                            source: 'json',
+                            jsonData: data
+                        };
+                        folderPaths.push(newFolder);
+                        updatePathTags();
+                        doClear();
+                        hideLoading();
+                        showToast('✅ JSON 清单加载成功：' + fileList.length + ' 个文件，其中 Excel ' + newFolder.excelCount +
+                            ' 个');
+                    } catch (err) {
+                        hideLoading();
+                        alert('JSON 解析失败: ' + err.message);
+                        console.error(err);
+                    }
+                };
+                reader.onerror = function() {
+                    hideLoading();
+                    alert('读取 JSON 文件失败');
+                };
+                reader.readAsText(file);
             }
 
             // ---- 重置扫描状态 ----
@@ -896,14 +1180,13 @@
             // ---- 核心搜索 ----
             async function performSearch(searchMode) {
                 if (folderPaths.length === 0) {
-                    alert('请至少选择一个文件夹。');
+                    alert('请至少选择一个数据源（文件夹或 JSON 清单）。');
                     return;
                 }
 
-                // 检查是否有文件夹正在统计中
                 for (var pi = 0; pi < folderPaths.length; pi++) {
                     if (!folderPaths[pi].counted) {
-                        alert('请等待文件夹 "' + folderPaths[pi].name + '" 统计完成后再搜索。');
+                        alert('请等待数据源 "' + folderPaths[pi].name + '" 统计完成后再搜索。');
                         return;
                     }
                 }
@@ -932,12 +1215,12 @@
                 resultArea.style.display = 'none';
                 scanSummary.style.display = 'none';
                 progressBar.style.width = '0%';
+                hasResult = false;
+                exportBtn.disabled = true;
 
                 try {
-                    // 收集所有 Excel 文件
                     var allFiles = collectAllExcelFiles();
 
-                    // 按关键路径筛选
                     var excelFiles = (searchMode === 'keyword') ?
                         filterFilesByPathKeywords(allFiles) :
                         allFiles;
@@ -975,7 +1258,7 @@
                         var item = excelFiles[i];
                         var file = item.file;
                         var path = item.path;
-                        var lastModified = file.lastModified || Date.now();
+                        var lastModified = getFileModified(file);
 
                         try {
                             var buffer = await readFileAsBuffer(file);
@@ -1057,6 +1340,7 @@
                         allKeywords: searchIds
                     };
 
+                    hasResult = true;
                     resetScanState();
 
                     if (searchIds.length > 0 && keywordList.length === 0 && fileList.length === 0) {
@@ -1068,6 +1352,8 @@
                             '<span class="stat-item">🔑 ID 总数：' + searchIds.length + ' 个</span>' +
                             '<span class="stat-item">❌ 未发现匹配项</span>';
                         resultArea.style.display = 'none';
+                        hasResult = false;
+                        exportBtn.disabled = true;
                     } else if (searchIds.length === 0 && fileList.length > 0) {
                         progressText.textContent = '✅ 全量扫描完成，共 ' + fileList.length + ' 个 Excel 文件。';
                         scanSummary.style.display = 'block';
@@ -1076,6 +1362,7 @@
                             '<span class="stat-item">📁 扫描文件：' + processed + ' 个</span>' +
                             '<span class="stat-item">📄 Excel 文件数：' + fileList.length + ' 个</span>';
                         resultArea.style.display = 'block';
+                        exportBtn.disabled = false;
                         renderView(currentView);
                     } else {
                         progressText.textContent = '✅ 搜索完成！共 ' + keywordList.length + ' 个 ID 命中 ' + fileList.length +
@@ -1089,6 +1376,7 @@
                             '<span class="stat-item">📄 匹配文件数：' + fileList.length + ' 个</span>' +
                             '<span class="stat-item">🔍 总命中次数：' + totalHits + ' 次</span>';
                         resultArea.style.display = 'block';
+                        exportBtn.disabled = false;
                         renderView(currentView);
                     }
                 } catch (err) {
@@ -1096,13 +1384,15 @@
                     alert('搜索过程中发生错误，请查看控制台日志。');
                     resetScanState();
                     progressWrap.style.display = 'none';
+                    hasResult = false;
+                    exportBtn.disabled = true;
                 }
             }
 
             // ---- 渲染视图 ----
             function renderView(view) {
                 currentView = view;
-                var btns = document.querySelectorAll('.view-toggle button');
+                var btns = document.querySelectorAll('.view-toggle button[data-view]');
                 for (var i = 0; i < btns.length; i++) {
                     var btn = btns[i];
                     if (btn.dataset.view === view) {
@@ -1151,13 +1441,16 @@
                     '</div>';
 
                 if (missKeywords.length > 0) {
-                    html += '<div style="margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">' +
-                        '<span style="font-size:13px;color:#6b7280;">未命中 ID：</span>' +
+                    var missText = missKeywords.join(',');
+                    html += '<div class="miss-header">' +
+                        '<span class="label">❌ 未命中 ID：</span>' +
                         '<span class="miss-keywords">';
                     for (var mki = 0; mki < missKeywords.length; mki++) {
                         html += '<span class="keyword-tag miss">' + escapeHtml(missKeywords[mki]) + '</span>';
                     }
-                    html += '</span></div>';
+                    html += '</span>' +
+                        '<button class="btn-copy" data-copy="' + escapeHtml(missText) + '">📋 复制</button>' +
+                        '</div>';
                 } else if (totalKeywords.length > 0) {
                     html += '<div style="margin-bottom:12px;color:#065f46;font-size:14px;">🎉 所有 ID 均有命中！</div>';
                 }
@@ -1166,7 +1459,7 @@
                     html += '<div class="no-data-msg">暂无命中数据</div>';
                 } else {
                     html += '<table>' +
-                        '<thead><tr><th style="width:18%;">🔑 ID</th><th>📁 匹配的 Excel 文件（命中次数 / 最后修改）</th></tr></thead>' +
+                        '<thead><tr><th style="width:16%;">🔑 ID</th><th>📁 匹配的 Excel 文件（命中次数 / 最后修改）</th><th class="action-col">操作</th></tr></thead>' +
                         '<tbody>';
                     for (var hki = 0; hki < hitKeywords.length; hki++) {
                         var kw = hitKeywords[hki];
@@ -1178,6 +1471,13 @@
                         for (var ei = 0; ei < sorted.length; ei++) {
                             totalKwHits += sorted[ei].count;
                         }
+
+                        var filePaths = [];
+                        for (var ei2 = 0; ei2 < sorted.length; ei2++) {
+                            filePaths.push(sorted[ei2].file);
+                        }
+                        var copyText = filePaths.join(',');
+
                         html += '<tr>' +
                             '<td><strong>' + escapeHtml(kw) + '</strong> <span class="count-badge">' + totalKwHits +
                             '</span></td>' +
@@ -1203,12 +1503,25 @@
                                     '</div>';
                             }
                         }
-                        html += '</td></tr>';
+                        html += '</td>' +
+                            '<td class="action-col"><button class="btn-copy" data-copy="' + escapeHtml(copyText) +
+                            '">📋 复制</button></td>' +
+                            '</tr>';
                     }
                     html += '</tbody></table>';
                 }
 
                 tableContainer.innerHTML = html;
+
+                var copyBtns = tableContainer.querySelectorAll('.btn-copy');
+                for (var ci = 0; ci < copyBtns.length; ci++) {
+                    copyBtns[ci].addEventListener('click', function() {
+                        var text = this.getAttribute('data-copy');
+                        if (text) {
+                            copyToClipboard(text);
+                        }
+                    });
+                }
             }
 
             // ---- 文件视图 ----
@@ -1241,7 +1554,7 @@
                 }
 
                 var html = '<table>' +
-                    '<thead><tr><th style="width:35%;">📄 Excel 文件（最后修改）</th><th>🔑 命中的 ID（次数）</th></tr></thead>' +
+                    '<thead><tr><th style="width:30%;">📄 Excel 文件（最后修改）</th><th>🔑 命中的 ID（次数）</th><th class="action-col">操作</th></tr></thead>' +
                     '<tbody>';
 
                 for (var fi = 0; fi < fileList.length; fi++) {
@@ -1254,6 +1567,12 @@
                         totalFileHits += keywords[ki2].count;
                     }
                     var dateStr = entry.lastModified ? formatDate(entry.lastModified) : '未知';
+
+                    var idList = [];
+                    for (var ki3 = 0; ki3 < keywords.length; ki3++) {
+                        idList.push(keywords[ki3].keyword);
+                    }
+                    var copyText = idList.join(',');
 
                     html += '<tr>' +
                         '<td>' +
@@ -1268,8 +1587,8 @@
                     if (keywords.length === 0) {
                         html += '<span style="color:#9ca3af;">无匹配 ID</span>';
                     } else {
-                        for (var ki3 = 0; ki3 < keywords.length; ki3++) {
-                            var k = keywords[ki3];
+                        for (var ki4 = 0; ki4 < keywords.length; ki4++) {
+                            var k = keywords[ki4];
                             var kw2 = k.keyword;
                             var fileEntries2 = kwFileMap[kw2] || [];
                             var rank = -1;
@@ -1289,11 +1608,158 @@
                                 '</span>';
                         }
                     }
-                    html += '</td></tr>';
+                    html += '</td>';
+
+                    if (keywords.length > 0) {
+                        html += '<td class="action-col"><button class="btn-copy" data-copy="' + escapeHtml(copyText) +
+                            '">📋 复制</button></td>';
+                    } else {
+                        html += '<td class="action-col"></td>';
+                    }
+
+                    html += '</tr>';
                 }
 
                 html += '</tbody></table>';
                 tableContainer.innerHTML = html;
+
+                var copyBtns = tableContainer.querySelectorAll('.btn-copy');
+                for (var ci = 0; ci < copyBtns.length; ci++) {
+                    copyBtns[ci].addEventListener('click', function() {
+                        var text = this.getAttribute('data-copy');
+                        if (text) {
+                            copyToClipboard(text);
+                        }
+                    });
+                }
+            }
+
+            // ---- 导出 Excel ----
+            function exportExcel() {
+                if (!hasResult) {
+                    alert('请先执行搜索。');
+                    return;
+                }
+
+                var keywordMap = resultData.keywordMap;
+                var fileMap = resultData.fileMap;
+                var keywordList = resultData.keywordList || [];
+                var fileList = resultData.fileList || [];
+                var allKeywords = resultData.allKeywords || [];
+
+                // 计算未命中ID
+                var missKeywords = [];
+                for (var mi = 0; mi < allKeywords.length; mi++) {
+                    var found = false;
+                    for (var hi = 0; hi < keywordList.length; hi++) {
+                        if (keywordList[hi] === allKeywords[mi]) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        missKeywords.push(allKeywords[mi]);
+                    }
+                }
+
+                // ---- Sheet1: ID统计 ----
+                var idData = [
+                    ['ID', '匹配的Excel文件路径', '最后修改时间', '颜色标记']
+                ];
+                for (var i = 0; i < keywordList.length; i++) {
+                    var kw = keywordList[i];
+                    var entries = keywordMap[kw] || [];
+                    var sorted = entries.slice().sort(function(a, b) {
+                        return (b.lastModified || 0) - (a.lastModified || 0);
+                    });
+                    for (var idx = 0; idx < sorted.length; idx++) {
+                        var entry = sorted[idx];
+                        var color = '';
+                        if (idx === 0) color = '绿色';
+                        else if (idx === 1) color = '黄色';
+                        else if (idx === 2) color = '橙色';
+                        var dateStr = entry.lastModified ? formatDate(entry.lastModified) : '未知';
+                        idData.push([kw, entry.file, dateStr, color]);
+                    }
+                }
+
+                // ---- Sheet2: 文件统计 ----
+                var fileData = [
+                    ['Excel文件路径', '最后修改时间', '命中的ID', '颜色标记']
+                ];
+                var kwFileMap = {};
+                var kwKeys = Object.keys(keywordMap);
+                for (var kwi = 0; kwi < kwKeys.length; kwi++) {
+                    var kw = kwKeys[kwi];
+                    var entries = keywordMap[kw] || [];
+                    var fileEntries = [];
+                    for (var ei = 0; ei < entries.length; ei++) {
+                        fileEntries.push({
+                            file: entries[ei].file,
+                            lastModified: entries[ei].lastModified || 0
+                        });
+                    }
+                    fileEntries.sort(function(a, b) {
+                        return b.lastModified - a.lastModified;
+                    });
+                    kwFileMap[kw] = fileEntries;
+                }
+
+                for (var fi = 0; fi < fileList.length; fi++) {
+                    var filePath = fileList[fi];
+                    var entry = fileMap[filePath];
+                    if (!entry) continue;
+                    var keywords = entry.keywords || [];
+                    var dateStr = entry.lastModified ? formatDate(entry.lastModified) : '未知';
+
+                    for (var ki = 0; ki < keywords.length; ki++) {
+                        var k = keywords[ki];
+                        var kw2 = k.keyword;
+                        var fileEntries2 = kwFileMap[kw2] || [];
+                        var rank = -1;
+                        for (var ri = 0; ri < fileEntries2.length; ri++) {
+                            if (fileEntries2[ri].file === filePath) {
+                                rank = ri;
+                                break;
+                            }
+                        }
+                        var color = '';
+                        if (rank === 0) color = '绿色';
+                        else if (rank === 1) color = '黄色';
+                        else if (rank === 2) color = '橙色';
+                        fileData.push([filePath, dateStr, kw2, color]);
+                    }
+                }
+
+                // ---- Sheet3: 未命中ID ----
+                var missData = [
+                    ['未命中ID']
+                ];
+                for (var mi2 = 0; mi2 < missKeywords.length; mi2++) {
+                    missData.push([missKeywords[mi2]]);
+                }
+
+                // 创建 Workbook
+                var wb = XLSX.utils.book_new();
+
+                var ws1 = XLSX.utils.aoa_to_sheet(idData);
+                XLSX.utils.book_append_sheet(wb, ws1, 'ID统计');
+
+                var ws2 = XLSX.utils.aoa_to_sheet(fileData);
+                XLSX.utils.book_append_sheet(wb, ws2, '文件统计');
+
+                var ws3 = XLSX.utils.aoa_to_sheet(missData);
+                XLSX.utils.book_append_sheet(wb, ws3, '未命中ID');
+
+                // 导出
+                var now = new Date();
+                var pad = function(n) { return String(n).padStart(2, '0'); };
+                var ts = now.getFullYear() + '' + pad(now.getMonth() + 1) + '' + pad(now.getDate()) + '_' +
+                    pad(now.getHours()) + '' + pad(now.getMinutes()) + '' + pad(now.getSeconds());
+                var filename = 'ID统计_' + ts + '.xlsx';
+
+                XLSX.writeFile(wb, filename);
+                showToast('✅ 导出成功: ' + filename);
             }
 
             // ---- 清空 ----
@@ -1332,6 +1798,8 @@
                     fileList: [],
                     allKeywords: []
                 };
+                hasResult = false;
+                exportBtn.disabled = true;
                 resultArea.style.display = 'none';
                 scanSummary.style.display = 'none';
                 progressWrap.style.display = 'none';
@@ -1372,7 +1840,7 @@
             function updatePathTags() {
                 pathTags.innerHTML = '';
                 if (folderPaths.length === 0) {
-                    pathTags.innerHTML = '<span style="font-size:13px;color:#9ca3af;">暂未选择文件夹</span>';
+                    pathTags.innerHTML = '<span style="font-size:13px;color:#9ca3af;">暂未选择数据源</span>';
                     return;
                 }
                 for (var i = 0; i < folderPaths.length; i++) {
@@ -1381,20 +1849,24 @@
                     tag.className = 'path-tag';
                     tag.setAttribute('data-index', i);
 
+                    var isJson = p.source === 'json';
                     var countText = '统计中...';
                     var countClass = 'count loading';
                     var statusText = '⏳ 统计中...';
                     var statusClass = 'status-tag';
+                    var typeText = isJson ? '📋 JSON' : '📂 文件夹';
+                    var typeClass = isJson ? 'tag-type json' : 'tag-type folder';
 
                     if (p.counted) {
                         countText = p.totalCount + ' / ' + p.excelCount + ' Excel';
-                        countClass = 'count done';
-                        statusText = '✅ 就绪';
-                        statusClass = 'status-tag done';
+                        countClass = isJson ? 'count json' : 'count done';
+                        statusText = isJson ? '✅ 已加载' : '✅ 就绪';
+                        statusClass = isJson ? 'status-tag json' : 'status-tag done';
                     }
 
                     tag.innerHTML =
                         '<span class="name">' + escapeHtml(p.name) + '</span>' +
+                        '<span class="' + typeClass + '">' + typeText + '</span>' +
                         '<span class="' + countClass + '">' + countText + '</span>' +
                         '<span class="' + statusClass + '">' + statusText + '</span>' +
                         '<span class="del" data-index="' + i + '">✕</span>';
@@ -1404,7 +1876,6 @@
                 for (var di = 0; di < dels.length; di++) {
                     dels[di].addEventListener('click', function() {
                         var idx = parseInt(this.dataset.index, 10);
-                        // 如果正在统计该文件夹，取消统计（通过标志）
                         folderPaths.splice(idx, 1);
                         updatePathTags();
                         updateButtons();
@@ -1413,7 +1884,6 @@
                 }
                 updateButtons();
 
-                // 对未统计的文件夹启动后台统计
                 for (var i = 0; i < folderPaths.length; i++) {
                     if (!folderPaths[i].counted && !folderPaths[i]._countingStarted) {
                         folderPaths[i]._countingStarted = true;
@@ -1476,7 +1946,7 @@
             // ---- 添加文件夹 ----
             addPathBtn.addEventListener('click', function() {
                 if (folderPaths.length >= 8) {
-                    alert('最多添加 8 个文件夹。');
+                    alert('最多添加 8 个数据源。');
                     return;
                 }
                 folderPicker.click();
@@ -1484,46 +1954,69 @@
 
             folderPicker.addEventListener('change', function(e) {
                 var files = e.target.files;
+                if (files.length === 0) {
+                    hideLoading();
+                    return;
+                }
+
+                showLoading('正在扫描文件夹...', '请稍候，正在读取文件列表');
+
+                setTimeout(function() {
+                    var folderName = '';
+                    var fileList = [];
+                    for (var i = 0; i < files.length; i++) {
+                        var f = files[i];
+                        fileList.push(f);
+                        if (i === 0) {
+                            var path = f.webkitRelativePath || f.name;
+                            var parts = path.split('/');
+                            folderName = parts.length > 1 ? parts[0] : path;
+                        }
+                    }
+
+                    for (var pi = 0; pi < folderPaths.length; pi++) {
+                        if (folderPaths[pi].name === folderName && folderPaths[pi].source !== 'json') {
+                            hideLoading();
+                            alert('文件夹 "' + folderName + '" 已添加，请勿重复添加。');
+                            folderPicker.value = '';
+                            return;
+                        }
+                    }
+
+                    var newFolder = {
+                        name: folderName,
+                        files: fileList,
+                        counted: false,
+                        totalCount: 0,
+                        excelCount: 0,
+                        _countingStarted: false,
+                        source: 'folder'
+                    };
+                    folderPaths.push(newFolder);
+                    updatePathTags();
+                    folderPicker.value = '';
+                    doClear();
+                    hideLoading();
+                    showToast('已添加文件夹 "' + folderName + '"，正在后台统计文件数量...', 2000);
+                }, 100);
+            });
+
+            // ---- 加载 JSON ----
+            loadJsonBtn.addEventListener('click', function() {
+                jsonPicker.click();
+            });
+
+            jsonPicker.addEventListener('change', function(e) {
+                var files = e.target.files;
                 if (files.length === 0) return;
-
-                var folderName = '';
-                var fileList = [];
-                for (var i = 0; i < files.length; i++) {
-                    var f = files[i];
-                    fileList.push(f);
-                    if (i === 0) {
-                        var path = f.webkitRelativePath || f.name;
-                        var parts = path.split('/');
-                        folderName = parts.length > 1 ? parts[0] : path;
-                    }
+                var file = files[0];
+                if (!file.name.endsWith('.json')) {
+                    alert('请选择 JSON 文件。');
+                    jsonPicker.value = '';
+                    return;
                 }
-
-                // 检查是否已存在同名文件夹
-                for (var pi = 0; pi < folderPaths.length; pi++) {
-                    if (folderPaths[pi].name === folderName) {
-                        alert('文件夹 "' + folderName + '" 已添加，请勿重复添加。');
-                        folderPicker.value = '';
-                        return;
-                    }
-                }
-
-                // 立即添加，标记为未统计
-                var newFolder = {
-                    name: folderName,
-                    files: fileList,
-                    counted: false,
-                    totalCount: 0,
-                    excelCount: 0,
-                    _countingStarted: false
-                };
-                folderPaths.push(newFolder);
-                updatePathTags();
-                folderPicker.value = '';
-                doClear();
-
-                showToast('已添加文件夹 "' + folderName + '"，正在后台统计文件数量...', 2000);
-
-                // 自动启动统计（在 updatePathTags 中会触发）
+                loadJsonFile(file);
+                jsonPicker.value = '';
             });
 
             // ---- ID 输入更新按钮 ----
@@ -1552,8 +2045,11 @@
                 }
             });
 
+            // ---- 导出按钮 ----
+            exportBtn.addEventListener('click', exportExcel);
+
             // ---- 视图切换 ----
-            var viewBtns = document.querySelectorAll('.view-toggle button');
+            var viewBtns = document.querySelectorAll('.view-toggle button[data-view]');
             for (var vbi = 0; vbi < viewBtns.length; vbi++) {
                 viewBtns[vbi].addEventListener('click', function() {
                     var view = this.dataset.view;
