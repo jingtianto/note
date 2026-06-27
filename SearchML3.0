@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Excel批量关键词检索工具（增强版）</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js">
+    </script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: "Microsoft Yahei", system-ui, sans-serif;
+        }
+        body {
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 24px;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        }
+        .title {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #1f2937;
+        }
+        .input-area {
+            margin-bottom: 16px;
+        }
+        .input-desc {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+        #keywordInput {
+            width: 100%;
+            height: 120px;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .path-manager {
+            margin: 16px 0;
+            padding: 12px;
+            background: #f9fafb;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        .path-manager .label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .path-manager .label-row span {
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+        }
+        .path-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            min-height: 36px;
+            align-items: center;
+        }
+        .path-tag {
+            display: inline-flex;
+            align-items: center;
+            background: #e5e7eb;
+            border-radius: 20px;
+            padding: 4px 12px 4px 16px;
+            font-size: 13px;
+            color: #1f2937;
+            gap: 8px;
+            max-width: 360px;
+        }
+        .path-tag .name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .path-tag .count {
+            background: #9ca3af;
+            color: #fff;
+            border-radius: 10px;
+            padding: 0 8px;
+            font-size: 11px;
+        }
+        .path-tag .del {
+            cursor: pointer;
+            font-weight: bold;
+            color: #6b7280;
+            padding: 0 4px;
+            font-size: 16px;
+            line-height: 1;
+        }
+        .path-tag .del:hover {
+            color: #dc2626;
+        }
+        .btn-add-path {
+            background: #2563eb;
+            color: #fff;
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: none;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-add-path:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+        .btn-add-path:hover:not(:disabled) {
+            background: #1d4ed8;
+        }
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin: 16px 0;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 24px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        #keywordSearchBtn {
+            background-color: #2563eb;
+            color: white;
+        }
+        #keywordSearchBtn:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+        #fullScanBtn {
+            background-color: #059669;
+            color: white;
+        }
+        #fullScanBtn:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+        #clearResBtn {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+        #stopScanBtn {
+            background-color: #f87171;
+            color: white;
+            display: none;
+        }
+        .file-input-hidden {
+            display: none;
+        }
+        .progress-wrap {
+            margin: 20px 0;
+            display: none;
+        }
+        .progress-text {
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #374151;
+            word-break: break-all;
+        }
+        .progress-bar-bg {
+            width: 100%;
+            height: 12px;
+            background-color: #e5e7eb;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .progress-bar-inner {
+            height: 100%;
+            width: 0%;
+            background-color: #2563eb;
+            transition: width 0.3s;
+        }
+        .scan-summary {
+            margin: 16px 0;
+            padding: 12px;
+            background-color: #f0fdf4;
+            border-radius: 6px;
+            color: #065f46;
+            line-height: 1.8;
+        }
+        .scan-summary strong {
+            font-size: 15px;
+        }
+        .scan-summary .stat-item {
+            display: inline-block;
+            margin-right: 24px;
+        }
+        .view-toggle {
+            display: flex;
+            gap: 12px;
+            margin: 18px 0 12px 0;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 10px;
+        }
+        .view-toggle button {
+            background: transparent;
+            border: none;
+            padding: 8px 18px;
+            font-size: 14px;
+            color: #6b7280;
+            cursor: pointer;
+            border-radius: 20px;
+            transition: 0.2s;
+            font-weight: 500;
+        }
+        .view-toggle button.active {
+            background: #2563eb;
+            color: #fff;
+        }
+        .view-toggle button:hover:not(.active) {
+            background: #f3f4f6;
+        }
+        .table-wrap {
+            margin-top: 6px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            min-width: 600px;
+        }
+        th,
+        td {
+            border: 1px solid #e5e7eb;
+            padding: 10px 12px;
+            text-align: left;
+            word-break: break-all;
+            vertical-align: top;
+        }
+        th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        .keyword-tag {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            margin: 2px 4px 2px 0;
+            font-size: 12px;
+            white-space: nowrap;
+            background: #f3f4f6;
+            color: #374151;
+        }
+        .keyword-tag.hit {
+            background: #eff6ff;
+            color: #2563eb;
+        }
+        .keyword-tag.miss {
+            background: #f3f4f6;
+            color: #9ca3af;
+        }
+        .highlight-green {
+            background: #bbf7d0 !important;
+            border: 1px solid #22c55e;
+            font-weight: 600;
+        }
+        .highlight-yellow {
+            background: #fde047 !important;
+            border: 1px solid #eab308;
+            font-weight: 600;
+        }
+        .highlight-orange {
+            background: #fdba74 !important;
+            border: 1px solid #f97316;
+            font-weight: 600;
+        }
+        .file-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .file-cell .fname {
+            font-weight: 500;
+        }
+        .file-cell .fdate {
+            font-size: 11px;
+            color: #6b7280;
+        }
+        .count-badge {
+            display: inline-block;
+            background: #e5e7eb;
+            color: #374151;
+            padding: 0 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+        .no-data-msg {
+            padding: 30px 0;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 14px;
+        }
+        .hit-miss-stats {
+            background: #f9fafb;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 20px;
+            border: 1px solid #e5e7eb;
+        }
+        .hit-miss-stats .stat-item {
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+        }
+        .hit-miss-stats .stat-item .label {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .hit-miss-stats .stat-item .value {
+            font-weight: 600;
+            font-size: 15px;
+        }
+        .hit-miss-stats .stat-item .value.hit {
+            color: #2563eb;
+        }
+        .hit-miss-stats .stat-item .value.miss {
+            color: #9ca3af;
+        }
+        .miss-keywords {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        @media (max-width: 640px) {
+            .container {
+                padding: 14px;
+            }
+            .btn-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .path-manager .label-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .view-toggle {
+                flex-wrap: wrap;
+            }
+            .hit-miss-stats {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+            .scan-summary .stat-item {
+                display: block;
+                margin-right: 0;
+            }
+            .path-tag {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 class="title">📊 Excel批量关键词检索工具（增强版）</h2>
+
+        <div class="input-area">
+            <div class="input-desc">检索关键词（一行一个，支持英文逗号分隔；全量搜索忽略此框）</div>
+            <textarea id="keywordInput" placeholder="示例：&#10;1757610,1778200&#10;1778199&#10;NA6-26"></textarea>
+        </div>
+
+        <div class="path-manager">
+            <div class="label-row">
+                <span>📁 已选文件夹（最多8个）</span>
+                <div>
+                    <button class="btn-add-path" id="addPathBtn">➕ 添加文件夹</button>
+                    <input type="file" id="folderPicker" class="file-input-hidden" webkitdirectory multiple />
+                </div>
+            </div>
+            <div class="path-tags" id="pathTags"></div>
+        </div>
+
+        <div class="btn-group">
+            <button id="keywordSearchBtn" disabled>🔍 关键词优先搜索</button>
+            <button id="fullScanBtn" disabled>📂 全量搜索（忽略关键词）</button>
+            <button id="clearResBtn">🗑️ 清空全部结果</button>
+            <button id="stopScanBtn">⏹️ 终止扫描</button>
+        </div>
+
+        <div class="progress-wrap" id="progressWrap">
+            <div class="progress-text" id="progressText">正在准备扫描...</div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-inner" id="progressBar"></div>
+            </div>
+        </div>
+
+        <div class="scan-summary" id="scanSummary" style="display:none;"></div>
+
+        <div id="resultArea" style="display:none;">
+            <div class="view-toggle">
+                <button class="active" data-view="keyword">🔑 按关键词统计</button>
+                <button data-view="file">📄 按 Excel 文件统计</button>
+            </div>
+            <div class="table-wrap" id="tableContainer">
+                <div class="no-data-msg">暂无数据</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            // DOM refs
+            var keywordInput = document.getElementById('keywordInput');
+            var folderPicker = document.getElementById('folderPicker');
+            var addPathBtn = document.getElementById('addPathBtn');
+            var pathTags = document.getElementById('pathTags');
+            var keywordSearchBtn = document.getElementById('keywordSearchBtn');
+            var fullScanBtn = document.getElementById('fullScanBtn');
+            var clearResBtn = document.getElementById('clearResBtn');
+            var stopScanBtn = document.getElementById('stopScanBtn');
+            var progressWrap = document.getElementById('progressWrap');
+            var progressText = document.getElementById('progressText');
+            var progressBar = document.getElementById('progressBar');
+            var scanSummary = document.getElementById('scanSummary');
+            var resultArea = document.getElementById('resultArea');
+            var tableContainer = document.getElementById('tableContainer');
+
+            // 状态
+            var folderPaths = [];
+            var isScanning = false;
+            var stopRequested = false;
+            var currentView = 'keyword';
+
+            // 结果存储
+            var resultData = {
+                keywordMap: {},
+                fileMap: {},
+                totalFiles: 0,
+                totalHits: 0,
+                keywordList: [],
+                fileList: [],
+                allKeywords: []
+            };
+
+            // ---- 工具函数 ----
+            function getFileExtension(name) {
+                var i = name.lastIndexOf('.');
+                return i > 0 ? name.substring(i + 1).toLowerCase() : '';
+            }
+
+            function isExcelFile(name) {
+                var ext = getFileExtension(name);
+                return ['xlsx', 'xls', 'xlsm', 'xlsb'].indexOf(ext) !== -1;
+            }
+
+            function parseKeywords(text) {
+                if (!text || !text.trim()) return [];
+                var lines = text.split(/\r?\n/);
+                var set = {};
+                var result = [];
+                for (var li = 0; li < lines.length; li++) {
+                    var line = lines[li].trim();
+                    if (!line) continue;
+                    var parts = line.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+                    for (var pi = 0; pi < parts.length; pi++) {
+                        var p = parts[pi];
+                        if (p && !set[p]) {
+                            set[p] = true;
+                            result.push(p);
+                        }
+                    }
+                }
+                return result;
+            }
+
+            function readFileAsBuffer(file) {
+                return new Promise(function(resolve, reject) {
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                        resolve(e.target.result);
+                    };
+                    reader.onerror = function(e) {
+                        reject(e.target.error);
+                    };
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+
+            function formatDate(ts) {
+                if (!ts) return '未知';
+                var d = new Date(ts);
+                var pad = function(n) {
+                    return String(n).padStart(2, '0');
+                };
+                return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' +
+                    pad(d.getMinutes());
+            }
+
+            function escapeHtml(str) {
+                if (!str) return '';
+                var div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            }
+
+            // ---- 搜索 Excel ----
+            function searchExcel(data, keywords) {
+                var workbook = XLSX.read(data, { type: 'array', cellDates: false });
+                var matches = [];
+                var sheetNames = workbook.SheetNames;
+
+                for (var si = 0; si < sheetNames.length; si++) {
+                    var sheetName = sheetNames[si];
+                    var sheet = workbook.Sheets[sheetName];
+                    if (!sheet) continue;
+                    var ref = sheet['!ref'];
+                    if (!ref) continue;
+                    var range = XLSX.utils.decode_range(ref);
+                    for (var R = range.s.r; R <= range.e.r; R++) {
+                        for (var C = range.s.c; C <= range.e.c; C++) {
+                            var addr = XLSX.utils.encode_cell({ r: R, c: C });
+                            var cell = sheet[addr];
+                            if (!cell) continue;
+                            var val = cell.v;
+                            if (val === undefined || val === null) continue;
+                            var strVal = String(val);
+                            if (!strVal) continue;
+                            for (var ki = 0; ki < keywords.length; ki++) {
+                                var kw = keywords[ki];
+                                if (strVal.indexOf(kw) !== -1) {
+                                    matches.push({ keyword: kw, sheet: sheetName, cell: addr, value: strVal });
+                                }
+                            }
+                        }
+                    }
+                }
+                return matches;
+            }
+
+            // ---- 收集所有 Excel 文件 ----
+            function collectAllExcelFiles() {
+                var all = [];
+                for (var pi = 0; pi < folderPaths.length; pi++) {
+                    var p = folderPaths[pi];
+                    var files = p.files;
+                    for (var fi = 0; fi < files.length; fi++) {
+                        var f = files[fi];
+                        if (isExcelFile(f.name)) {
+                            all.push({
+                                file: f,
+                                path: f.webkitRelativePath || f.name,
+                                rootName: p.name
+                            });
+                        }
+                    }
+                }
+                return all;
+            }
+
+            // ---- 关键词优先搜索：查找包含关键词的目录 ----
+            function findKeywordFolders(keyword) {
+                var kwLower = keyword.toLowerCase();
+                var matchedFolders = [];
+                for (var pi = 0; pi < folderPaths.length; pi++) {
+                    var p = folderPaths[pi];
+                    var files = p.files;
+                    for (var fi = 0; fi < files.length; fi++) {
+                        var f = files[fi];
+                        var fullPath = f.webkitRelativePath || f.name;
+                        var parts = fullPath.split('/');
+                        for (var di = 0; di < parts.length - 1; di++) {
+                            if (parts[di].toLowerCase().indexOf(kwLower) !== -1) {
+                                matchedFolders.push({
+                                    root: p,
+                                    folderPath: parts.slice(0, di + 1).join('/'),
+                                    file: f
+                                });
+                                break;
+                            }
+                        }
+                    }
+                }
+                var seen = {};
+                var unique = [];
+                for (var mi = 0; mi < matchedFolders.length; mi++) {
+                    var item = matchedFolders[mi];
+                    var key = item.root.name + '|' + item.folderPath;
+                    if (!seen[key]) {
+                        seen[key] = true;
+                        unique.push(item);
+                    }
+                }
+                return unique;
+            }
+
+            // ---- 从匹配的文件夹中收集 Excel 文件 ----
+            function collectFilesFromMatchedFolders(matchedFolders) {
+                var fileSet = {};
+                var result = [];
+                for (var mi = 0; mi < matchedFolders.length; mi++) {
+                    var item = matchedFolders[mi];
+                    var root = item.root;
+                    var folderPath = item.folderPath;
+                    var files = root.files;
+                    for (var fi = 0; fi < files.length; fi++) {
+                        var f = files[fi];
+                        var fp = f.webkitRelativePath || f.name;
+                        if (fp.indexOf(folderPath + '/') === 0 && isExcelFile(f.name)) {
+                            if (!fileSet[fp]) {
+                                fileSet[fp] = true;
+                                result.push({ file: f, path: fp });
+                            }
+                        }
+                    }
+                }
+                return result;
+            }
+
+            // ---- 重置扫描状态 ----
+            function resetScanState() {
+                isScanning = false;
+                stopRequested = false;
+                keywordSearchBtn.disabled = false;
+                fullScanBtn.disabled = false;
+                stopScanBtn.style.display = 'none';
+                stopScanBtn.disabled = false;
+                stopScanBtn.textContent = '⏹️ 终止扫描';
+                updateButtons();
+            }
+
+            // ---- 核心搜索 ----
+            async function performSearch(searchMode) {
+                if (folderPaths.length === 0) {
+                    alert('请至少添加一个文件夹路径。');
+                    return;
+                }
+
+                var keywords = [];
+                var matchedFolderItems = null;
+
+                if (searchMode === 'keyword') {
+                    var rawText = keywordInput.value;
+                    keywords = parseKeywords(rawText);
+                    if (keywords.length === 0) {
+                        alert('关键词优先搜索需要至少一个关键词。');
+                        return;
+                    }
+                    var kwLower = keywords[0].toLowerCase();
+                    for (var pi = 0; pi < folderPaths.length; pi++) {
+                        if (folderPaths[pi].name.toLowerCase().indexOf(kwLower) !== -1) {
+                            alert('根目录 "' + folderPaths[pi].name + '" 包含关键词 "' + keywords[0] + '"，请调整关键词或使用全量搜索。');
+                            return;
+                        }
+                    }
+                    matchedFolderItems = findKeywordFolders(keywords[0]);
+                    if (matchedFolderItems.length === 0) {
+                        alert('未找到包含关键词的文件夹，请尝试其他关键词或使用全量搜索。');
+                        return;
+                    }
+                }
+
+                stopRequested = false;
+                isScanning = true;
+                keywordSearchBtn.disabled = true;
+                fullScanBtn.disabled = true;
+                stopScanBtn.style.display = 'inline-block';
+                stopScanBtn.disabled = false;
+                stopScanBtn.textContent = '⏹️ 终止扫描';
+                progressWrap.style.display = 'block';
+                resultArea.style.display = 'none';
+                scanSummary.style.display = 'none';
+                progressBar.style.width = '0%';
+
+                try {
+                    var excelFiles = [];
+                    if (searchMode === 'keyword') {
+                        var collected = collectFilesFromMatchedFolders(matchedFolderItems);
+                        excelFiles = collected;
+                    } else {
+                        var allFiles = collectAllExcelFiles();
+                        excelFiles = allFiles;
+                    }
+
+                    if (excelFiles.length === 0) {
+                        progressText.textContent = '未找到任何 Excel 文件。';
+                        progressWrap.style.display = 'none';
+                        resetScanState();
+                        return;
+                    }
+
+                    var searchKeywords = (searchMode === 'keyword') ? keywords : [];
+
+                    var keywordMap = {};
+                    var fileMap = {};
+                    var totalHits = 0;
+                    var processed = 0;
+                    var total = excelFiles.length;
+
+                    if (searchKeywords.length > 0) {
+                        for (var kwi = 0; kwi < searchKeywords.length; kwi++) {
+                            keywordMap[searchKeywords[kwi]] = [];
+                        }
+                    }
+
+                    progressText.textContent = '正在搜索 ' + total + ' 个 Excel 文件...';
+
+                    for (var i = 0; i < excelFiles.length; i++) {
+                        if (stopRequested) {
+                            progressText.textContent = '⏹️ 扫描已终止。';
+                            break;
+                        }
+                        var item = excelFiles[i];
+                        var file = item.file;
+                        var path = item.path;
+                        var lastModified = file.lastModified || Date.now();
+
+                        try {
+                            var buffer = await readFileAsBuffer(file);
+                            var matches = (searchKeywords.length > 0) ? searchExcel(buffer, searchKeywords) : [];
+                            if (matches.length > 0) {
+                                var kwGroups = {};
+                                for (var mi2 = 0; mi2 < matches.length; mi2++) {
+                                    var m = matches[mi2];
+                                    if (!kwGroups[m.keyword]) kwGroups[m.keyword] = [];
+                                    kwGroups[m.keyword].push(m);
+                                }
+                                var kwKeys = Object.keys(kwGroups);
+                                for (var kk = 0; kk < kwKeys.length; kk++) {
+                                    var kw = kwKeys[kk];
+                                    var items = kwGroups[kw];
+                                    var entry = {
+                                        file: path,
+                                        count: items.length,
+                                        sheets: [],
+                                        lastModified: lastModified
+                                    };
+                                    var sheetSet = {};
+                                    for (var si2 = 0; si2 < items.length; si2++) {
+                                        sheetSet[items[si2].sheet] = true;
+                                    }
+                                    entry.sheets = Object.keys(sheetSet);
+                                    if (keywordMap[kw]) {
+                                        keywordMap[kw].push(entry);
+                                    } else {
+                                        keywordMap[kw] = [entry];
+                                    }
+                                }
+                                var fileKwList = [];
+                                for (var kk2 = 0; kk2 < kwKeys.length; kk2++) {
+                                    fileKwList.push({
+                                        keyword: kwKeys[kk2],
+                                        count: kwGroups[kwKeys[kk2]].length
+                                    });
+                                }
+                                fileMap[path] = {
+                                    file: path,
+                                    keywords: fileKwList,
+                                    lastModified: lastModified
+                                };
+                                totalHits += matches.length;
+                            } else if (searchKeywords.length === 0) {
+                                if (!fileMap[path]) {
+                                    fileMap[path] = {
+                                        file: path,
+                                        keywords: [],
+                                        lastModified: lastModified
+                                    };
+                                }
+                            }
+                            processed++;
+                            var pct = Math.round((processed / total) * 100);
+                            progressBar.style.width = pct + '%';
+                            progressText.textContent = '进度 ' + processed + '/' + total + ' (' + pct + '%) — 当前: ' + path;
+                        } catch (err) {
+                            console.warn('读取文件失败:', path, err);
+                            processed++;
+                            var pct2 = Math.round((processed / total) * 100);
+                            progressBar.style.width = pct2 + '%';
+                        }
+                    }
+
+                    var keywordList = Object.keys(keywordMap).filter(function(k) {
+                        return keywordMap[k].length > 0;
+                    }).sort();
+                    var fileList = Object.keys(fileMap).sort();
+
+                    resultData = {
+                        keywordMap: keywordMap,
+                        fileMap: fileMap,
+                        totalFiles: processed,
+                        totalHits: totalHits,
+                        keywordList: keywordList,
+                        fileList: fileList,
+                        allKeywords: searchKeywords
+                    };
+
+                    resetScanState();
+
+                    if (searchKeywords.length > 0 && keywordList.length === 0 && fileList.length === 0) {
+                        progressText.textContent = '✅ 搜索完成，未找到任何匹配。';
+                        scanSummary.style.display = 'block';
+                        scanSummary.innerHTML =
+                            '<strong>🔍 搜索完成</strong><br/>' +
+                            '<span class="stat-item">📁 扫描文件：' + processed + ' 个</span>' +
+                            '<span class="stat-item">🔑 关键词总数：' + searchKeywords.length + ' 个</span>' +
+                            '<span class="stat-item">❌ 未发现匹配项</span>';
+                        resultArea.style.display = 'none';
+                    } else if (searchKeywords.length === 0 && fileList.length > 0) {
+                        progressText.textContent = '✅ 全量扫描完成，共 ' + fileList.length + ' 个 Excel 文件。';
+                        scanSummary.style.display = 'block';
+                        scanSummary.innerHTML =
+                            '<strong>📂 全量扫描完成</strong><br/>' +
+                            '<span class="stat-item">📁 扫描文件：' + processed + ' 个</span>' +
+                            '<span class="stat-item">📄 Excel 文件数：' + fileList.length + ' 个</span>';
+                        resultArea.style.display = 'block';
+                        renderView(currentView);
+                    } else {
+                        progressText.textContent = '✅ 搜索完成！共 ' + keywordList.length + ' 个关键词命中 ' + fileList.length +
+                            ' 个文件，总命中 ' + totalHits + ' 次。';
+                        scanSummary.style.display = 'block';
+                        scanSummary.innerHTML =
+                            '<strong>✅ 搜索完成</strong><br/>' +
+                            '<span class="stat-item">📁 扫描文件：' + processed + ' 个</span>' +
+                            '<span class="stat-item">🔑 关键词总数：' + searchKeywords.length + ' 个</span>' +
+                            '<span class="stat-item">✅ 命中关键词：' + keywordList.length + ' 个</span>' +
+                            '<span class="stat-item">📄 匹配文件数：' + fileList.length + ' 个</span>' +
+                            '<span class="stat-item">🔍 总命中次数：' + totalHits + ' 次</span>';
+                        resultArea.style.display = 'block';
+                        renderView(currentView);
+                    }
+                } catch (err) {
+                    console.error('搜索过程中发生错误:', err);
+                    alert('搜索过程中发生错误，请查看控制台日志。');
+                    resetScanState();
+                    progressWrap.style.display = 'none';
+                }
+            }
+
+            // ---- 渲染视图 ----
+            function renderView(view) {
+                currentView = view;
+                var btns = document.querySelectorAll('.view-toggle button');
+                for (var i = 0; i < btns.length; i++) {
+                    var btn = btns[i];
+                    if (btn.dataset.view === view) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                }
+                if (view === 'keyword') {
+                    renderKeywordView();
+                } else {
+                    renderFileView();
+                }
+            }
+
+            // ---- 关键词视图 ----
+            function renderKeywordView() {
+                var keywordMap = resultData.keywordMap;
+                var keywordList = resultData.keywordList || [];
+                var allKeywords = resultData.allKeywords || [];
+                var hitKeywords = keywordList;
+                var totalKeywords = allKeywords;
+                var missKeywords = [];
+                for (var mi = 0; mi < totalKeywords.length; mi++) {
+                    var found = false;
+                    for (var hi = 0; hi < hitKeywords.length; hi++) {
+                        if (hitKeywords[hi] === totalKeywords[mi]) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        missKeywords.push(totalKeywords[mi]);
+                    }
+                }
+
+                var html = '';
+
+                html += '<div class="hit-miss-stats">' +
+                    '<div class="stat-item"><span class="label">📌 总关键词</span><span class="value">' + totalKeywords
+                    .length + '</span></div>' +
+                    '<div class="stat-item"><span class="label">✅ 命中</span><span class="value hit">' + hitKeywords
+                    .length + '</span></div>' +
+                    '<div class="stat-item"><span class="label">❌ 未命中</span><span class="value miss">' + missKeywords
+                    .length + '</span></div>' +
+                    '</div>';
+
+                if (missKeywords.length > 0) {
+                    html += '<div style="margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">' +
+                        '<span style="font-size:13px;color:#6b7280;">未命中关键词：</span>' +
+                        '<span class="miss-keywords">';
+                    for (var mki = 0; mki < missKeywords.length; mki++) {
+                        html += '<span class="keyword-tag miss">' + escapeHtml(missKeywords[mki]) + '</span>';
+                    }
+                    html += '</span></div>';
+                } else if (totalKeywords.length > 0) {
+                    html += '<div style="margin-bottom:12px;color:#065f46;font-size:14px;">🎉 所有关键词均有命中！</div>';
+                }
+
+                if (hitKeywords.length === 0) {
+                    html += '<div class="no-data-msg">暂无命中数据</div>';
+                } else {
+                    html += '<table>' +
+                        '<thead><tr><th style="width:18%;">🔑 关键词</th><th>📁 匹配的 Excel 文件（命中次数 / 最后修改）</th></tr></thead>' +
+                        '<tbody>';
+                    for (var hki = 0; hki < hitKeywords.length; hki++) {
+                        var kw = hitKeywords[hki];
+                        var entries = keywordMap[kw] || [];
+                        var sorted = entries.slice().sort(function(a, b) {
+                            return (b.lastModified || 0) - (a.lastModified || 0);
+                        });
+                        var totalKwHits = 0;
+                        for (var ei = 0; ei < sorted.length; ei++) {
+                            totalKwHits += sorted[ei].count;
+                        }
+                        html += '<tr>' +
+                            '<td><strong>' + escapeHtml(kw) + '</strong> <span class="count-badge">' + totalKwHits +
+                            '</span></td>' +
+                            '<td>';
+                        if (sorted.length === 0) {
+                            html += '<span style="color:#9ca3af;">无</span>';
+                        } else {
+                            for (var idx = 0; idx < sorted.length; idx++) {
+                                var entry = sorted[idx];
+                                var sheetsStr = (entry.sheets && entry.sheets.length > 0) ?
+                                    ' (Sheet: ' + entry.sheets.join(', ') + ')' : '';
+                                var highlightClass = '';
+                                if (idx === 0) highlightClass = 'highlight-green';
+                                else if (idx === 1) highlightClass = 'highlight-yellow';
+                                else if (idx === 2) highlightClass = 'highlight-orange';
+                                var dateStr = entry.lastModified ? formatDate(entry.lastModified) : '未知';
+                                html += '<div style="display:block;margin-bottom:4px;padding:4px 8px;border-radius:4px;background:#f3f4f6;" class="' +
+                                    highlightClass + '">' +
+                                    '<span style="font-weight:500;">📄 ' + escapeHtml(entry.file) + '</span>' +
+                                    '<span class="count-badge">' + entry.count + ' 次' + sheetsStr + '</span>' +
+                                    '<span style="font-size:11px;color:#6b7280;margin-left:8px;">' + dateStr +
+                                    '</span>' +
+                                    '</div>';
+                            }
+                        }
+                        html += '</td></tr>';
+                    }
+                    html += '</tbody></table>';
+                }
+
+                tableContainer.innerHTML = html;
+            }
+
+            // ---- 文件视图 ----
+            function renderFileView() {
+                var fileMap = resultData.fileMap;
+                var fileList = resultData.fileList || [];
+                var keywordMap = resultData.keywordMap;
+
+                if (fileList.length === 0) {
+                    tableContainer.innerHTML = '<div class="no-data-msg">暂无数据</div>';
+                    return;
+                }
+
+                var kwFileMap = {};
+                var kwKeys = Object.keys(keywordMap);
+                for (var kwi = 0; kwi < kwKeys.length; kwi++) {
+                    var kw = kwKeys[kwi];
+                    var entries = keywordMap[kw] || [];
+                    var fileEntries = [];
+                    for (var ei = 0; ei < entries.length; ei++) {
+                        fileEntries.push({
+                            file: entries[ei].file,
+                            lastModified: entries[ei].lastModified || 0
+                        });
+                    }
+                    fileEntries.sort(function(a, b) {
+                        return b.lastModified - a.lastModified;
+                    });
+                    kwFileMap[kw] = fileEntries;
+                }
+
+                var html = '<table>' +
+                    '<thead><tr><th style="width:35%;">📄 Excel 文件（最后修改）</th><th>🔑 命中的关键词（次数）</th></tr></thead>' +
+                    '<tbody>';
+
+                for (var fi = 0; fi < fileList.length; fi++) {
+                    var filePath = fileList[fi];
+                    var entry = fileMap[filePath];
+                    if (!entry) continue;
+                    var keywords = entry.keywords || [];
+                    var totalFileHits = 0;
+                    for (var ki2 = 0; ki2 < keywords.length; ki2++) {
+                        totalFileHits += keywords[ki2].count;
+                    }
+                    var dateStr = entry.lastModified ? formatDate(entry.lastModified) : '未知';
+
+                    html += '<tr>' +
+                        '<td>' +
+                        '<div class="file-cell">' +
+                        '<span class="fname">' + escapeHtml(filePath) + '</span>' +
+                        '<span class="fdate">📅 ' + dateStr + '</span>' +
+                        '<span class="count-badge">总命中 ' + totalFileHits + ' 次</span>' +
+                        '</div>' +
+                        '</td>' +
+                        '<td>';
+
+                    if (keywords.length === 0) {
+                        html += '<span style="color:#9ca3af;">无匹配关键词</span>';
+                    } else {
+                        for (var ki3 = 0; ki3 < keywords.length; ki3++) {
+                            var k = keywords[ki3];
+                            var kw2 = k.keyword;
+                            var fileEntries2 = kwFileMap[kw2] || [];
+                            var rank = -1;
+                            for (var ri = 0; ri < fileEntries2.length; ri++) {
+                                if (fileEntries2[ri].file === filePath) {
+                                    rank = ri;
+                                    break;
+                                }
+                            }
+                            var highlightClass = '';
+                            if (rank === 0) highlightClass = 'highlight-green';
+                            else if (rank === 1) highlightClass = 'highlight-yellow';
+                            else if (rank === 2) highlightClass = 'highlight-orange';
+
+                            html += '<span class="keyword-tag hit ' + highlightClass + '">' +
+                                escapeHtml(kw2) + ' <span class="count-badge">' + k.count + '</span>' +
+                                '</span>';
+                        }
+                    }
+                    html += '</td></tr>';
+                }
+
+                html += '</tbody></table>';
+                tableContainer.innerHTML = html;
+            }
+
+            // ---- 清空 ----
+            function clearAll() {
+                if (isScanning) {
+                    if (!confirm('扫描正在进行，确定要终止并清空结果吗？')) return;
+                    stopRequested = true;
+                    var waitCount = 0;
+                    var maxWait = 50; // 最多等待5秒 (50 * 100ms)
+                    var checkStop = function() {
+                        if (isScanning && waitCount < maxWait) {
+                            waitCount++;
+                            setTimeout(checkStop, 100);
+                        } else {
+                            if (isScanning) {
+                                // 超时强制重置
+                                isScanning = false;
+                                stopRequested = false;
+                            }
+                            resetScanState();
+                            doClear();
+                        }
+                    };
+                    setTimeout(checkStop, 100);
+                    return;
+                }
+                doClear();
+            }
+
+            function doClear() {
+                resultData = {
+                    keywordMap: {},
+                    fileMap: {},
+                    totalFiles: 0,
+                    totalHits: 0,
+                    keywordList: [],
+                    fileList: [],
+                    allKeywords: []
+                };
+                resultArea.style.display = 'none';
+                scanSummary.style.display = 'none';
+                progressWrap.style.display = 'none';
+                progressBar.style.width = '0%';
+                progressText.textContent = '';
+                tableContainer.innerHTML = '<div class="no-data-msg">暂无数据</div>';
+                resetScanState();
+            }
+
+            // ---- 路径管理 ----
+            function updatePathTags() {
+                pathTags.innerHTML = '';
+                for (var i = 0; i < folderPaths.length; i++) {
+                    var p = folderPaths[i];
+                    var tag = document.createElement('span');
+                    tag.className = 'path-tag';
+                    var excelCount = 0;
+                    var files = p.files;
+                    for (var fi = 0; fi < files.length; fi++) {
+                        if (isExcelFile(files[fi].name)) excelCount++;
+                    }
+                    tag.innerHTML =
+                        '<span class="name">' + escapeHtml(p.name) + '</span>' +
+                        '<span class="count">' + p.files.length + ' / ' + excelCount + ' Excel</span>' +
+                        '<span class="del" data-index="' + i + '">✕</span>';
+                    pathTags.appendChild(tag);
+                }
+                var dels = document.querySelectorAll('.path-tag .del');
+                for (var di = 0; di < dels.length; di++) {
+                    dels[di].addEventListener('click', function() {
+                        var idx = parseInt(this.dataset.index, 10);
+                        folderPaths.splice(idx, 1);
+                        updatePathTags();
+                        updateButtons();
+                        doClear();
+                    });
+                }
+                updateButtons();
+            }
+
+            function updateButtons() {
+                var hasPaths = folderPaths.length > 0;
+                var hasKeywords = parseKeywords(keywordInput.value).length > 0;
+                keywordSearchBtn.disabled = !hasPaths || !hasKeywords || isScanning;
+                fullScanBtn.disabled = !hasPaths || isScanning;
+                addPathBtn.disabled = folderPaths.length >= 8;
+            }
+
+            // ---- 添加文件夹 ----
+            addPathBtn.addEventListener('click', function() {
+                if (folderPaths.length >= 8) {
+                    alert('最多添加 8 个文件夹。');
+                    return;
+                }
+                folderPicker.click();
+            });
+
+            folderPicker.addEventListener('change', function(e) {
+                var files = e.target.files;
+                if (files.length === 0) return;
+                var folderName = '';
+                var fileList = [];
+                for (var i = 0; i < files.length; i++) {
+                    var f = files[i];
+                    fileList.push(f);
+                    if (i === 0) {
+                        var path = f.webkitRelativePath || f.name;
+                        var parts = path.split('/');
+                        folderName = parts.length > 1 ? parts[0] : path;
+                    }
+                }
+                for (var pi = 0; pi < folderPaths.length; pi++) {
+                    if (folderPaths[pi].name === folderName) {
+                        alert('文件夹 "' + folderName + '" 已添加，请勿重复添加。');
+                        folderPicker.value = '';
+                        return;
+                    }
+                }
+                folderPaths.push({ name: folderName, files: fileList });
+                updatePathTags();
+                folderPicker.value = '';
+                doClear();
+            });
+
+            // ---- 按钮事件 ----
+            keywordSearchBtn.addEventListener('click', function() {
+                performSearch('keyword');
+            });
+
+            fullScanBtn.addEventListener('click', function() {
+                performSearch('full');
+            });
+
+            clearResBtn.addEventListener('click', clearAll);
+
+            stopScanBtn.addEventListener('click', function() {
+                if (isScanning) {
+                    stopRequested = true;
+                    stopScanBtn.disabled = true;
+                    stopScanBtn.textContent = '⏹️ 正在终止...';
+                    setTimeout(function() {
+                        stopScanBtn.disabled = false;
+                        stopScanBtn.textContent = '⏹️ 终止扫描';
+                    }, 2000);
+                }
+            });
+
+            // ---- 视图切换 ----
+            var viewBtns = document.querySelectorAll('.view-toggle button');
+            for (var vbi = 0; vbi < viewBtns.length; vbi++) {
+                viewBtns[vbi].addEventListener('click', function() {
+                    var view = this.dataset.view;
+                    if (view !== currentView && resultArea.style.display !== 'none') {
+                        renderView(view);
+                    }
+                });
+            }
+
+            // ---- 关键词输入更新按钮状态 ----
+            keywordInput.addEventListener('input', updateButtons);
+
+            // ---- 初始化 ----
+            updatePathTags();
+            tableContainer.innerHTML = '<div class="no-data-msg">暂无数据</div>';
+            console.log('Excel 批量关键词检索工具（增强版）已加载 ✅');
+        })();
+    </script>
+</body>
+</html>
