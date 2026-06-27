@@ -122,7 +122,6 @@ def search_excel_file(file_path, ids):
     """在单个 Excel 文件中搜索 ID，返回匹配结果"""
     matches = []
     try:
-        # 使用 data_only=True 读取值，read_only=True 提高性能
         wb = load_workbook(file_path, data_only=True, read_only=True)
         for sheet_name in wb.sheetnames:
             sheet = wb[sheet_name]
@@ -178,13 +177,18 @@ def main():
         print("📌 关键路径: 无（搜索所有文件夹）")
     print("")
 
-    # 4. 扫描文件夹，收集 Excel 文件
+    # 4. 扫描文件夹，收集 Excel 文件（每10个文件输出进度）
     print("📂 正在扫描 Excel 文件...")
     excel_files = []
-    folder_path_obj = Path(folder_path)
+    scanned_count = 0
+    found_count = 0
 
     for root, dirs, files in os.walk(folder_path):
         for file in files:
+            scanned_count += 1
+            if scanned_count % 10 == 0:
+                print(f"   🔄 已扫描 {scanned_count} 个文件，找到 {found_count} 个 Excel...", end='\r')
+
             if is_excel_file(file):
                 full_path = os.path.join(root, file)
                 # 关键路径筛选（使用相对路径）
@@ -199,16 +203,19 @@ def main():
                     if not matched:
                         continue
                 excel_files.append(full_path)
+                found_count += 1
 
-    print(f"✅ 找到 {len(excel_files)} 个 Excel 文件")
+    # 换行，覆盖扫描进度
+    print("")
+    print(f"✅ 扫描完成！共扫描 {scanned_count} 个文件，找到 {found_count} 个 Excel 文件")
     print("")
 
     if not excel_files:
         print("❌ 未找到任何 Excel 文件，程序退出。")
         return
 
-    # 5. 搜索
-    print("🔍 正在搜索...")
+    # 5. 搜索（每10个文件输出进度）
+    print("🔍 正在搜索 Excel 内容...")
     print("   (这可能需要一些时间，请耐心等待)")
     results = []
     total_matches = 0
@@ -217,8 +224,9 @@ def main():
 
     for file_path in excel_files:
         processed += 1
-        if processed % 10 == 0 or processed == total:
-            print(f"   进度: {processed}/{total}")
+        if processed % 10 == 0:
+            pct = int(processed / total * 100)
+            print(f"   🔍 进度: {processed}/{total} ({pct}%)", end='\r')
 
         matches = search_excel_file(file_path, ids)
         if matches:
@@ -249,11 +257,12 @@ def main():
                 total_matches += len(items)
             results.append(file_entry)
 
-    print(f"✅ 搜索完成，共 {total_matches} 次命中")
+    # 换行，覆盖搜索进度
+    print("")
+    print(f"✅ 搜索完成，共 {total_matches} 次命中，命中 {len(results)} 个文件")
     print("")
 
     # 6. 生成结果 JSON
-    # 保存到脚本所在目录
     script_dir = os.path.dirname(os.path.abspath(__file__))
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     output_path = os.path.join(script_dir, f"search_result_{timestamp}.json")
