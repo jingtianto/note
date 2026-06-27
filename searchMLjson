@@ -1,9 +1,24 @@
 import os
 import json
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, simpledialog, scrolledtext
 from pathlib import Path
 from datetime import datetime
+import re
+import sys
+
+# 检查 openpyxl 是否安装
+try:
+    import openpyxl
+    from openpyxl import load_workbook
+except ImportError:
+    print("=" * 60)
+    print("❌ 未安装 openpyxl 库")
+    print("请运行以下命令安装：")
+    print("    pip install openpyxl")
+    print("=" * 60)
+    sys.exit(1)
+
 
 def select_folder():
     """弹出文件夹选择对话框"""
@@ -14,133 +29,285 @@ def select_folder():
     root.destroy()
     return folder_path
 
-def scan_folder(folder_path, script_dir):
-    """遍历文件夹，生成文件清单"""
-    file_list = []
-    total_files = 0
-    total_size = 0
-    
-    print("=" * 60)
-    print("📁 开始扫描文件夹...")
-    print(f"📂 路径: {folder_path}")
-    print("=" * 60)
-    
-    for root, dirs, files in os.walk(folder_path):
-        for file in files:
-            try:
-                full_path = Path(root) / file
-                stat = full_path.stat()
-                file_info = {
-                    "path": str(full_path),
-                    "name": file,
-                    "size": stat.st_size,
-                    "modified": stat.st_mtime,
-                    "modified_str": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-                }
-                file_list.append(file_info)
-                total_files += 1
-                total_size += stat.st_size
-                
-                if total_files % 100 == 0:
-                    print(f"✅ 已扫描 {total_files} 个文件...")
-                    
-            except Exception as e:
-                print(f"⚠️ 跳过文件 {file}: {e}")
-    
-    # 生成JSON文件 - 固定保存在脚本所在目录
-    folder_name = Path(folder_path).name
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"file_list_{folder_name}_{timestamp}.json"
-    output_path = os.path.join(script_dir, filename)
-    
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump({
-            "folder": folder_path,
-            "total_files": total_files,
-            "total_size": total_size,
-            "scan_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "files": file_list
-        }, f, ensure_ascii=False, indent=2)
-    
-    return output_path, total_files, total_size
+
+def get_ids_from_user():
+    """弹出对话框让用户输入ID"""
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+
+    dialog = tk.Toplevel(root)
+    dialog.title("输入要搜索的 ID")
+    dialog.geometry("500x300")
+    dialog.attributes('-topmost', True)
+    dialog.transient(root)
+
+    tk.Label(dialog, text="输入要搜索的 ID（一行一个，支持逗号分隔）:", font=("Microsoft Yahei", 11)).pack(pady=10)
+
+    text_widget = scrolledtext.ScrolledText(dialog, height=10, font=("Microsoft Yahei", 10))
+    text_widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+    text_widget.insert(tk.END, "示例：\n1757610,1778200\n1778199\n1530042")
+
+    result = []
+    dialog_closed = False
+
+    def on_confirm():
+        nonlocal result, dialog_closed
+        if dialog_closed:
+            return
+        content = text_widget.get("1.0", tk.END).strip()
+        lines = content.split('\n')
+        ids = []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            parts = re.split(r'[,，\s]+', line)
+            for p in parts:
+                p = p.strip()
+                if p:
+                    ids.append(p)
+        result = ids
+        dialog_closed = True
+        dialog.destroy()
+        root.destroy()
+
+    def on_cancel():
+        nonlocal dialog_closed
+        if dialog_closed:
+            return
+        dialog_closed = True
+        dialog.destroy()
+        root.destroy()
+
+    btn_frame = tk.Frame(dialog)
+    btn_frame.pack(pady=10)
+    tk.Button(btn_frame, text="确认", command=on_confirm, width=10, bg="#2563eb", fg="white",
+              font=("Microsoft Yahei", 10)).pack(side=tk.LEFT, padx=5)
+    tk.Button(btn_frame, text="取消", command=on_cancel, width=10, bg="#e5e7eb",
+              font=("Microsoft Yahei", 10)).pack(side=tk.LEFT, padx=5)
+
+    dialog.protocol("WM_DELETE_WINDOW", on_cancel)
+    dialog.grab_set()
+    root.wait_window(dialog)
+
+    return result
+
+
+def get_path_keywords():
+    """弹出对话框让用户输入关键路径（可选）"""
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+
+    keywords = simpledialog.askstring(
+        "关键路径（可选）",
+        "输入关键路径词（用于筛选文件夹，多个用逗号分隔）：\n留空表示搜索所有文件夹",
+        parent=root
+    )
+    root.destroy()
+
+    if keywords:
+        return [k.strip() for k in re.split(r'[,，\s]+', keywords) if k.strip()]
+    return []
+
+
+def is_excel_file(filename):
+    """检查是否为 Excel 文件"""
+    ext = os.path.splitext(filename)[1].lower()
+    return ext in ['.xlsx', '.xls', '.xlsm', '.xlsb']
+
+
+def search_excel_file(file_path, ids):
+    """在单个 Excel 文件中搜索 ID，返回匹配结果"""
+    matches = []
+    try:
+        # 使用 data_only=True 读取值，read_only=True 提高性能
+        wb = load_workbook(file_path, data_only=True, read_only=True)
+        for sheet_name in wb.sheetnames:
+            sheet = wb[sheet_name]
+            for row in sheet.iter_rows(values_only=True):
+                if not row:
+                    continue
+                for cell_val in row:
+                    if cell_val is None:
+                        continue
+                    str_val = str(cell_val)
+                    if not str_val:
+                        continue
+                    for id_val in ids:
+                        if id_val in str_val:
+                            matches.append({
+                                "keyword": id_val,
+                                "sheet": sheet_name,
+                                "value": str_val
+                            })
+        wb.close()
+    except Exception as e:
+        print(f"⚠️ 读取文件失败 {os.path.basename(file_path)}: {e}")
+    return matches
+
 
 def main():
-    # 获取脚本所在目录（固定保存位置）
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    
     print("=" * 60)
-    print("📁 文件夹扫描工具 v2.0")
-    print("=" * 60)
-    print(f"📂 JSON 文件保存位置: {script_dir}")
+    print("📊 Excel 批量搜索工具 (Python版)")
     print("=" * 60)
     print("")
-    
-    # 弹出文件夹选择对话框
+
+    # 1. 选择文件夹
     folder_path = select_folder()
-    
     if not folder_path:
         print("❌ 未选择文件夹，程序退出。")
         return
-    
+    print(f"📁 已选择文件夹: {folder_path}")
     print("")
-    
-    # 开始扫描
+
+    # 2. 输入ID
+    ids = get_ids_from_user()
+    if not ids:
+        print("❌ 未输入 ID，程序退出。")
+        return
+    print(f"🔑 搜索 ID ({len(ids)} 个): {', '.join(ids)}")
+    print("")
+
+    # 3. 输入关键路径（可选）
+    path_keywords = get_path_keywords()
+    if path_keywords:
+        print(f"📌 关键路径: {', '.join(path_keywords)}")
+    else:
+        print("📌 关键路径: 无（搜索所有文件夹）")
+    print("")
+
+    # 4. 扫描文件夹，收集 Excel 文件
+    print("📂 正在扫描 Excel 文件...")
+    excel_files = []
+    folder_path_obj = Path(folder_path)
+
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            if is_excel_file(file):
+                full_path = os.path.join(root, file)
+                # 关键路径筛选（使用相对路径）
+                if path_keywords:
+                    rel_path = os.path.relpath(full_path, folder_path)
+                    rel_path_lower = rel_path.lower()
+                    matched = False
+                    for kw in path_keywords:
+                        if kw.lower() in rel_path_lower:
+                            matched = True
+                            break
+                    if not matched:
+                        continue
+                excel_files.append(full_path)
+
+    print(f"✅ 找到 {len(excel_files)} 个 Excel 文件")
+    print("")
+
+    if not excel_files:
+        print("❌ 未找到任何 Excel 文件，程序退出。")
+        return
+
+    # 5. 搜索
+    print("🔍 正在搜索...")
+    print("   (这可能需要一些时间，请耐心等待)")
+    results = []
+    total_matches = 0
+    processed = 0
+    total = len(excel_files)
+
+    for file_path in excel_files:
+        processed += 1
+        if processed % 10 == 0 or processed == total:
+            print(f"   进度: {processed}/{total}")
+
+        matches = search_excel_file(file_path, ids)
+        if matches:
+            # 按ID分组
+            kw_groups = {}
+            for m in matches:
+                if m["keyword"] not in kw_groups:
+                    kw_groups[m["keyword"]] = []
+                kw_groups[m["keyword"]].append(m)
+
+            # 获取文件修改时间
+            try:
+                mtime = os.path.getmtime(file_path)
+            except:
+                mtime = None
+
+            file_entry = {
+                "file": file_path,
+                "last_modified": mtime,
+                "keywords": []
+            }
+            for kw, items in kw_groups.items():
+                file_entry["keywords"].append({
+                    "keyword": kw,
+                    "count": len(items),
+                    "sheets": list(set([m["sheet"] for m in items]))
+                })
+                total_matches += len(items)
+            results.append(file_entry)
+
+    print(f"✅ 搜索完成，共 {total_matches} 次命中")
+    print("")
+
+    # 6. 生成结果 JSON
+    # 保存到脚本所在目录
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    output_path = os.path.join(script_dir, f"search_result_{timestamp}.json")
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "folder": folder_path,
+            "ids": ids,
+            "path_keywords": path_keywords,
+            "total_files_scanned": len(excel_files),
+            "total_hits": total_matches,
+            "matched_files": len(results),
+            "scan_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "results": results
+        }, f, ensure_ascii=False, indent=2)
+
+    print("=" * 60)
+    print("✅ 搜索完成！")
+    print(f"📁 扫描路径: {folder_path}")
+    print(f"📄 扫描文件: {len(excel_files)} 个")
+    print(f"🔑 搜索 ID: {len(ids)} 个")
+    print(f"✅ 命中文件: {len(results)} 个")
+    print(f"🔍 总命中次数: {total_matches}")
+    print("")
+    print("📄 结果已保存到:")
+    print(f"   {output_path}")
+    print("=" * 60)
+
+    # 弹出提示框
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    messagebox.showinfo(
+        "搜索完成",
+        f"✅ 搜索完成！\n\n"
+        f"📁 扫描路径: {folder_path}\n"
+        f"📄 扫描文件: {len(excel_files)} 个\n"
+        f"🔑 搜索 ID: {len(ids)} 个\n"
+        f"✅ 命中文件: {len(results)} 个\n"
+        f"🔍 总命中次数: {total_matches}\n\n"
+        f"📄 结果已保存到:\n{output_path}\n\n"
+        f"💡 提示: 在 HTML 工具中点击\n"
+        f"「📊 加载搜索结果 JSON」导入查看"
+    )
+    root.destroy()
+
+    # 自动打开文件夹（Windows）
     try:
-        output_path, total_files, total_size = scan_folder(folder_path, script_dir)
-        
-        # 格式化文件大小
-        if total_size > 1024 * 1024 * 1024:
-            size_str = f"{total_size / (1024 * 1024 * 1024):.2f} GB"
-        elif total_size > 1024 * 1024:
-            size_str = f"{total_size / (1024 * 1024):.2f} MB"
-        elif total_size > 1024:
-            size_str = f"{total_size / 1024:.2f} KB"
-        else:
-            size_str = f"{total_size} B"
-        
-        print("")
-        print("=" * 60)
-        print("✅ 扫描完成！")
-        print("=" * 60)
-        print(f"📁 扫描路径: {folder_path}")
-        print(f"📄 文件总数: {total_files}")
-        print(f"💾 总大小: {size_str}")
-        print("")
-        print("📄 JSON 文件已保存到:")
-        print(f"   {output_path}")
-        print("=" * 60)
-        
-        # 弹出提示框
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
-        messagebox.showinfo(
-            "扫描完成", 
-            f"✅ 扫描完成！\n\n"
-            f"📁 扫描路径: {folder_path}\n"
-            f"📄 文件总数: {total_files}\n"
-            f"💾 总大小: {size_str}\n\n"
-            f"📄 JSON 文件已保存到:\n{output_path}\n\n"
-            f"💡 提示: 可以在 HTML 工具中点击\n"
-            f"「加载 JSON 清单」导入此文件"
-        )
-        root.destroy()
-        
-        # 自动打开文件夹（Windows）
-        try:
-            import subprocess
-            if os.name == 'nt':  # Windows
-                subprocess.Popen(['explorer', script_dir])
-        except:
-            pass
-            
-    except Exception as e:
-        print(f"❌ 扫描出错: {e}")
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
-        messagebox.showerror("错误", f"扫描失败: {e}")
-        root.destroy()
+        import subprocess
+        if os.name == 'nt':
+            subprocess.Popen(['explorer', script_dir])
+    except:
+        pass
+
 
 if __name__ == "__main__":
     main()
