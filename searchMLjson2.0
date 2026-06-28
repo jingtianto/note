@@ -5,6 +5,7 @@ Excel Octane-ID 索引生成器 (图形界面版)
 功能：管理多个数据源，生成JSON索引文件
 支持：增量更新（只处理变更的文件）
 输出：{数据源名称}.json 供HTML工具使用
+新增：启动时自动扫描已有索引文件并恢复数据源
 """
 
 import os
@@ -30,7 +31,6 @@ class IndexBuilder:
     """索引构建器 - 支持增量更新"""
     
     def __init__(self, config_path="config.json"):
-        # 获取脚本所在目录
         script_dir = os.path.dirname(os.path.abspath(__file__))
         self.config_path = os.path.join(script_dir, config_path)
         self.config = self.load_config()
@@ -47,8 +47,13 @@ class IndexBuilder:
         return {"data_sources": []}
     
     def save_config(self):
-        with open(self.config_path, 'w', encoding='utf-8') as f:
-            json.dump(self.config, f, ensure_ascii=False, indent=2)
+        try:
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception as e:
+            print(f"⚠️ 保存配置失败: {e}")
+            return False
     
     def add_source(self, name, path):
         for s in self.config["data_sources"]:
@@ -82,65 +87,50 @@ class IndexBuilder:
         self.save_config()
     
     def stop(self):
-        """停止当前操作"""
         self.stop_flag = True
     
     def parse_excel(self, file_path):
-        """提取IPN Sheet中Octane-ID列的所有非空值"""
         try:
             wb = load_workbook(file_path, data_only=True, read_only=True)
-            
             if 'IPN' not in wb.sheetnames:
                 wb.close()
                 return []
-            
             sheet = wb['IPN']
-            
-            # 查找 Octane-ID 列
             octane_col_index = None
             first_row = list(sheet.iter_rows(min_row=1, max_row=1, values_only=True))[0]
             for idx, cell_value in enumerate(first_row):
                 if cell_value and str(cell_value).strip() == 'Octane-ID':
                     octane_col_index = idx
                     break
-            
             if octane_col_index is None:
                 wb.close()
                 return []
-            
-            # 提取非空值
             ids = []
             for row in sheet.iter_rows(min_row=2, values_only=True):
                 if octane_col_index < len(row):
                     value = row[octane_col_index]
                     if value is not None and str(value).strip():
                         ids.append(str(value).strip())
-            
             wb.close()
             return ids
         except Exception as e:
             return []
     
     def get_all_excel_files(self, folder_path, callback=None):
-        """递归获取所有子目录中的Excel文件"""
         excel_files = []
         extensions = ['.xlsx', '.xls', '.xlsm', '.xlsb']
-        
         try:
             if not os.path.exists(folder_path):
                 if callback:
                     callback("debug", f"❌ 路径不存在: {folder_path}")
                 return []
-            
             total_dirs = 0
             total_files = 0
-            
             for root, dirs, files in os.walk(folder_path):
                 if self.stop_flag:
                     if callback:
                         callback("debug", "⏹️ 用户停止扫描")
                     return []
-                
                 total_dirs += 1
                 for file in files:
                     file_lower = file.lower()
@@ -150,21 +140,16 @@ class IndexBuilder:
                             excel_files.append(file_path)
                             total_files += 1
                             break
-                
                 if total_dirs % 100 == 0 and callback:
                     callback("debug", f"已扫描 {total_dirs} 个目录, 找到 {total_files} 个Excel")
-            
             if callback:
                 callback("debug", f"✅ 扫描完成: {total_dirs} 个目录, {total_files} 个Excel文件")
-            
         except Exception as e:
             if callback:
                 callback("debug", f"❌ 扫描错误: {str(e)}")
-        
         return excel_files
     
     def load_existing_index(self, source_name, output_dir):
-        """加载已有的索引文件"""
         index_file = os.path.join(output_dir, f"{source_name}.json")
         if os.path.exists(index_file):
             try:
@@ -175,7 +160,6 @@ class IndexBuilder:
         return None
     
     def build_index(self, source_name, output_dir=".", callback=None, incremental=True):
-        """为单个数据源构建索引（支持增量更新）"""
         self.stop_flag = False
         self.is_building = True
         
@@ -200,13 +184,10 @@ class IndexBuilder:
             callback("debug", f"📁 路径: {folder_path}")
             callback("debug", f"📁 模式: {'增量更新' if incremental else '全量重建'}")
         
-        # 获取所有Excel文件
         excel_files = self.get_all_excel_files(folder_path, callback)
-        
         if self.stop_flag:
             self.is_building = False
             return {"error": "用户停止", "stopped": True}
-        
         if not excel_files:
             if callback:
                 callback("error", f"❌ 未找到任何Excel文件！")
@@ -217,14 +198,12 @@ class IndexBuilder:
             callback("status", f"找到 {len(excel_files)} 个Excel文件，正在提取ID...")
             callback("debug", f"📊 共 {len(excel_files)} 个Excel文件")
         
-        # 加载已有索引（用于增量更新）
         existing_data = None
         if incremental:
             existing_data = self.load_existing_index(source_name, output_dir)
             if existing_data:
                 callback("debug", f"📂 加载已有索引: {len(existing_data.get('files', {}))} 个文件")
         
-        # 构建索引
         data = {
             "version": "1.0",
             "build_time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -236,15 +215,12 @@ class IndexBuilder:
             "id_index": {}
         }
         
-        # 如果是增量更新且存在旧数据，复制旧数据（全量重建则保持空字典）
         if incremental and existing_data:
             data["files"] = existing_data.get("files", {}).copy()
             data["id_index"] = existing_data.get("id_index", {}).copy()
         
         processed = 0
         id_set = set()
-        
-        # 收集所有现有ID（用于统计）
         for file_info in data["files"].values():
             for id_val in file_info.get("ids", []):
                 id_set.add(id_val)
@@ -257,11 +233,9 @@ class IndexBuilder:
                 return {"error": "用户停止", "stopped": True}
             
             rel_path = str(file_path.relative_to(folder_path))
-            
             if callback:
                 callback("progress", idx, len(excel_files), rel_path[:50])
             
-            # 增量更新：检查文件是否变化
             should_parse = True
             if incremental and existing_data:
                 existing_file = existing_data.get("files", {}).get(rel_path)
@@ -270,7 +244,6 @@ class IndexBuilder:
                         stat = file_path.stat()
                         current_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
                         if current_modified == existing_file.get("modified"):
-                            # 确保ID在id_set中
                             for id_val in existing_file.get("ids", []):
                                 id_set.add(id_val)
                             processed += 1
@@ -283,9 +256,7 @@ class IndexBuilder:
             if not should_parse:
                 continue
             
-            # 解析文件
             ids = self.parse_excel(file_path)
-            
             if ids:
                 try:
                     stat = file_path.stat()
@@ -298,18 +269,14 @@ class IndexBuilder:
                         "modified": "",
                         "ids": ids
                     }
-                
-                # 更新id_index
                 for id_val in ids:
                     if id_val not in data["id_index"]:
                         data["id_index"][id_val] = []
                     if rel_path not in data["id_index"][id_val]:
                         data["id_index"][id_val].append(rel_path)
                     id_set.add(id_val)
-                
                 processed += 1
             else:
-                # 如果文件没有ID，从索引中移除
                 if rel_path in data["files"]:
                     old_ids = data["files"][rel_path].get("ids", [])
                     for old_id in old_ids:
@@ -321,14 +288,12 @@ class IndexBuilder:
                                 del data["id_index"][old_id]
                     del data["files"][rel_path]
         
-        # 处理已删除的文件（增量更新时）
         if incremental and existing_data:
             current_paths = {str(f.relative_to(folder_path)) for f in excel_files}
             to_remove = []
             for file_path in data["files"].keys():
                 if file_path not in current_paths:
                     to_remove.append(file_path)
-            
             for file_path in to_remove:
                 old_ids = data["files"][file_path].get("ids", [])
                 for old_id in old_ids:
@@ -345,7 +310,6 @@ class IndexBuilder:
         data["total_files"] = len(data["files"])
         data["total_ids"] = len(data["id_index"])
         
-        # 保存JSON
         output_file = os.path.join(output_dir, f"{source_name}.json")
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
@@ -354,7 +318,6 @@ class IndexBuilder:
             self.is_building = False
             return {"error": f"保存JSON失败: {str(e)}"}
         
-        # 更新配置中的统计信息
         source["last_build"] = data["build_time"]
         source["file_count"] = data["total_files"]
         source["id_count"] = data["total_ids"]
@@ -376,32 +339,23 @@ class IndexBuilder:
         }
     
     def build_all(self, output_dir=".", callback=None, incremental=True):
-        """为所有启用的数据源构建索引"""
         sources = [s for s in self.config["data_sources"] if s["enabled"]]
-        
         if not sources:
             if callback:
                 callback("error", "没有启用的数据源")
             return []
-        
         results = []
         for idx, source in enumerate(sources, 1):
             if self.stop_flag:
                 if callback:
                     callback("debug", "⏹️ 用户停止所有构建")
                 break
-            
             if callback:
                 callback("source", f"({idx}/{len(sources)}) {source['name']}")
             result = self.build_index(source["name"], output_dir, callback, incremental)
-            results.append({
-                "name": source["name"],
-                "result": result
-            })
-            
+            results.append({"name": source["name"], "result": result})
             if result.get("stopped") or result.get("error"):
                 break
-        
         return results
 
 
@@ -414,7 +368,6 @@ class IndexerGUI:
         self.root.minsize(600, 400)
         
         self.script_dir = os.path.dirname(os.path.abspath(__file__))
-        
         self.builder = IndexBuilder("config.json")
         self.output_dir = self.script_dir
         self.is_running = False
@@ -424,7 +377,50 @@ class IndexerGUI:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
         self.create_widgets()
+        
+        # ===== 关键：启动时自动恢复数据源 =====
+        self.auto_restore_sources()
         self.refresh_list()
+    
+    def auto_restore_sources(self):
+        """
+        自动扫描脚本目录下所有 .json 文件，
+        识别为索引文件的自动添加为数据源（如果尚未在配置中）
+        """
+        existing_indexes = []
+        for file in os.listdir(self.script_dir):
+            if file.endswith('.json') and file != 'config.json':
+                file_path = os.path.join(self.script_dir, file)
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        # 判断是否为索引文件（包含 source_name 和 source_path）
+                        if 'source_name' in data and 'source_path' in data:
+                            existing_indexes.append(data)
+                except:
+                    pass
+        
+        if not existing_indexes:
+            return
+        
+        # 检查这些数据源是否已在 config 中
+        config_names = [s["name"] for s in self.builder.config["data_sources"]]
+        for idx_data in existing_indexes:
+            name = idx_data["source_name"]
+            if name not in config_names:
+                # 自动添加
+                self.builder.config["data_sources"].append({
+                    "name": name,
+                    "path": idx_data["source_path"],
+                    "enabled": True,
+                    "last_build": idx_data.get("build_time", ""),
+                    "file_count": idx_data.get("total_files", 0),
+                    "id_count": idx_data.get("total_ids", 0)
+                })
+                self.log(f"♻️ 自动恢复数据源: {name}")
+        
+        # 保存更新后的配置
+        self.builder.save_config()
     
     def create_widgets(self):
         main_frame = ttk.Frame(self.root, padding="10")
@@ -511,9 +507,7 @@ class IndexerGUI:
         status_bar.pack(fill=X, pady=(5, 0))
     
     def refresh_list(self):
-        """刷新数据源列表，保留选中状态"""
         selected_name = self.get_selected_name()
-        
         self.listbox.delete(0, END)
         for source in self.builder.config["data_sources"]:
             status = "✅" if source["enabled"] else "❌"
@@ -521,7 +515,6 @@ class IndexerGUI:
             ids = source.get("id_count", 0)
             last = source.get("last_build", "")[:16] if source.get("last_build") else "未构建"
             self.listbox.insert(END, f"{status} {source['name']}  (📁{files} 🔑{ids} 🕐{last})")
-        
         if selected_name:
             for idx, source in enumerate(self.builder.config["data_sources"]):
                 if source["name"] == selected_name:
@@ -634,7 +627,6 @@ class IndexerGUI:
         self.log_text.see(END)
     
     def stop_build(self):
-        """停止当前构建"""
         self.builder.stop()
         self.stop_btn.config(state=DISABLED, text="⏹️ 停止中...")
         self.log("⏹️ 正在停止当前任务...")
@@ -734,7 +726,6 @@ class IndexerGUI:
         self.current_thread.start()
     
     def on_closing(self):
-        """窗口关闭时停止线程"""
         if self.is_running:
             self.builder.stop()
             if self.current_thread and self.current_thread.is_alive():
