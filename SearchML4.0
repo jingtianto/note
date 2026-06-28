@@ -1,0 +1,2386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Excel批量关键词检索工具（增强版）</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js">
+    </script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: "Microsoft Yahei", system-ui, sans-serif;
+        }
+        body {
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 24px;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        }
+        .title {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #1f2937;
+        }
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 6px;
+        }
+        .section-desc {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+        .input-area {
+            margin-bottom: 16px;
+        }
+        #idInput {
+            width: 100%;
+            height: 100px;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .path-keyword-manager {
+            margin: 16px 0;
+            padding: 12px 16px;
+            background: #f9fafb;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        .path-keyword-manager .row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .path-keyword-manager .row input {
+            flex: 1;
+            min-width: 160px;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .path-keyword-manager .row input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+        .btn-add-pk {
+            background: #2563eb;
+            color: #fff;
+            padding: 8px 18px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+        .btn-add-pk:hover {
+            background: #1d4ed8;
+        }
+        .btn-add-pk:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+        .pk-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+            min-height: 32px;
+            align-items: center;
+        }
+        .pk-tag {
+            display: inline-flex;
+            align-items: center;
+            background: #e5e7eb;
+            border-radius: 16px;
+            padding: 4px 10px 4px 14px;
+            font-size: 13px;
+            color: #1f2937;
+            gap: 6px;
+        }
+        .pk-tag .del {
+            cursor: pointer;
+            font-weight: bold;
+            color: #6b7280;
+            font-size: 16px;
+            line-height: 1;
+            padding: 0 2px;
+        }
+        .pk-tag .del:hover {
+            color: #dc2626;
+        }
+        .pk-empty-tip {
+            font-size: 13px;
+            color: #9ca3af;
+        }
+
+        .path-manager {
+            margin: 12px 0;
+            padding: 12px 16px;
+            background: #f9fafb;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        .path-manager .label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .path-manager .label-row span {
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+        }
+        .path-manager .btn-group-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .path-manager .btn-group-row button {
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: none;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+        .btn-add-path {
+            background: #2563eb;
+            color: #fff;
+        }
+        .btn-add-path:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+        .btn-add-path:hover:not(:disabled) {
+            background: #1d4ed8;
+        }
+        .btn-load-json {
+            background: #8b5cf6;
+            color: #fff;
+        }
+        .btn-load-json:hover {
+            background: #7c3aed;
+        }
+        .btn-load-json:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+        .btn-load-result {
+            background: #0b5e42;
+            color: #fff;
+        }
+        .btn-load-result:hover {
+            background: #065f46;
+        }
+        .btn-load-result:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+        .file-input-hidden {
+            display: none;
+        }
+        .path-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+            min-height: 36px;
+            align-items: center;
+        }
+        .path-tag {
+            display: inline-flex;
+            align-items: center;
+            background: #e5e7eb;
+            border-radius: 20px;
+            padding: 4px 12px 4px 16px;
+            font-size: 13px;
+            color: #1f2937;
+            gap: 8px;
+            max-width: 500px;
+        }
+        .path-tag .name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .path-tag .count {
+            background: #9ca3af;
+            color: #fff;
+            border-radius: 10px;
+            padding: 0 8px;
+            font-size: 11px;
+            min-width: 20px;
+            text-align: center;
+        }
+        .path-tag .count.loading {
+            background: #fbbf24;
+            animation: pulse 1s infinite;
+        }
+        .path-tag .count.done {
+            background: #22c55e;
+        }
+        .path-tag .count.json {
+            background: #8b5cf6;
+        }
+        .path-tag .count.result {
+            background: #0b5e42;
+        }
+        @keyframes pulse {
+            0%,
+            100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+        .path-tag .del {
+            cursor: pointer;
+            font-weight: bold;
+            color: #6b7280;
+            padding: 0 4px;
+            font-size: 16px;
+            line-height: 1;
+        }
+        .path-tag .del:hover {
+            color: #dc2626;
+        }
+        .path-tag .status-tag {
+            font-size: 10px;
+            padding: 0 6px;
+            border-radius: 4px;
+            background: #fef3c7;
+            color: #d97706;
+        }
+        .path-tag .status-tag.done {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .path-tag .status-tag.json {
+            background: #ede9fe;
+            color: #7c3aed;
+        }
+        .path-tag .status-tag.result {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .path-tag .tag-type {
+            font-size: 10px;
+            padding: 0 6px;
+            border-radius: 4px;
+            background: #e5e7eb;
+            color: #6b7280;
+        }
+        .path-tag .tag-type.folder {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+        .path-tag .tag-type.json {
+            background: #ede9fe;
+            color: #7c3aed;
+        }
+        .path-tag .tag-type.result {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin: 16px 0;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 24px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        #keywordSearchBtn {
+            background-color: #2563eb;
+            color: white;
+        }
+        #keywordSearchBtn:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+        #fullScanBtn {
+            background-color: #059669;
+            color: white;
+        }
+        #fullScanBtn:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+        #clearResBtn {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
+        #stopScanBtn {
+            background-color: #f87171;
+            color: white;
+            display: none;
+        }
+        #exportBtn {
+            background-color: #0b5e42;
+            color: white;
+        }
+        #exportBtn:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+        #exportBtn:hover:not(:disabled) {
+            background-color: #065f46;
+        }
+
+        .progress-wrap {
+            margin: 20px 0;
+            display: none;
+        }
+        .progress-text {
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #374151;
+            word-break: break-all;
+        }
+        .progress-bar-bg {
+            width: 100%;
+            height: 12px;
+            background-color: #e5e7eb;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .progress-bar-inner {
+            height: 100%;
+            width: 0%;
+            background-color: #2563eb;
+            transition: width 0.3s;
+        }
+        .scan-summary {
+            margin: 16px 0;
+            padding: 12px;
+            background-color: #f0fdf4;
+            border-radius: 6px;
+            color: #065f46;
+            line-height: 1.8;
+        }
+        .scan-summary strong {
+            font-size: 15px;
+        }
+        .scan-summary .stat-item {
+            display: inline-block;
+            margin-right: 24px;
+        }
+        .view-toggle {
+            display: flex;
+            gap: 12px;
+            margin: 18px 0 12px 0;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .view-toggle button {
+            background: transparent;
+            border: none;
+            padding: 8px 18px;
+            font-size: 14px;
+            color: #6b7280;
+            cursor: pointer;
+            border-radius: 20px;
+            transition: 0.2s;
+            font-weight: 500;
+        }
+        .view-toggle button.active {
+            background: #2563eb;
+            color: #fff;
+        }
+        .view-toggle button:hover:not(.active) {
+            background: #f3f4f6;
+        }
+        .view-toggle .spacer {
+            flex: 1;
+        }
+        .view-toggle .btn-export {
+            background: #0b5e42;
+            color: #fff;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .view-toggle .btn-export:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+        .view-toggle .btn-export:hover:not(:disabled) {
+            background: #065f46;
+        }
+
+        .table-wrap {
+            margin-top: 6px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            min-width: 600px;
+        }
+        th,
+        td {
+            border: 1px solid #e5e7eb;
+            padding: 10px 12px;
+            text-align: left;
+            word-break: break-all;
+            vertical-align: top;
+        }
+        th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        .keyword-tag {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            margin: 2px 4px 2px 0;
+            font-size: 12px;
+            white-space: nowrap;
+            background: #f3f4f6;
+            color: #374151;
+        }
+        .keyword-tag.hit {
+            background: #eff6ff;
+            color: #2563eb;
+        }
+        .keyword-tag.miss {
+            background: #f3f4f6;
+            color: #9ca3af;
+        }
+        .highlight-green {
+            background: #bbf7d0 !important;
+            border: 1px solid #22c55e;
+            font-weight: 600;
+        }
+        .highlight-yellow {
+            background: #fde047 !important;
+            border: 1px solid #eab308;
+            font-weight: 600;
+        }
+        .highlight-orange {
+            background: #fdba74 !important;
+            border: 1px solid #f97316;
+            font-weight: 600;
+        }
+        .file-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .file-cell .fname {
+            font-weight: 500;
+        }
+        .file-cell .fdate {
+            font-size: 11px;
+            color: #6b7280;
+        }
+        .count-badge {
+            display: inline-block;
+            background: #e5e7eb;
+            color: #374151;
+            padding: 0 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+        .no-data-msg {
+            padding: 30px 0;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 14px;
+        }
+        .hit-miss-stats {
+            background: #f9fafb;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 20px;
+            border: 1px solid #e5e7eb;
+        }
+        .hit-miss-stats .stat-item {
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+        }
+        .hit-miss-stats .stat-item .label {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .hit-miss-stats .stat-item .value {
+            font-weight: 600;
+            font-size: 15px;
+        }
+        .hit-miss-stats .stat-item .value.hit {
+            color: #2563eb;
+        }
+        .hit-miss-stats .stat-item .value.miss {
+            color: #9ca3af;
+        }
+        .miss-keywords {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1f2937;
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 9999;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            max-width: 90%;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .toast.show {
+            opacity: 1;
+        }
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9998;
+            justify-content: center;
+            align-items: center;
+        }
+        .loading-overlay.show {
+            display: flex;
+        }
+        .loading-box {
+            background: #fff;
+            padding: 40px 48px;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        .loading-box .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e5e7eb;
+            border-top-color: #2563eb;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        .loading-box .msg {
+            margin-top: 16px;
+            font-size: 15px;
+            color: #374151;
+        }
+        .loading-box .sub-msg {
+            margin-top: 6px;
+            font-size: 13px;
+            color: #9ca3af;
+        }
+
+        .btn-copy {
+            background: #e5e7eb;
+            border: none;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            cursor: pointer;
+            color: #374151;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+        .btn-copy:hover {
+            background: #d1d5db;
+        }
+        .btn-copy:active {
+            background: #2563eb;
+            color: #fff;
+        }
+        .miss-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        .miss-header .label {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .miss-header .btn-copy {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+        .miss-header .btn-copy:hover {
+            background: #bfdbfe;
+        }
+
+        .action-col {
+            width: 70px;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 14px;
+            }
+            .btn-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .path-manager .label-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .path-manager .btn-group-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .path-keyword-manager .row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .view-toggle {
+                flex-wrap: wrap;
+            }
+            .hit-miss-stats {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+            .scan-summary .stat-item {
+                display: block;
+                margin-right: 0;
+            }
+            .path-tag {
+                max-width: 100%;
+            }
+            .loading-box {
+                margin: 20px;
+                padding: 30px 24px;
+            }
+            .action-col {
+                width: 50px;
+            }
+            .action-col .btn-copy {
+                font-size: 10px;
+                padding: 2px 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 class="title">📊 Excel批量关键词检索工具（增强版）</h2>
+
+        <div class="toast" id="toast"></div>
+
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-box">
+                <div class="spinner"></div>
+                <div class="msg" id="loadingMsg">正在处理...</div>
+                <div class="sub-msg" id="loadingSubMsg">请稍候</div>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <div class="section-title">🔑 ID 列表</div>
+            <div class="section-desc">在 Excel 内容中检索的 ID（一行一个，支持英文逗号分隔；全量搜索忽略此框）</div>
+            <textarea id="idInput" placeholder="示例：&#10;1757610,1778200&#10;1778199&#10;1530042"></textarea>
+        </div>
+
+        <div class="path-keyword-manager">
+            <div class="section-title">📌 关键路径</div>
+            <div class="section-desc">用于筛选文件夹范围（路径包含任一关键词即纳入），不区分大小写</div>
+            <div class="row">
+                <input type="text" id="pkInput" placeholder="输入关键路径词，如 NA6-26" />
+                <button class="btn-add-pk" id="addPkBtn">➕ 添加</button>
+            </div>
+            <div class="pk-tags" id="pkTags">
+                <span class="pk-empty-tip">暂无关键路径，请添加</span>
+            </div>
+        </div>
+
+        <div class="path-manager">
+            <div class="label-row">
+                <span>📁 数据源</span>
+                <div class="btn-group-row">
+                    <button class="btn-add-path" id="addPathBtn">📂 添加文件夹</button>
+                    <button class="btn-load-json" id="loadJsonBtn">📋 加载 JSON 清单</button>
+                    <button class="btn-load-result" id="loadResultBtn">📊 加载搜索结果 JSON</button>
+                    <input type="file" id="folderPicker" class="file-input-hidden" webkitdirectory multiple />
+                    <input type="file" id="jsonPicker" class="file-input-hidden" accept=".json" />
+                    <input type="file" id="resultPicker" class="file-input-hidden" accept=".json" />
+                </div>
+            </div>
+            <div class="path-tags" id="pathTags">
+                <span style="font-size:13px;color:#9ca3af;">暂未选择数据源</span>
+            </div>
+        </div>
+
+        <div class="btn-group">
+            <button id="keywordSearchBtn" disabled>🔍 关键词优先搜索</button>
+            <button id="fullScanBtn" disabled>📂 全量搜索（忽略ID和关键路径）</button>
+            <button id="clearResBtn">🗑️ 清空全部结果</button>
+            <button id="stopScanBtn">⏹️ 终止扫描</button>
+        </div>
+
+        <div class="progress-wrap" id="progressWrap">
+            <div class="progress-text" id="progressText">正在准备扫描...</div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-inner" id="progressBar"></div>
+            </div>
+        </div>
+
+        <div class="scan-summary" id="scanSummary" style="display:none;"></div>
+
+        <div id="resultArea" style="display:none;">
+            <div class="view-toggle">
+                <button class="active" data-view="keyword">🔑 按ID统计</button>
+                <button data-view="file">📄 按 Excel 文件统计</button>
+                <span class="spacer"></span>
+                <button class="btn-export" id="exportBtn" disabled>📥 导出 Excel</button>
+            </div>
+            <div class="table-wrap" id="tableContainer">
+                <div class="no-data-msg">暂无数据</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            // DOM refs
+            var idInput = document.getElementById('idInput');
+            var pkInput = document.getElementById('pkInput');
+            var addPkBtn = document.getElementById('addPkBtn');
+            var pkTags = document.getElementById('pkTags');
+            var folderPicker = document.getElementById('folderPicker');
+            var jsonPicker = document.getElementById('jsonPicker');
+            var resultPicker = document.getElementById('resultPicker');
+            var addPathBtn = document.getElementById('addPathBtn');
+            var loadJsonBtn = document.getElementById('loadJsonBtn');
+            var loadResultBtn = document.getElementById('loadResultBtn');
+            var pathTags = document.getElementById('pathTags');
+            var keywordSearchBtn = document.getElementById('keywordSearchBtn');
+            var fullScanBtn = document.getElementById('fullScanBtn');
+            var clearResBtn = document.getElementById('clearResBtn');
+            var stopScanBtn = document.getElementById('stopScanBtn');
+            var exportBtn = document.getElementById('exportBtn');
+            var progressWrap = document.getElementById('progressWrap');
+            var progressText = document.getElementById('progressText');
+            var progressBar = document.getElementById('progressBar');
+            var scanSummary = document.getElementById('scanSummary');
+            var resultArea = document.getElementById('resultArea');
+            var tableContainer = document.getElementById('tableContainer');
+            var toast = document.getElementById('toast');
+            var loadingOverlay = document.getElementById('loadingOverlay');
+            var loadingMsg = document.getElementById('loadingMsg');
+            var loadingSubMsg = document.getElementById('loadingSubMsg');
+
+            // 状态
+            var folderPaths = [];
+            var pathKeywords = [];
+            var isScanning = false;
+            var stopRequested = false;
+            var currentView = 'keyword';
+            var isCounting = false;
+            var hasResult = false;
+            var isResultFromJson = false;
+
+            // 结果存储
+            var resultData = {
+                keywordMap: {},
+                fileMap: {},
+                totalFiles: 0,
+                totalHits: 0,
+                keywordList: [],
+                fileList: [],
+                allKeywords: []
+            };
+
+            // ---- Toast ----
+            var toastTimer = null;
+
+            function showToast(msg, duration) {
+                duration = duration || 2000;
+                toast.textContent = msg;
+                toast.classList.add('show');
+                if (toastTimer) {
+                    clearTimeout(toastTimer);
+                }
+                toastTimer = setTimeout(function() {
+                    toast.classList.remove('show');
+                }, duration);
+            }
+
+            // ---- 复制功能 ----
+            function copyToClipboard(text) {
+                if (!text) return;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(function() {
+                        showToast('✅ 已复制: ' + text.slice(0, 50) + (text.length > 50 ? '...' : ''));
+                    }).catch(function() {
+                        fallbackCopy(text);
+                    });
+                } else {
+                    fallbackCopy(text);
+                }
+            }
+
+            function fallbackCopy(text) {
+                var textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('✅ 已复制: ' + text.slice(0, 50) + (text.length > 50 ? '...' : ''));
+                } catch (err) {
+                    alert('复制失败，请手动复制。');
+                }
+                document.body.removeChild(textarea);
+            }
+
+            // ---- Loading Overlay ----
+            function showLoading(msg, subMsg) {
+                loadingMsg.textContent = msg || '正在处理...';
+                loadingSubMsg.textContent = subMsg || '请稍候';
+                loadingOverlay.classList.add('show');
+            }
+
+            function hideLoading() {
+                loadingOverlay.classList.remove('show');
+            }
+
+            // ---- 工具函数 ----
+            function getFileExtension(name) {
+                var i = name.lastIndexOf('.');
+                return i > 0 ? name.substring(i + 1).toLowerCase() : '';
+            }
+
+            function isExcelFile(name) {
+                var ext = getFileExtension(name);
+                return ['xlsx', 'xls', 'xlsm', 'xlsb'].indexOf(ext) !== -1;
+            }
+
+            function parseIds(text) {
+                if (!text || !text.trim()) return [];
+                var lines = text.split(/\r?\n/);
+                var set = {};
+                var result = [];
+                for (var li = 0; li < lines.length; li++) {
+                    var line = lines[li].trim();
+                    if (!line) continue;
+                    var parts = line.split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; });
+                    for (var pi = 0; pi < parts.length; pi++) {
+                        var p = parts[pi];
+                        if (p && !set[p]) {
+                            set[p] = true;
+                            result.push(p);
+                        }
+                    }
+                }
+                return result;
+            }
+
+            function readFileAsBuffer(file) {
+                return new Promise(function(resolve, reject) {
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                        resolve(e.target.result);
+                    };
+                    reader.onerror = function(e) {
+                        reject(e.target.error);
+                    };
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+
+            function formatDate(ts) {
+                if (!ts) return '未知';
+                var d = new Date(ts);
+                var pad = function(n) {
+                    return String(n).padStart(2, '0');
+                };
+                return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' +
+                    pad(d.getMinutes());
+            }
+
+            function escapeHtml(str) {
+                if (!str) return '';
+                var div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            }
+
+            function getFilePath(file) {
+                return file._path || file.webkitRelativePath || file.name;
+            }
+
+            function getFileModified(file) {
+                return file._modified || file.lastModified || Date.now();
+            }
+
+            // ---- 搜索 Excel ----
+            function searchExcel(data, ids) {
+                var workbook = XLSX.read(data, { type: 'array', cellDates: false });
+                var matches = [];
+                var sheetNames = workbook.SheetNames;
+
+                for (var si = 0; si < sheetNames.length; si++) {
+                    var sheetName = sheetNames[si];
+                    var sheet = workbook.Sheets[sheetName];
+                    if (!sheet) continue;
+                    var ref = sheet['!ref'];
+                    if (!ref) continue;
+                    var range = XLSX.utils.decode_range(ref);
+                    for (var R = range.s.r; R <= range.e.r; R++) {
+                        for (var C = range.s.c; C <= range.e.c; C++) {
+                            var addr = XLSX.utils.encode_cell({ r: R, c: C });
+                            var cell = sheet[addr];
+                            if (!cell) continue;
+                            var val = cell.v;
+                            if (val === undefined || val === null) continue;
+                            var strVal = String(val);
+                            if (!strVal) continue;
+                            for (var ki = 0; ki < ids.length; ki++) {
+                                var id = ids[ki];
+                                if (strVal.indexOf(id) !== -1) {
+                                    matches.push({ keyword: id, sheet: sheetName, cell: addr, value: strVal });
+                                }
+                            }
+                        }
+                    }
+                }
+                return matches;
+            }
+
+            // ---- 收集所有 Excel 文件 ----
+            function collectAllExcelFiles() {
+                var all = [];
+                for (var pi = 0; pi < folderPaths.length; pi++) {
+                    var p = folderPaths[pi];
+                    if (p.source === 'result') continue;
+                    if (!p.files) continue;
+                    var files = p.files;
+                    for (var fi = 0; fi < files.length; fi++) {
+                        var f = files[fi];
+                        if (isExcelFile(f.name)) {
+                            all.push({
+                                file: f,
+                                path: getFilePath(f),
+                                rootName: p.name,
+                                source: p.source || 'folder'
+                            });
+                        }
+                    }
+                }
+                return all;
+            }
+
+            // ---- 按关键路径筛选 ----
+            function filterFilesByPathKeywords(allFiles) {
+                if (pathKeywords.length === 0) return allFiles;
+
+                var result = [];
+                for (var fi = 0; fi < allFiles.length; fi++) {
+                    var item = allFiles[fi];
+                    var pathLower = item.path.toLowerCase();
+                    var matched = false;
+                    for (var ki = 0; ki < pathKeywords.length; ki++) {
+                        if (pathLower.indexOf(pathKeywords[ki].toLowerCase()) !== -1) {
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (matched) {
+                        result.push(item);
+                    }
+                }
+                return result;
+            }
+
+            // ---- 后台统计 ----
+            function countFilesAsync(folderIndex) {
+                var p = folderPaths[folderIndex];
+                if (!p || p.counted) return;
+                if (p.source === 'json' || p.source === 'result') {
+                    p.counted = true;
+                    p.totalCount = p.files ? p.files.length : 0;
+                    p.excelCount = p.files ? p.files.filter(function(f) { return isExcelFile(f.name); }).length : 0;
+                    updatePathTags();
+                    updateButtons();
+                    return;
+                }
+
+                isCounting = true;
+                var files = p.files;
+                var total = files.length;
+                var excelCount = 0;
+                var batchSize = 50;
+                var processed = 0;
+
+                function processBatch() {
+                    var end = Math.min(processed + batchSize, total);
+                    for (var i = processed; i < end; i++) {
+                        if (isExcelFile(files[i].name)) {
+                            excelCount++;
+                        }
+                    }
+                    processed = end;
+
+                    var tag = document.querySelector('.path-tag[data-index="' + folderIndex + '"] .count');
+                    if (tag) {
+                        tag.textContent = processed + '/' + total + ' (Excel: ' + excelCount + ')';
+                    }
+
+                    if (processed < total) {
+                        setTimeout(processBatch, 50);
+                    } else {
+                        p.excelCount = excelCount;
+                        p.totalCount = total;
+                        p.counted = true;
+                        isCounting = false;
+                        if (tag) {
+                            tag.textContent = total + ' / ' + excelCount + ' Excel';
+                            tag.className = 'count done';
+                        }
+                        var statusTag = document.querySelector('.path-tag[data-index="' + folderIndex + '"] .status-tag');
+                        if (statusTag) {
+                            statusTag.textContent = '✅ 就绪';
+                            statusTag.className = 'status-tag done';
+                        }
+                        updateButtons();
+                        showToast('文件夹 "' + p.name + '" 统计完成：' + total + ' 个文件，' + excelCount + ' 个 Excel');
+                    }
+                }
+
+                setTimeout(processBatch, 100);
+            }
+
+            // ===== 加载索引JSON数据 =====
+            function loadIndexData(data) {
+                var keywordMap = {};
+                var fileMap = {};
+                var allIds = new Set();
+                var allFiles = [];
+
+                // 遍历 files 对象
+                var filePaths = Object.keys(data.files || {});
+                for (var fi = 0; fi < filePaths.length; fi++) {
+                    var filePath = filePaths[fi];
+                    var fileInfo = data.files[filePath];
+                    var ids = fileInfo.ids || [];
+
+                    // 统计该文件中各ID出现次数
+                    var idCountMap = {};
+                    for (var ii = 0; ii < ids.length; ii++) {
+                        var id = ids[ii];
+                        if (!idCountMap[id]) {
+                            idCountMap[id] = 0;
+                        }
+                        idCountMap[id] += 1;
+                        allIds.add(id);
+                    }
+
+                    // 构建 fileMap
+                    var keywordListForFile = [];
+                    var idKeys = Object.keys(idCountMap);
+                    for (var ki = 0; ki < idKeys.length; ki++) {
+                        var idKey = idKeys[ki];
+                        keywordListForFile.push({ keyword: idKey, count: idCountMap[idKey] });
+                    }
+                    fileMap[filePath] = {
+                        file: filePath,
+                        keywords: keywordListForFile,
+                        lastModified: fileInfo.modified || Date.now()
+                    };
+                    allFiles.push(filePath);
+
+                    // 构建 keywordMap
+                    for (var ki2 = 0; ki2 < idKeys.length; ki2++) {
+                        var idKey2 = idKeys[ki2];
+                        if (!keywordMap[idKey2]) {
+                            keywordMap[idKey2] = [];
+                        }
+                        keywordMap[idKey2].push({
+                            file: filePath,
+                            count: idCountMap[idKey2],
+                            sheets: [],
+                            lastModified: fileInfo.modified || Date.now()
+                        });
+                    }
+                }
+
+                var keywordList = Object.keys(keywordMap).sort();
+                var fileList = allFiles.sort();
+
+                // 计算总命中数
+                var totalHits = 0;
+                var kwKeys = Object.keys(keywordMap);
+                for (var ki3 = 0; ki3 < kwKeys.length; ki3++) {
+                    var kw = kwKeys[ki3];
+                    var entries = keywordMap[kw];
+                    for (var ei = 0; ei < entries.length; ei++) {
+                        totalHits += entries[ei].count;
+                    }
+                }
+
+                resultData = {
+                    keywordMap: keywordMap,
+                    fileMap: fileMap,
+                    totalFiles: data.total_files || fileList.length,
+                    totalHits: totalHits,
+                    keywordList: keywordList,
+                    fileList: fileList,
+                    allKeywords: Array.from(allIds)
+                };
+
+                hasResult = true;
+                isResultFromJson = true;
+                resultArea.style.display = 'block';
+                exportBtn.disabled = false;
+
+                scanSummary.style.display = 'block';
+                scanSummary.innerHTML =
+                    '<strong>📊 索引加载成功</strong><br/>' +
+                    '<span class="stat-item">📁 文件数：' + fileList.length + ' 个</span>' +
+                    '<span class="stat-item">🔑 ID 总数：' + allIds.size + ' 个</span>' +
+                    '<span class="stat-item">✅ 命中 ID：' + keywordList.length + ' 个</span>' +
+                    '<span class="stat-item">🔍 总命中次数：' + totalHits + ' 次</span>';
+
+                progressText.textContent = '✅ 索引加载完成！共 ' + keywordList.length + ' 个 ID，' + fileList.length + ' 个文件。';
+
+                renderView(currentView);
+                showToast('✅ 索引加载成功');
+            }
+
+            // ---- 加载 JSON 清单（支持索引JSON） ----
+            function loadJsonFile(file) {
+                showLoading('正在解析 JSON...', '请稍候');
+
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        var data = JSON.parse(e.target.result);
+
+                        // 判断是否为索引JSON（包含 id_index 和 files）
+                        if (data.id_index && data.files) {
+                            loadIndexData(data);
+                            hideLoading();
+                            return;
+                        }
+
+                        // 否则按原有逻辑处理（文件清单）
+                        var files = data.files || [];
+                        if (files.length === 0) {
+                            hideLoading();
+                            alert('JSON 文件中没有找到文件列表。');
+                            return;
+                        }
+
+                        var fileList = [];
+                        for (var fi = 0; fi < files.length; fi++) {
+                            var item = files[fi];
+                            var pathStr = item.path || '';
+                            var name = item.name || pathStr.split('/').pop().split('\\').pop() || '未知文件';
+                            var mockFile = {
+                                name: name,
+                                size: item.size || 0,
+                                type: 'application/octet-stream',
+                                lastModified: item.modified || (item.modified_str ? new Date(item.modified_str)
+                                    .getTime() : Date.now()),
+                                _path: item.path || '',
+                                _modified: item.modified || (item.modified_str ? new Date(item.modified_str)
+                                    .getTime() : Date.now()),
+                                webkitRelativePath: item.path || ''
+                            };
+                            mockFile.slice = function() { return null; };
+                            fileList.push(mockFile);
+                        }
+
+                        var jsonName = file.name;
+                        for (var pi = 0; pi < folderPaths.length; pi++) {
+                            if (folderPaths[pi].name === jsonName && folderPaths[pi].source === 'json') {
+                                hideLoading();
+                                alert('JSON 清单 "' + jsonName + '" 已加载，请勿重复加载。');
+                                return;
+                            }
+                        }
+
+                        var newFolder = {
+                            name: jsonName,
+                            files: fileList,
+                            counted: true,
+                            totalCount: fileList.length,
+                            excelCount: fileList.filter(function(f) { return isExcelFile(f.name); }).length,
+                            _countingStarted: true,
+                            source: 'json',
+                            jsonData: data
+                        };
+                        folderPaths.push(newFolder);
+                        updatePathTags();
+                        doClear();
+                        hideLoading();
+                        showToast('✅ JSON 清单加载成功：' + fileList.length + ' 个文件，其中 Excel ' + newFolder.excelCount +
+                            ' 个');
+                    } catch (err) {
+                        hideLoading();
+                        alert('JSON 解析失败: ' + err.message);
+                        console.error(err);
+                    }
+                };
+                reader.onerror = function() {
+                    hideLoading();
+                    alert('读取 JSON 文件失败');
+                };
+                reader.readAsText(file);
+            }
+
+            // ---- 加载搜索结果 JSON ----
+            function loadResultJsonFile(file) {
+                showLoading('正在加载搜索结果...', '请稍候');
+
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        var data = JSON.parse(e.target.result);
+                        var results = data.results || [];
+
+                        if (results.length === 0) {
+                            hideLoading();
+                            alert('搜索结果 JSON 中没有命中记录。');
+                            return;
+                        }
+
+                        var ids = data.ids || [];
+                        var totalHits = data.total_hits || 0;
+                        var totalFiles = data.total_files_scanned || 0;
+
+                        var keywordMap = {};
+                        var fileMap = {};
+
+                        for (var ri = 0; ri < results.length; ri++) {
+                            var result = results[ri];
+                            var filePath = result.file;
+                            var lastModified = result.last_modified || Date.now();
+
+                            fileMap[filePath] = {
+                                file: filePath,
+                                keywords: result.keywords || [],
+                                lastModified: lastModified
+                            };
+
+                            var keywords = result.keywords || [];
+                            for (var ki = 0; ki < keywords.length; ki++) {
+                                var kw = keywords[ki].keyword;
+                                var count = keywords[ki].count || 0;
+                                var sheets = keywords[ki].sheets || [];
+
+                                if (!keywordMap[kw]) {
+                                    keywordMap[kw] = [];
+                                }
+
+                                var exists = false;
+                                for (var ei = 0; ei < keywordMap[kw].length; ei++) {
+                                    if (keywordMap[kw][ei].file === filePath) {
+                                        exists = true;
+                                        break;
+                                    }
+                                }
+
+                                if (!exists) {
+                                    keywordMap[kw].push({
+                                        file: filePath,
+                                        count: count,
+                                        sheets: sheets,
+                                        lastModified: lastModified
+                                    });
+                                }
+                            }
+                        }
+
+                        var keywordList = Object.keys(keywordMap).filter(function(k) {
+                            return keywordMap[k].length > 0;
+                        }).sort();
+                        var fileList = Object.keys(fileMap).sort();
+
+                        resultData = {
+                            keywordMap: keywordMap,
+                            fileMap: fileMap,
+                            totalFiles: totalFiles,
+                            totalHits: totalHits,
+                            keywordList: keywordList,
+                            fileList: fileList,
+                            allKeywords: ids
+                        };
+
+                        hasResult = true;
+                        isResultFromJson = true;
+                        resultArea.style.display = 'block';
+                        exportBtn.disabled = false;
+
+                        scanSummary.style.display = 'block';
+                        scanSummary.innerHTML =
+                            '<strong>📊 搜索结果加载成功</strong><br/>' +
+                            '<span class="stat-item">📁 扫描文件：' + totalFiles + ' 个</span>' +
+                            '<span class="stat-item">🔑 ID 总数：' + ids.length + ' 个</span>' +
+                            '<span class="stat-item">✅ 命中 ID：' + keywordList.length + ' 个</span>' +
+                            '<span class="stat-item">📄 匹配文件数：' + fileList.length + ' 个</span>' +
+                            '<span class="stat-item">🔍 总命中次数：' + totalHits + ' 次</span>';
+
+                        progressText.textContent = '✅ 搜索结果加载完成！共 ' + keywordList.length + ' 个 ID 命中 ' +
+                            fileList.length + ' 个文件，总命中 ' + totalHits + ' 次。';
+
+                        // 移除已存在的同名结果源
+                        for (var pi = folderPaths.length - 1; pi >= 0; pi--) {
+                            if (folderPaths[pi].source === 'result') {
+                                folderPaths.splice(pi, 1);
+                            }
+                        }
+
+                        var resultName = file.name;
+                        var newFolder = {
+                            name: resultName,
+                            files: [],
+                            counted: true,
+                            totalCount: results.length,
+                            excelCount: results.length,
+                            _countingStarted: true,
+                            source: 'result',
+                            jsonData: data
+                        };
+                        folderPaths.push(newFolder);
+                        updatePathTags();
+
+                        hideLoading();
+                        renderView(currentView);
+                        showToast('✅ 搜索结果加载成功：' + fileList.length + ' 个匹配文件');
+
+                    } catch (err) {
+                        hideLoading();
+                        alert('JSON 解析失败: ' + err.message);
+                        console.error(err);
+                    }
+                };
+                reader.onerror = function() {
+                    hideLoading();
+                    alert('读取 JSON 文件失败');
+                };
+                reader.readAsText(file);
+            }
+
+            // ---- 重置扫描状态 ----
+            function resetScanState() {
+                isScanning = false;
+                stopRequested = false;
+                keywordSearchBtn.disabled = false;
+                fullScanBtn.disabled = false;
+                stopScanBtn.style.display = 'none';
+                stopScanBtn.disabled = false;
+                stopScanBtn.textContent = '⏹️ 终止扫描';
+                updateButtons();
+            }
+
+            // ---- 核心搜索 ----
+            async function performSearch(searchMode) {
+                // 检查是否有可用的数据源（排除 result 类型）
+                var hasFolderSource = false;
+                for (var pi = 0; pi < folderPaths.length; pi++) {
+                    if (folderPaths[pi].source !== 'result') {
+                        hasFolderSource = true;
+                        break;
+                    }
+                }
+
+                if (!hasFolderSource) {
+                    alert('请至少添加一个文件夹或 JSON 清单作为数据源（搜索结果 JSON 不能用于重新搜索）。');
+                    return;
+                }
+
+                for (var pi = 0; pi < folderPaths.length; pi++) {
+                    if (folderPaths[pi].source === 'result') continue;
+                    if (!folderPaths[pi].counted) {
+                        alert('请等待数据源 "' + folderPaths[pi].name + '" 统计完成后再搜索。');
+                        return;
+                    }
+                }
+
+                var ids = [];
+                if (searchMode === 'keyword') {
+                    ids = parseIds(idInput.value);
+                    if (ids.length === 0) {
+                        alert('关键词优先搜索需要至少输入一个 ID。');
+                        return;
+                    }
+                    if (pathKeywords.length === 0) {
+                        alert('关键词优先搜索需要至少添加一个关键路径。');
+                        return;
+                    }
+                }
+
+                stopRequested = false;
+                isScanning = true;
+                keywordSearchBtn.disabled = true;
+                fullScanBtn.disabled = true;
+                stopScanBtn.style.display = 'inline-block';
+                stopScanBtn.disabled = false;
+                stopScanBtn.textContent = '⏹️ 终止扫描';
+                progressWrap.style.display = 'block';
+                resultArea.style.display = 'none';
+                scanSummary.style.display = 'none';
+                progressBar.style.width = '0%';
+                hasResult = false;
+                isResultFromJson = false;
+                exportBtn.disabled = true;
+
+                try {
+                    var allFiles = collectAllExcelFiles();
+
+                    var excelFiles = (searchMode === 'keyword') ?
+                        filterFilesByPathKeywords(allFiles) :
+                        allFiles;
+
+                    if (excelFiles.length === 0) {
+                        progressText.textContent = searchMode === 'keyword' ?
+                            '未找到匹配关键路径的 Excel 文件。' :
+                            '未找到任何 Excel 文件。';
+                        progressWrap.style.display = 'none';
+                        resetScanState();
+                        return;
+                    }
+
+                    var searchIds = (searchMode === 'keyword') ? ids : [];
+
+                    var keywordMap = {};
+                    var fileMap = {};
+                    var totalHits = 0;
+                    var processed = 0;
+                    var total = excelFiles.length;
+
+                    if (searchIds.length > 0) {
+                        for (var kwi = 0; kwi < searchIds.length; kwi++) {
+                            keywordMap[searchIds[kwi]] = [];
+                        }
+                    }
+
+                    progressText.textContent = '正在搜索 ' + total + ' 个 Excel 文件...';
+
+                    for (var i = 0; i < excelFiles.length; i++) {
+                        if (stopRequested) {
+                            progressText.textContent = '⏹️ 扫描已终止。';
+                            break;
+                        }
+                        var item = excelFiles[i];
+                        var file = item.file;
+                        var path = item.path;
+                        var lastModified = getFileModified(file);
+
+                        try {
+                            var buffer = await readFileAsBuffer(file);
+                            var matches = (searchIds.length > 0) ? searchExcel(buffer, searchIds) : [];
+                            if (matches.length > 0) {
+                                var kwGroups = {};
+                                for (var mi2 = 0; mi2 < matches.length; mi2++) {
+                                    var m = matches[mi2];
+                                    if (!kwGroups[m.keyword]) kwGroups[m.keyword] = [];
+                                    kwGroups[m.keyword].push(m);
+                                }
+                                var kwKeys = Object.keys(kwGroups);
+                                for (var kk = 0; kk < kwKeys.length; kk++) {
+                                    var kw = kwKeys[kk];
+                                    var items = kwGroups[kw];
+                                    var entry = {
+                                        file: path,
+                                        count: items.length,
+                                        sheets: [],
+                                        lastModified: lastModified
+                                    };
+                                    var sheetSet = {};
+                                    for (var si2 = 0; si2 < items.length; si2++) {
+                                        sheetSet[items[si2].sheet] = true;
+                                    }
+                                    entry.sheets = Object.keys(sheetSet);
+                                    if (keywordMap[kw]) {
+                                        keywordMap[kw].push(entry);
+                                    } else {
+                                        keywordMap[kw] = [entry];
+                                    }
+                                }
+                                var fileKwList = [];
+                                for (var kk2 = 0; kk2 < kwKeys.length; kk2++) {
+                                    fileKwList.push({
+                                        keyword: kwKeys[kk2],
+                                        count: kwGroups[kwKeys[kk2]].length
+                                    });
+                                }
+                                fileMap[path] = {
+                                    file: path,
+                                    keywords: fileKwList,
+                                    lastModified: lastModified
+                                };
+                                totalHits += matches.length;
+                            } else if (searchIds.length === 0) {
+                                if (!fileMap[path]) {
+                                    fileMap[path] = {
+                                        file: path,
+                                        keywords: [],
+                                        lastModified: lastModified
+                                    };
+                                }
+                            }
+                            processed++;
+                            var pct = Math.round((processed / total) * 100);
+                            progressBar.style.width = pct + '%';
+                            progressText.textContent = '进度 ' + processed + '/' + total + ' (' + pct + '%) — 当前: ' + path;
+                        } catch (err) {
+                            console.warn('读取文件失败:', path, err);
+                            processed++;
+                            var pct2 = Math.round((processed / total) * 100);
+                            progressBar.style.width = pct2 + '%';
+                        }
+                    }
+
+                    var keywordList = Object.keys(keywordMap).filter(function(k) {
+                        return keywordMap[k].length > 0;
+                    }).sort();
+                    var fileList = Object.keys(fileMap).sort();
+
+                    resultData = {
+                        keywordMap: keywordMap,
+                        fileMap: fileMap,
+                        totalFiles: processed,
+                        totalHits: totalHits,
+                        keywordList: keywordList,
+                        fileList: fileList,
+                        allKeywords: searchIds
+                    };
+
+                    hasResult = true;
+                    isResultFromJson = false;
+                    resetScanState();
+
+                    if (searchIds.length > 0 && keywordList.length === 0 && fileList.length === 0) {
+                        progressText.textContent = '✅ 搜索完成，未找到任何匹配的 ID。';
+                        scanSummary.style.display = 'block';
+                        scanSummary.innerHTML =
+                            '<strong>🔍 搜索完成</strong><br/>' +
+                            '<span class="stat-item">📁 扫描文件：' + processed + ' 个</span>' +
+                            '<span class="stat-item">🔑 ID 总数：' + searchIds.length + ' 个</span>' +
+                            '<span class="stat-item">❌ 未发现匹配项</span>';
+                        resultArea.style.display = 'none';
+                        hasResult = false;
+                        exportBtn.disabled = true;
+                    } else if (searchIds.length === 0 && fileList.length > 0) {
+                        progressText.textContent = '✅ 全量扫描完成，共 ' + fileList.length + ' 个 Excel 文件。';
+                        scanSummary.style.display = 'block';
+                        scanSummary.innerHTML =
+                            '<strong>📂 全量扫描完成</strong><br/>' +
+                            '<span class="stat-item">📁 扫描文件：' + processed + ' 个</span>' +
+                            '<span class="stat-item">📄 Excel 文件数：' + fileList.length + ' 个</span>';
+                        resultArea.style.display = 'block';
+                        exportBtn.disabled = false;
+                        renderView(currentView);
+                    } else {
+                        progressText.textContent = '✅ 搜索完成！共 ' + keywordList.length + ' 个 ID 命中 ' + fileList.length +
+                            ' 个文件，总命中 ' + totalHits + ' 次。';
+                        scanSummary.style.display = 'block';
+                        scanSummary.innerHTML =
+                            '<strong>✅ 搜索完成</strong><br/>' +
+                            '<span class="stat-item">📁 扫描文件：' + processed + ' 个</span>' +
+                            '<span class="stat-item">🔑 ID 总数：' + searchIds.length + ' 个</span>' +
+                            '<span class="stat-item">✅ 命中 ID：' + keywordList.length + ' 个</span>' +
+                            '<span class="stat-item">📄 匹配文件数：' + fileList.length + ' 个</span>' +
+                            '<span class="stat-item">🔍 总命中次数：' + totalHits + ' 次</span>';
+                        resultArea.style.display = 'block';
+                        exportBtn.disabled = false;
+                        renderView(currentView);
+                    }
+                } catch (err) {
+                    console.error('搜索过程中发生错误:', err);
+                    alert('搜索过程中发生错误，请查看控制台日志。');
+                    resetScanState();
+                    progressWrap.style.display = 'none';
+                    hasResult = false;
+                    exportBtn.disabled = true;
+                }
+            }
+
+            // ---- 渲染视图 ----
+            function renderView(view) {
+                currentView = view;
+                var btns = document.querySelectorAll('.view-toggle button[data-view]');
+                for (var i = 0; i < btns.length; i++) {
+                    var btn = btns[i];
+                    if (btn.dataset.view === view) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                }
+                if (view === 'keyword') {
+                    renderKeywordView();
+                } else {
+                    renderFileView();
+                }
+            }
+
+            // ---- 关键词视图 ----
+            function renderKeywordView() {
+                var keywordMap = resultData.keywordMap;
+                var keywordList = resultData.keywordList || [];
+                var allKeywords = resultData.allKeywords || [];
+                var hitKeywords = keywordList;
+                var totalKeywords = allKeywords;
+                var missKeywords = [];
+                for (var mi = 0; mi < totalKeywords.length; mi++) {
+                    var found = false;
+                    for (var hi = 0; hi < hitKeywords.length; hi++) {
+                        if (hitKeywords[hi] === totalKeywords[mi]) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        missKeywords.push(totalKeywords[mi]);
+                    }
+                }
+
+                var html = '';
+
+                html += '<div class="hit-miss-stats">' +
+                    '<div class="stat-item"><span class="label">📌 总 ID</span><span class="value">' + totalKeywords
+                    .length + '</span></div>' +
+                    '<div class="stat-item"><span class="label">✅ 命中</span><span class="value hit">' + hitKeywords
+                    .length + '</span></div>' +
+                    '<div class="stat-item"><span class="label">❌ 未命中</span><span class="value miss">' + missKeywords
+                    .length + '</span></div>' +
+                    '</div>';
+
+                if (missKeywords.length > 0) {
+                    var missText = missKeywords.join(',');
+                    html += '<div class="miss-header">' +
+                        '<span class="label">❌ 未命中 ID：</span>' +
+                        '<span class="miss-keywords">';
+                    for (var mki = 0; mki < missKeywords.length; mki++) {
+                        html += '<span class="keyword-tag miss">' + escapeHtml(missKeywords[mki]) + '</span>';
+                    }
+                    html += '</span>' +
+                        '<button class="btn-copy" data-copy="' + escapeHtml(missText) + '">📋 复制</button>' +
+                        '</div>';
+                } else if (totalKeywords.length > 0) {
+                    html += '<div style="margin-bottom:12px;color:#065f46;font-size:14px;">🎉 所有 ID 均有命中！</div>';
+                }
+
+                if (hitKeywords.length === 0) {
+                    html += '<div class="no-data-msg">暂无命中数据</div>';
+                } else {
+                    html += '<table>' +
+                        '<thead><tr><th style="width:16%;">🔑 ID</th><th>📁 匹配的 Excel 文件（命中次数 / 最后修改）</th><th class="action-col">操作</th></tr></thead>' +
+                        '<tbody>';
+                    for (var hki = 0; hki < hitKeywords.length; hki++) {
+                        var kw = hitKeywords[hki];
+                        var entries = keywordMap[kw] || [];
+                        var sorted = entries.slice().sort(function(a, b) {
+                            return (b.lastModified || 0) - (a.lastModified || 0);
+                        });
+                        var totalKwHits = 0;
+                        for (var ei = 0; ei < sorted.length; ei++) {
+                            totalKwHits += sorted[ei].count;
+                        }
+
+                        var filePaths = [];
+                        for (var ei2 = 0; ei2 < sorted.length; ei2++) {
+                            filePaths.push(sorted[ei2].file);
+                        }
+                        var copyText = filePaths.join(',');
+
+                        html += '<tr>' +
+                            '<td><strong>' + escapeHtml(kw) + '</strong> <span class="count-badge">' + totalKwHits +
+                            '</span></td>' +
+                            '<td>';
+                        if (sorted.length === 0) {
+                            html += '<span style="color:#9ca3af;">无</span>';
+                        } else {
+                            for (var idx = 0; idx < sorted.length; idx++) {
+                                var entry = sorted[idx];
+                                var sheetsStr = (entry.sheets && entry.sheets.length > 0) ?
+                                    ' (Sheet: ' + entry.sheets.join(', ') + ')' : '';
+                                var highlightClass = '';
+                                if (idx === 0) highlightClass = 'highlight-green';
+                                else if (idx === 1) highlightClass = 'highlight-yellow';
+                                else if (idx === 2) highlightClass = 'highlight-orange';
+                                var dateStr = entry.lastModified ? formatDate(entry.lastModified) : '未知';
+                                html += '<div style="display:block;margin-bottom:4px;padding:4px 8px;border-radius:4px;background:#f3f4f6;" class="' +
+                                    highlightClass + '">' +
+                                    '<span style="font-weight:500;">📄 ' + escapeHtml(entry.file) + '</span>' +
+                                    '<span class="count-badge">' + entry.count + ' 次' + sheetsStr + '</span>' +
+                                    '<span style="font-size:11px;color:#6b7280;margin-left:8px;">' + dateStr +
+                                    '</span>' +
+                                    '</div>';
+                            }
+                        }
+                        html += '</td>' +
+                            '<td class="action-col"><button class="btn-copy" data-copy="' + escapeHtml(copyText) +
+                            '">📋 复制</button></td>' +
+                            '</tr>';
+                    }
+                    html += '</tbody></table>';
+                }
+
+                tableContainer.innerHTML = html;
+
+                var copyBtns = tableContainer.querySelectorAll('.btn-copy');
+                for (var ci = 0; ci < copyBtns.length; ci++) {
+                    copyBtns[ci].addEventListener('click', function() {
+                        var text = this.getAttribute('data-copy');
+                        if (text) {
+                            copyToClipboard(text);
+                        }
+                    });
+                }
+            }
+
+            // ---- 文件视图 ----
+            function renderFileView() {
+                var fileMap = resultData.fileMap;
+                var fileList = resultData.fileList || [];
+                var keywordMap = resultData.keywordMap;
+
+                if (fileList.length === 0) {
+                    tableContainer.innerHTML = '<div class="no-data-msg">暂无数据</div>';
+                    return;
+                }
+
+                var kwFileMap = {};
+                var kwKeys = Object.keys(keywordMap);
+                for (var kwi = 0; kwi < kwKeys.length; kwi++) {
+                    var kw = kwKeys[kwi];
+                    var entries = keywordMap[kw] || [];
+                    var fileEntries = [];
+                    for (var ei = 0; ei < entries.length; ei++) {
+                        fileEntries.push({
+                            file: entries[ei].file,
+                            lastModified: entries[ei].lastModified || 0
+                        });
+                    }
+                    fileEntries.sort(function(a, b) {
+                        return b.lastModified - a.lastModified;
+                    });
+                    kwFileMap[kw] = fileEntries;
+                }
+
+                var html = '<table>' +
+                    '<thead><tr><th style="width:30%;">📄 Excel 文件（最后修改）</th><th>🔑 命中的 ID（次数）</th><th class="action-col">操作</th></tr></thead>' +
+                    '<tbody>';
+
+                for (var fi = 0; fi < fileList.length; fi++) {
+                    var filePath = fileList[fi];
+                    var entry = fileMap[filePath];
+                    if (!entry) continue;
+                    var keywords = entry.keywords || [];
+                    var totalFileHits = 0;
+                    for (var ki2 = 0; ki2 < keywords.length; ki2++) {
+                        totalFileHits += keywords[ki2].count;
+                    }
+                    var dateStr = entry.lastModified ? formatDate(entry.lastModified) : '未知';
+
+                    var idList = [];
+                    for (var ki3 = 0; ki3 < keywords.length; ki3++) {
+                        idList.push(keywords[ki3].keyword);
+                    }
+                    var copyText = idList.join(',');
+
+                    html += '<tr>' +
+                        '<td>' +
+                        '<div class="file-cell">' +
+                        '<span class="fname">' + escapeHtml(filePath) + '</span>' +
+                        '<span class="fdate">📅 ' + dateStr + '</span>' +
+                        '<span class="count-badge">总命中 ' + totalFileHits + ' 次</span>' +
+                        '</div>' +
+                        '</td>' +
+                        '<td>';
+
+                    if (keywords.length === 0) {
+                        html += '<span style="color:#9ca3af;">无匹配 ID</span>';
+                    } else {
+                        for (var ki4 = 0; ki4 < keywords.length; ki4++) {
+                            var k = keywords[ki4];
+                            var kw2 = k.keyword;
+                            var fileEntries2 = kwFileMap[kw2] || [];
+                            var rank = -1;
+                            for (var ri = 0; ri < fileEntries2.length; ri++) {
+                                if (fileEntries2[ri].file === filePath) {
+                                    rank = ri;
+                                    break;
+                                }
+                            }
+                            var highlightClass = '';
+                            if (rank === 0) highlightClass = 'highlight-green';
+                            else if (rank === 1) highlightClass = 'highlight-yellow';
+                            else if (rank === 2) highlightClass = 'highlight-orange';
+
+                            html += '<span class="keyword-tag hit ' + highlightClass + '">' +
+                                escapeHtml(kw2) + ' <span class="count-badge">' + k.count + '</span>' +
+                                '</span>';
+                        }
+                    }
+                    html += '</td>';
+
+                    if (keywords.length > 0) {
+                        html += '<td class="action-col"><button class="btn-copy" data-copy="' + escapeHtml(copyText) +
+                            '">📋 复制</button></td>';
+                    } else {
+                        html += '<td class="action-col"></td>';
+                    }
+
+                    html += '</tr>';
+                }
+
+                html += '</tbody></table>';
+                tableContainer.innerHTML = html;
+
+                var copyBtns = tableContainer.querySelectorAll('.btn-copy');
+                for (var ci = 0; ci < copyBtns.length; ci++) {
+                    copyBtns[ci].addEventListener('click', function() {
+                        var text = this.getAttribute('data-copy');
+                        if (text) {
+                            copyToClipboard(text);
+                        }
+                    });
+                }
+            }
+
+            // ---- 导出 Excel ----
+            function exportExcel() {
+                if (!hasResult) {
+                    alert('请先执行搜索或加载搜索结果。');
+                    return;
+                }
+
+                var keywordMap = resultData.keywordMap;
+                var fileMap = resultData.fileMap;
+                var keywordList = resultData.keywordList || [];
+                var fileList = resultData.fileList || [];
+                var allKeywords = resultData.allKeywords || [];
+
+                // 计算未命中ID
+                var missKeywords = [];
+                for (var mi = 0; mi < allKeywords.length; mi++) {
+                    var found = false;
+                    for (var hi = 0; hi < keywordList.length; hi++) {
+                        if (keywordList[hi] === allKeywords[mi]) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        missKeywords.push(allKeywords[mi]);
+                    }
+                }
+
+                // ---- Sheet1: ID统计 ----
+                var idData = [
+                    ['ID', '匹配的Excel文件路径', '最后修改时间', '颜色标记']
+                ];
+                for (var i = 0; i < keywordList.length; i++) {
+                    var kw = keywordList[i];
+                    var entries = keywordMap[kw] || [];
+                    var sorted = entries.slice().sort(function(a, b) {
+                        return (b.lastModified || 0) - (a.lastModified || 0);
+                    });
+                    for (var idx = 0; idx < sorted.length; idx++) {
+                        var entry = sorted[idx];
+                        var color = '';
+                        if (idx === 0) color = '绿色';
+                        else if (idx === 1) color = '黄色';
+                        else if (idx === 2) color = '橙色';
+                        var dateStr = entry.lastModified ? formatDate(entry.lastModified) : '未知';
+                        idData.push([kw, entry.file, dateStr, color]);
+                    }
+                }
+
+                // ---- Sheet2: 文件统计 ----
+                var fileData = [
+                    ['Excel文件路径', '最后修改时间', '命中的ID', '颜色标记']
+                ];
+                var kwFileMap = {};
+                var kwKeys = Object.keys(keywordMap);
+                for (var kwi = 0; kwi < kwKeys.length; kwi++) {
+                    var kw = kwKeys[kwi];
+                    var entries = keywordMap[kw] || [];
+                    var fileEntries = [];
+                    for (var ei = 0; ei < entries.length; ei++) {
+                        fileEntries.push({
+                            file: entries[ei].file,
+                            lastModified: entries[ei].lastModified || 0
+                        });
+                    }
+                    fileEntries.sort(function(a, b) {
+                        return b.lastModified - a.lastModified;
+                    });
+                    kwFileMap[kw] = fileEntries;
+                }
+
+                for (var fi = 0; fi < fileList.length; fi++) {
+                    var filePath = fileList[fi];
+                    var entry = fileMap[filePath];
+                    if (!entry) continue;
+                    var keywords = entry.keywords || [];
+                    var dateStr = entry.lastModified ? formatDate(entry.lastModified) : '未知';
+
+                    for (var ki = 0; ki < keywords.length; ki++) {
+                        var k = keywords[ki];
+                        var kw2 = k.keyword;
+                        var fileEntries2 = kwFileMap[kw2] || [];
+                        var rank = -1;
+                        for (var ri = 0; ri < fileEntries2.length; ri++) {
+                            if (fileEntries2[ri].file === filePath) {
+                                rank = ri;
+                                break;
+                            }
+                        }
+                        var color = '';
+                        if (rank === 0) color = '绿色';
+                        else if (rank === 1) color = '黄色';
+                        else if (rank === 2) color = '橙色';
+                        fileData.push([filePath, dateStr, kw2, color]);
+                    }
+                }
+
+                // ---- Sheet3: 未命中ID ----
+                var missData = [
+                    ['未命中ID']
+                ];
+                for (var mi2 = 0; mi2 < missKeywords.length; mi2++) {
+                    missData.push([missKeywords[mi2]]);
+                }
+
+                // 创建 Workbook
+                var wb = XLSX.utils.book_new();
+
+                var ws1 = XLSX.utils.aoa_to_sheet(idData);
+                XLSX.utils.book_append_sheet(wb, ws1, 'ID统计');
+
+                var ws2 = XLSX.utils.aoa_to_sheet(fileData);
+                XLSX.utils.book_append_sheet(wb, ws2, '文件统计');
+
+                var ws3 = XLSX.utils.aoa_to_sheet(missData);
+                XLSX.utils.book_append_sheet(wb, ws3, '未命中ID');
+
+                // 导出
+                var now = new Date();
+                var pad = function(n) { return String(n).padStart(2, '0'); };
+                var ts = now.getFullYear() + '' + pad(now.getMonth() + 1) + '' + pad(now.getDate()) + '_' +
+                    pad(now.getHours()) + '' + pad(now.getMinutes()) + '' + pad(now.getSeconds());
+                var filename = 'ID统计_' + ts + '.xlsx';
+
+                XLSX.writeFile(wb, filename);
+                showToast('✅ 导出成功: ' + filename);
+            }
+
+            // ---- 清空 ----
+            function clearAll() {
+                if (isScanning) {
+                    if (!confirm('扫描正在进行，确定要终止并清空结果吗？')) return;
+                    stopRequested = true;
+                    var waitCount = 0;
+                    var maxWait = 50;
+                    var checkStop = function() {
+                        if (isScanning && waitCount < maxWait) {
+                            waitCount++;
+                            setTimeout(checkStop, 100);
+                        } else {
+                            if (isScanning) {
+                                isScanning = false;
+                                stopRequested = false;
+                            }
+                            resetScanState();
+                            doClear();
+                        }
+                    };
+                    setTimeout(checkStop, 100);
+                    return;
+                }
+                doClear();
+            }
+
+            function doClear() {
+                resultData = {
+                    keywordMap: {},
+                    fileMap: {},
+                    totalFiles: 0,
+                    totalHits: 0,
+                    keywordList: [],
+                    fileList: [],
+                    allKeywords: []
+                };
+                hasResult = false;
+                isResultFromJson = false;
+                exportBtn.disabled = true;
+                resultArea.style.display = 'none';
+                scanSummary.style.display = 'none';
+                progressWrap.style.display = 'none';
+                progressBar.style.width = '0%';
+                progressText.textContent = '';
+                tableContainer.innerHTML = '<div class="no-data-msg">暂无数据</div>';
+                resetScanState();
+            }
+
+            // ---- 关键路径管理 ----
+            function updatePkTags() {
+                pkTags.innerHTML = '';
+                if (pathKeywords.length === 0) {
+                    pkTags.innerHTML = '<span class="pk-empty-tip">暂无关键路径，请添加</span>';
+                    return;
+                }
+                for (var i = 0; i < pathKeywords.length; i++) {
+                    var tag = document.createElement('span');
+                    tag.className = 'pk-tag';
+                    tag.innerHTML =
+                        '<span>' + escapeHtml(pathKeywords[i]) + '</span>' +
+                        '<span class="del" data-index="' + i + '">✕</span>';
+                    pkTags.appendChild(tag);
+                }
+                var dels = pkTags.querySelectorAll('.del');
+                for (var di = 0; di < dels.length; di++) {
+                    dels[di].addEventListener('click', function() {
+                        var idx = parseInt(this.dataset.index, 10);
+                        pathKeywords.splice(idx, 1);
+                        updatePkTags();
+                        updateButtons();
+                    });
+                }
+                updateButtons();
+            }
+
+            // ---- 路径管理 ----
+            function updatePathTags() {
+                pathTags.innerHTML = '';
+                if (folderPaths.length === 0) {
+                    pathTags.innerHTML = '<span style="font-size:13px;color:#9ca3af;">暂未选择数据源</span>';
+                    return;
+                }
+                for (var i = 0; i < folderPaths.length; i++) {
+                    var p = folderPaths[i];
+                    var tag = document.createElement('span');
+                    tag.className = 'path-tag';
+                    tag.setAttribute('data-index', i);
+
+                    var isJson = p.source === 'json';
+                    var isResult = p.source === 'result';
+                    var countText = '统计中...';
+                    var countClass = 'count loading';
+                    var statusText = '⏳ 统计中...';
+                    var statusClass = 'status-tag';
+                    var typeText = isResult ? '📊 结果' : (isJson ? '📋 JSON' : '📂 文件夹');
+                    var typeClass = isResult ? 'tag-type result' : (isJson ? 'tag-type json' : 'tag-type folder');
+
+                    if (p.counted) {
+                        if (isResult) {
+                            countText = p.totalCount + ' 个匹配文件';
+                            countClass = 'count result';
+                            statusText = '✅ 已加载';
+                            statusClass = 'status-tag result';
+                        } else {
+                            countText = p.totalCount + ' / ' + p.excelCount + ' Excel';
+                            countClass = isJson ? 'count json' : 'count done';
+                            statusText = isJson ? '✅ 已加载' : '✅ 就绪';
+                            statusClass = isJson ? 'status-tag json' : 'status-tag done';
+                        }
+                    }
+
+                    tag.innerHTML =
+                        '<span class="name">' + escapeHtml(p.name) + '</span>' +
+                        '<span class="' + typeClass + '">' + typeText + '</span>' +
+                        '<span class="' + countClass + '">' + countText + '</span>' +
+                        '<span class="' + statusClass + '">' + statusText + '</span>' +
+                        '<span class="del" data-index="' + i + '">✕</span>';
+                    pathTags.appendChild(tag);
+                }
+                var dels = pathTags.querySelectorAll('.del');
+                for (var di = 0; di < dels.length; di++) {
+                    dels[di].addEventListener('click', function() {
+                        var idx = parseInt(this.dataset.index, 10);
+                        folderPaths.splice(idx, 1);
+                        updatePathTags();
+                        updateButtons();
+                        doClear();
+                    });
+                }
+                updateButtons();
+
+                for (var i = 0; i < folderPaths.length; i++) {
+                    if (!folderPaths[i].counted && !folderPaths[i]._countingStarted) {
+                        folderPaths[i]._countingStarted = true;
+                        countFilesAsync(i);
+                    }
+                }
+            }
+
+            // ---- 按钮状态更新 ----
+            function updateButtons() {
+                var hasPaths = folderPaths.length > 0;
+                // 检查是否有非 result 类型的数据源
+                var hasSearchableSource = false;
+                for (var i = 0; i < folderPaths.length; i++) {
+                    if (folderPaths[i].source !== 'result') {
+                        hasSearchableSource = true;
+                        break;
+                    }
+                }
+                var hasIds = parseIds(idInput.value).length > 0;
+                var hasPk = pathKeywords.length > 0;
+                var allCounted = true;
+                for (var i = 0; i < folderPaths.length; i++) {
+                    if (folderPaths[i].source === 'result') continue;
+                    if (!folderPaths[i].counted) {
+                        allCounted = false;
+                        break;
+                    }
+                }
+                var pathsReady = hasPaths && allCounted;
+
+                keywordSearchBtn.disabled = !hasSearchableSource || !pathsReady || !hasIds || !hasPk || isScanning;
+                fullScanBtn.disabled = !hasSearchableSource || !pathsReady || isScanning;
+                addPathBtn.disabled = folderPaths.length >= 8;
+                addPkBtn.disabled = !pkInput.value.trim();
+            }
+
+            // ---- 添加关键路径 ----
+            addPkBtn.addEventListener('click', function() {
+                var val = pkInput.value.trim();
+                if (!val) return;
+                var exists = false;
+                for (var i = 0; i < pathKeywords.length; i++) {
+                    if (pathKeywords[i].toLowerCase() === val.toLowerCase()) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (exists) {
+                    alert('关键路径 "' + val + '" 已存在。');
+                    pkInput.value = '';
+                    return;
+                }
+                pathKeywords.push(val);
+                pkInput.value = '';
+                updatePkTags();
+                updateButtons();
+            });
+
+            pkInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addPkBtn.click();
+                }
+            });
+
+            pkInput.addEventListener('input', updateButtons);
+
+            // ---- 添加文件夹 ----
+            addPathBtn.addEventListener('click', function() {
+                if (folderPaths.length >= 8) {
+                    alert('最多添加 8 个数据源。');
+                    return;
+                }
+                folderPicker.click();
+            });
+
+            folderPicker.addEventListener('change', function(e) {
+                var files = e.target.files;
+                if (files.length === 0) {
+                    hideLoading();
+                    return;
+                }
+
+                showLoading('正在扫描文件夹...', '请稍候，正在读取文件列表');
+
+                setTimeout(function() {
+                    var folderName = '';
+                    var fileList = [];
+                    for (var i = 0; i < files.length; i++) {
+                        var f = files[i];
+                        fileList.push(f);
+                        if (i === 0) {
+                            var path = f.webkitRelativePath || f.name;
+                            var parts = path.split('/');
+                            folderName = parts.length > 1 ? parts[0] : path;
+                        }
+                    }
+
+                    for (var pi = 0; pi < folderPaths.length; pi++) {
+                        if (folderPaths[pi].name === folderName && folderPaths[pi].source !== 'json' && folderPaths[pi]
+                            .source !== 'result') {
+                            hideLoading();
+                            alert('文件夹 "' + folderName + '" 已添加，请勿重复添加。');
+                            folderPicker.value = '';
+                            return;
+                        }
+                    }
+
+                    var newFolder = {
+                        name: folderName,
+                        files: fileList,
+                        counted: false,
+                        totalCount: 0,
+                        excelCount: 0,
+                        _countingStarted: false,
+                        source: 'folder'
+                    };
+                    folderPaths.push(newFolder);
+                    updatePathTags();
+                    folderPicker.value = '';
+                    doClear();
+                    hideLoading();
+                    showToast('已添加文件夹 "' + folderName + '"，正在后台统计文件数量...', 2000);
+                }, 100);
+            });
+
+            // ---- 加载 JSON 清单 ----
+            loadJsonBtn.addEventListener('click', function() {
+                jsonPicker.click();
+            });
+
+            jsonPicker.addEventListener('change', function(e) {
+                var files = e.target.files;
+                if (files.length === 0) return;
+                var file = files[0];
+                if (!file.name.endsWith('.json')) {
+                    alert('请选择 JSON 文件。');
+                    jsonPicker.value = '';
+                    return;
+                }
+                loadJsonFile(file);
+                jsonPicker.value = '';
+            });
+
+            // ---- 加载搜索结果 JSON ----
+            loadResultBtn.addEventListener('click', function() {
+                resultPicker.click();
+            });
+
+            resultPicker.addEventListener('change', function(e) {
+                var files = e.target.files;
+                if (files.length === 0) return;
+                var file = files[0];
+                if (!file.name.endsWith('.json')) {
+                    alert('请选择 JSON 文件。');
+                    resultPicker.value = '';
+                    return;
+                }
+                loadResultJsonFile(file);
+                resultPicker.value = '';
+            });
+
+            // ---- ID 输入更新按钮 ----
+            idInput.addEventListener('input', updateButtons);
+
+            // ---- 搜索按钮 ----
+            keywordSearchBtn.addEventListener('click', function() {
+                performSearch('keyword');
+            });
+
+            fullScanBtn.addEventListener('click', function() {
+                performSearch('full');
+            });
+
+            clearResBtn.addEventListener('click', clearAll);
+
+            stopScanBtn.addEventListener('click', function() {
+                if (isScanning) {
+                    stopRequested = true;
+                    stopScanBtn.disabled = true;
+                    stopScanBtn.textContent = '⏹️ 正在终止...';
+                    setTimeout(function() {
+                        stopScanBtn.disabled = false;
+                        stopScanBtn.textContent = '⏹️ 终止扫描';
+                    }, 2000);
+                }
+            });
+
+            // ---- 导出按钮 ----
+            exportBtn.addEventListener('click', exportExcel);
+
+            // ---- 视图切换 ----
+            var viewBtns = document.querySelectorAll('.view-toggle button[data-view]');
+            for (var vbi = 0; vbi < viewBtns.length; vbi++) {
+                viewBtns[vbi].addEventListener('click', function() {
+                    var view = this.dataset.view;
+                    if (view !== currentView && resultArea.style.display !== 'none') {
+                        renderView(view);
+                    }
+                });
+            }
+
+            // ---- 初始化 ----
+            updatePkTags();
+            updatePathTags();
+            tableContainer.innerHTML = '<div class="no-data-msg">暂无数据</div>';
+            console.log('Excel 批量关键词检索工具（增强版）已加载 ✅');
+        })();
+    </script>
+</body>
+</html>
