@@ -797,6 +797,9 @@
                 <button class="active" data-view="keyword">🔑 按ID统计</button>
                 <button data-view="file">📄 按 Excel 文件统计</button>
                 <span class="spacer"></span>
+                <label style="font-size:13px;color:#6b7280;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="checkbox" id="highlightFilter" /> 仅显示高亮项
+                </label>
                 <button class="btn-export" id="exportBtn" disabled>📥 导出 Excel</button>
             </div>
             <div class="table-wrap" id="tableContainer">
@@ -836,6 +839,7 @@
             var loadingOverlay = document.getElementById('loadingOverlay');
             var loadingMsg = document.getElementById('loadingMsg');
             var loadingSubMsg = document.getElementById('loadingSubMsg');
+            var highlightFilter = document.getElementById('highlightFilter');
 
             // 状态
             var folderPaths = [];
@@ -1766,6 +1770,7 @@
                 }
             }
 
+            // ---- 关键词视图 ----
             function renderKeywordView() {
                 var keywordMap = resultData.keywordMap;
                 var keywordList = resultData.keywordList || [];
@@ -1815,13 +1820,13 @@
                 if (hitKeywords.length === 0) {
                     html += '<div class="no-data-msg">暂无命中数据</div>';
                 } else {
+                    var filterChecked = highlightFilter.checked;
                     html += '<table>' +
                         '<thead><tr><th style="width:16%;">🔑 ID</th><th>📁 匹配的 Excel 文件（命中次数 / 最后修改）</th><th class="action-col">操作</th></tr></thead>' +
                         '<tbody>';
                     for (var hki = 0; hki < hitKeywords.length; hki++) {
                         var kw = hitKeywords[hki];
                         var entries = keywordMap[kw] || [];
-                        // 按修改时间降序排列（最新的在前）
                         var sorted = entries.slice().sort(function(a, b) {
                             return (b.lastModified || 0) - (a.lastModified || 0);
                         });
@@ -1831,8 +1836,12 @@
                         }
 
                         var filePaths = [];
-                        for (var ei2 = 0; ei2 < sorted.length; ei2++) {
-                            filePaths.push(sorted[ei2].file);
+                        // 如果开启筛选，只显示前3个（有颜色标记）
+                        var maxDisplay = filterChecked ? 3 : sorted.length;
+                        for (var idx = 0; idx < maxDisplay; idx++) {
+                            if (idx < sorted.length) {
+                                filePaths.push(sorted[idx].file);
+                            }
                         }
                         var copyText = filePaths.join(',');
 
@@ -1844,10 +1853,10 @@
                             html += '<span style="color:#9ca3af;">无</span>';
                         } else {
                             for (var idx = 0; idx < sorted.length; idx++) {
+                                if (filterChecked && idx >= 3) break; // 筛选模式只显示前3个
                                 var entry = sorted[idx];
                                 var sheetsStr = (entry.sheets && entry.sheets.length > 0) ?
                                     ' (Sheet: ' + entry.sheets.join(', ') + ')' : '';
-                                // 颜色标记：最新(第1)为绿色，第2为黄色，第3为橙色
                                 var highlightClass = '';
                                 if (idx === 0) highlightClass = 'highlight-green';
                                 else if (idx === 1) highlightClass = 'highlight-yellow';
@@ -1860,6 +1869,10 @@
                                     '<span style="font-size:11px;color:#6b7280;margin-left:8px;">' + dateStr +
                                     '</span>' +
                                     '</div>';
+                            }
+                            if (filterChecked && sorted.length > 3) {
+                                html += '<div style="color:#9ca3af;font-size:12px;">... 还有 ' + (sorted.length - 3) +
+                                    ' 个较旧条目（已隐藏）</div>';
                             }
                         }
                         html += '</td>' +
@@ -1883,6 +1896,7 @@
                 }
             }
 
+            // ---- 文件视图 ----
             function renderFileView() {
                 var fileMap = resultData.fileMap;
                 var fileList = resultData.fileList || [];
@@ -1905,13 +1919,13 @@
                             lastModified: entries[ei].lastModified || 0
                         });
                     }
-                    // 按修改时间降序
                     fileEntries.sort(function(a, b) {
                         return b.lastModified - a.lastModified;
                     });
                     kwFileMap[kw] = fileEntries;
                 }
 
+                var filterChecked = highlightFilter.checked;
                 var html = '<table>' +
                     '<thead><tr><th style="width:30%;">📄 Excel 文件（最后修改）</th><th>🔑 命中的 ID（次数）</th><th class="action-col">操作</th></tr></thead>' +
                     '<tbody>';
@@ -1921,6 +1935,36 @@
                     var entry = fileMap[filePath];
                     if (!entry) continue;
                     var keywords = entry.keywords || [];
+
+                    // 构建显示的关键词列表（带颜色）
+                    var displayKeywords = [];
+                    for (var ki4 = 0; ki4 < keywords.length; ki4++) {
+                        var k = keywords[ki4];
+                        var kw2 = k.keyword;
+                        var fileEntries2 = kwFileMap[kw2] || [];
+                        var rank = -1;
+                        for (var ri = 0; ri < fileEntries2.length; ri++) {
+                            if (fileEntries2[ri].file === filePath) {
+                                rank = ri;
+                                break;
+                            }
+                        }
+                        if (filterChecked && rank > 2) continue; // 只显示高亮（排名0,1,2）
+                        var highlightClass = '';
+                        if (rank === 0) highlightClass = 'highlight-green';
+                        else if (rank === 1) highlightClass = 'highlight-yellow';
+                        else if (rank === 2) highlightClass = 'highlight-orange';
+                        displayKeywords.push({
+                            keyword: kw2,
+                            count: k.count,
+                            rank: rank,
+                            highlightClass: highlightClass
+                        });
+                    }
+
+                    // 如果开启筛选且没有任何高亮ID，跳过该文件行
+                    if (filterChecked && displayKeywords.length === 0) continue;
+
                     var totalFileHits = 0;
                     for (var ki2 = 0; ki2 < keywords.length; ki2++) {
                         totalFileHits += keywords[ki2].count;
@@ -1928,8 +1972,8 @@
                     var dateStr = entry.lastModified ? formatDate(entry.lastModified) : '未知';
 
                     var idList = [];
-                    for (var ki3 = 0; ki3 < keywords.length; ki3++) {
-                        idList.push(keywords[ki3].keyword);
+                    for (var ki3 = 0; ki3 < displayKeywords.length; ki3++) {
+                        idList.push(displayKeywords[ki3].keyword);
                     }
                     var copyText = idList.join(',');
 
@@ -1943,33 +1987,23 @@
                         '</td>' +
                         '<td>';
 
-                    if (keywords.length === 0) {
+                    if (displayKeywords.length === 0) {
                         html += '<span style="color:#9ca3af;">无匹配 ID</span>';
                     } else {
-                        for (var ki4 = 0; ki4 < keywords.length; ki4++) {
-                            var k = keywords[ki4];
-                            var kw2 = k.keyword;
-                            var fileEntries2 = kwFileMap[kw2] || [];
-                            var rank = -1;
-                            for (var ri = 0; ri < fileEntries2.length; ri++) {
-                                if (fileEntries2[ri].file === filePath) {
-                                    rank = ri;
-                                    break;
-                                }
-                            }
-                            var highlightClass = '';
-                            if (rank === 0) highlightClass = 'highlight-green';
-                            else if (rank === 1) highlightClass = 'highlight-yellow';
-                            else if (rank === 2) highlightClass = 'highlight-orange';
-
-                            html += '<span class="keyword-tag hit ' + highlightClass + '">' +
-                                escapeHtml(kw2) + ' <span class="count-badge">' + k.count + '</span>' +
+                        for (var di = 0; di < displayKeywords.length; di++) {
+                            var item = displayKeywords[di];
+                            html += '<span class="keyword-tag hit ' + item.highlightClass + '">' +
+                                escapeHtml(item.keyword) + ' <span class="count-badge">' + item.count + '</span>' +
                                 '</span>';
+                        }
+                        if (filterChecked && keywords.length > displayKeywords.length) {
+                            html += '<span style="color:#9ca3af;font-size:11px;margin-left:4px;">... 隐藏了 ' + (
+                                keywords.length - displayKeywords.length) + ' 个非高亮ID</span>';
                         }
                     }
                     html += '</td>';
 
-                    if (keywords.length > 0) {
+                    if (displayKeywords.length > 0) {
                         html += '<td class="action-col"><button class="btn-copy" data-copy="' + escapeHtml(copyText) +
                             '">📋 复制</button></td>';
                     } else {
@@ -2020,6 +2054,9 @@
                     }
                 }
 
+                var filterChecked = highlightFilter.checked;
+
+                // ---- Sheet1: ID统计（按筛选） ----
                 var idData = [
                     ['ID', '匹配的Excel文件路径', '最后修改时间', '颜色标记']
                 ];
@@ -2029,7 +2066,8 @@
                     var sorted = entries.slice().sort(function(a, b) {
                         return (b.lastModified || 0) - (a.lastModified || 0);
                     });
-                    for (var idx = 0; idx < sorted.length; idx++) {
+                    var maxIdx = filterChecked ? 3 : sorted.length;
+                    for (var idx = 0; idx < maxIdx && idx < sorted.length; idx++) {
                         var entry = sorted[idx];
                         var color = '';
                         if (idx === 0) color = '绿色';
@@ -2040,6 +2078,7 @@
                     }
                 }
 
+                // ---- Sheet2: 文件统计（按筛选） ----
                 var fileData = [
                     ['Excel文件路径', '最后修改时间', '命中的ID', '颜色标记']
                 ];
@@ -2068,6 +2107,8 @@
                     var keywords = entry.keywords || [];
                     var dateStr = entry.lastModified ? formatDate(entry.lastModified) : '未知';
 
+                    var hasAnyHighlight = false;
+                    var rowAdded = false;
                     for (var ki = 0; ki < keywords.length; ki++) {
                         var k = keywords[ki];
                         var kw2 = k.keyword;
@@ -2079,14 +2120,22 @@
                                 break;
                             }
                         }
+                        if (filterChecked && rank > 2) continue; // 非高亮跳过
+                        hasAnyHighlight = true;
                         var color = '';
                         if (rank === 0) color = '绿色';
                         else if (rank === 1) color = '黄色';
                         else if (rank === 2) color = '橙色';
                         fileData.push([filePath, dateStr, kw2, color]);
+                        rowAdded = true;
+                    }
+                    // 如果开启筛选且该文件没有任何高亮ID，不添加该文件行
+                    if (filterChecked && !hasAnyHighlight) {
+                        // 如果需要移除之前可能添加的行？由于我们逐条添加，如果没有高亮ID则不会添加任何行，符合预期。
                     }
                 }
 
+                // ---- Sheet3: 未命中ID（不受筛选影响） ----
                 var missData = [
                     ['未命中ID']
                 ];
@@ -2535,6 +2584,13 @@
                     }
                 });
             }
+
+            // ---- 高亮筛选切换 ----
+            highlightFilter.addEventListener('change', function() {
+                if (resultArea.style.display !== 'none') {
+                    renderView(currentView);
+                }
+            });
 
             // ---- 初始化 ----
             updatePkTags();
