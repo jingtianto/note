@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Excel Ocatan-ID 索引生成器 (图形界面版)
-功能：管理多个数据源，生成JSON索引文件
+功能：管理多个数据源，递归扫描所有子目录，生成JSON索引文件
 输出：{数据源名称}.json 供HTML工具使用
 """
 
@@ -69,6 +69,8 @@ class IndexBuilder:
         """提取IPN Sheet中Ocatan-ID列的所有非空值"""
         try:
             wb = load_workbook(file_path, data_only=True, read_only=True)
+            
+            # 检查是否有 IPN Sheet
             if 'IPN' not in wb.sheetnames:
                 wb.close()
                 return []
@@ -100,6 +102,23 @@ class IndexBuilder:
         except Exception as e:
             return []
     
+    def get_all_excel_files(self, folder_path):
+        """递归获取所有子目录中的Excel文件"""
+        excel_files = []
+        extensions = ['.xlsx', '.xls', '.xlsm', '.xlsb']
+        
+        # 使用 os.walk 递归遍历所有子目录
+        for root, dirs, files in os.walk(folder_path):
+            for file in files:
+                file_lower = file.lower()
+                for ext in extensions:
+                    if file_lower.endswith(ext):
+                        file_path = Path(root) / file
+                        excel_files.append(file_path)
+                        break
+        
+        return excel_files
+    
     def build_index(self, source_name, output_dir=".", callback=None):
         """为单个数据源构建索引"""
         source = None
@@ -118,18 +137,18 @@ class IndexBuilder:
             return {"error": f"路径不存在: {folder_path}"}
         
         if callback:
-            callback("status", f"扫描: {folder_path}")
+            callback("status", f"正在扫描: {folder_path}")
         
-        # 获取所有Excel文件
-        excel_files = []
-        for ext in ['.xlsx', '.xls', '.xlsm', '.xlsb']:
-            excel_files.extend(folder_path.rglob(f'*{ext}'))
+        # 递归获取所有Excel文件
+        excel_files = self.get_all_excel_files(str(folder_path))
         
         if not excel_files:
-            return {"error": "未找到Excel文件"}
+            if callback:
+                callback("error", f"未找到Excel文件，请检查目录: {folder_path}")
+            return {"error": f"未找到Excel文件，请检查目录: {folder_path}"}
         
         if callback:
-            callback("status", f"找到 {len(excel_files)} 个Excel文件")
+            callback("status", f"找到 {len(excel_files)} 个Excel文件，正在提取ID...")
         
         # 构建索引
         data = {
@@ -184,7 +203,8 @@ class IndexBuilder:
             "success": True,
             "file": output_file,
             "total_files": processed,
-            "total_ids": len(id_set)
+            "total_ids": len(id_set),
+            "excel_files_scanned": len(excel_files)
         }
     
     def build_all(self, output_dir=".", callback=None):
@@ -416,7 +436,9 @@ class IndexerGUI:
             result = args[0]
             if result.get("success"):
                 self.root.after(0, lambda: self.log(f"   📄 {result['file']}"))
-                self.root.after(0, lambda: self.log(f"   📊 文件: {result['total_files']}, ID: {result['total_ids']}"))
+                self.root.after(0, lambda: self.log(f"   📊 扫描Excel: {result.get('excel_files_scanned', 0)} 个"))
+                self.root.after(0, lambda: self.log(f"   📊 含ID文件: {result['total_files']} 个"))
+                self.root.after(0, lambda: self.log(f"   📊 唯一ID数: {result['total_ids']} 个"))
             else:
                 self.root.after(0, lambda: self.log(f"   ❌ {result.get('error', '未知错误')}"))
     
@@ -468,6 +490,6 @@ class IndexerGUI:
 
 # ========== 启动 ==========
 if __name__ == '__main__':
-    root = Tk()  # 修复：直接使用 Tk() 而不是 tk.Tk()
+    root = Tk()
     app = IndexerGUI(root)
     root.mainloop()
