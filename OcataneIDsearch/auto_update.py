@@ -4,6 +4,7 @@
 独立增量更新脚本 - 用于定时任务
 功能：读取 config.json，对所有启用的数据源执行增量更新
 运行方式：python auto_update.py
+支持显示详细进度，避免“卡住”假象
 """
 
 import os
@@ -12,13 +13,51 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-# 导入主程序中的 IndexBuilder 类（不会触发 GUI 界面，因为主程序入口在 if __name__ 中）
+# 导入主程序中的 IndexBuilder 类（不会触发 GUI 界面）
 try:
     from OcatanID import IndexBuilder
 except ImportError:
     print("错误：找不到 OcatanID.py，请确保该文件在同一目录下")
     sys.exit(1)
 
+# ===== 进度回调函数 =====
+def progress_callback(msg_type, *args):
+    """
+    回调函数，用于接收索引构建过程中的状态信息并打印到控制台
+    """
+    if msg_type == "status":
+        # 状态信息，例如“正在扫描: /path”
+        print(f"   📌 {args[0]}")
+    
+    elif msg_type == "progress":
+        # 进度信息：当前索引、总数、文件名
+        idx, total, name = args
+        # 计算百分比
+        pct = int((idx / total) * 100) if total > 0 else 0
+        print(f"   ⏳ [{idx}/{total}] ({pct}%) {name}")
+    
+    elif msg_type == "debug":
+        # 调试信息，默认不显示，如需显示可取消注释
+        # print(f"   🔍 {args[0]}")
+        pass  # 静默，避免日志刷屏
+    
+    elif msg_type == "done":
+        # 完成信息
+        print(f"   ✅ {args[0]}")
+    
+    elif msg_type == "error":
+        # 错误信息
+        print(f"   ❌ {args[0]}")
+    
+    elif msg_type == "source":
+        # 数据源切换
+        print(f"\n📁 {args[0]}")
+    
+    elif msg_type == "result":
+        # 结果信息（由主循环单独打印，此处忽略避免重复）
+        pass
+
+# ===== 主函数 =====
 def main():
     # 获取脚本所在目录
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -50,26 +89,27 @@ def main():
         name = source["name"]
         print(f"\n▶ 正在更新数据源: {name}")
         
-        # 执行增量更新（incremental=True）
+        # 执行增量更新（incremental=True），传入回调
         result = builder.build_index(
             source_name=name,
-            output_dir=script_dir,  # JSON 文件输出到当前目录
-            callback=None,          # 静默模式，不输出进度回调
+            output_dir=script_dir,          # JSON 文件输出到当前目录
+            callback=progress_callback,     # 显示进度
             incremental=True
         )
         
+        # 打印结果摘要
         if "error" in result:
             print(f"   ❌ 更新失败: {result['error']}")
         elif result.get("stopped"):
             print(f"   ⏹ 已停止")
         else:
-            print(f"   ✅ 更新成功: 新增 {result.get('new', 0)} 个文件, "
+            print(f"   ✅ 更新完成: 新增 {result.get('new', 0)} 个文件, "
                   f"修改 {result.get('modified', 0)} 个文件, "
                   f"删除 {result.get('deleted', 0)} 个文件, "
-                  f"当前索引含 {result.get('total_ids', 0)} 个 ID")
+                  f"当前索引含 {result.get('total_ids', 0)} 个唯一 ID")
             success_count += 1
     
-    print(f"\n{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - 更新完成！成功更新 {success_count}/{len(enabled_sources)} 个数据源")
+    print(f"\n{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - 全部完成！成功更新 {success_count}/{len(enabled_sources)} 个数据源")
 
 if __name__ == "__main__":
     main()
