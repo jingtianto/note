@@ -4,7 +4,7 @@
 独立增量更新脚本 - 用于定时任务
 功能：读取 config.json，对所有启用的数据源执行增量更新
 运行方式：python auto_update.py
-支持显示详细进度，避免“卡住”假象
+支持显示详细进度，包括目录扫描进度
 """
 
 import os
@@ -32,14 +32,12 @@ def progress_callback(msg_type, *args):
     elif msg_type == "progress":
         # 进度信息：当前索引、总数、文件名
         idx, total, name = args
-        # 计算百分比
         pct = int((idx / total) * 100) if total > 0 else 0
         print(f"   ⏳ [{idx}/{total}] ({pct}%) {name}")
     
     elif msg_type == "debug":
-        # 调试信息，默认不显示，如需显示可取消注释
-        # print(f"   🔍 {args[0]}")
-        pass  # 静默，避免日志刷屏
+        # 调试信息：包括目录扫描进度（每100个目录输出一次）
+        print(f"   🔍 {args[0]}")
     
     elif msg_type == "done":
         # 完成信息
