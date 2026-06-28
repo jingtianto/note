@@ -1,322 +1,473 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Excel Ocatan-ID 索引生成器 (图形界面版)
+功能：管理多个数据源，生成JSON索引文件
+输出：{数据源名称}.json 供HTML工具使用
+"""
+
 import os
 import json
-import tkinter as tk
-from tkinter import filedialog, messagebox, simpledialog, scrolledtext
+import threading
 from pathlib import Path
 from datetime import datetime
-import re
-import sys
-
-# 检查 openpyxl 是否安装
-try:
-    import openpyxl
-    from openpyxl import load_workbook
-except ImportError:
-    print("=" * 60)
-    print("❌ 未安装 openpyxl 库")
-    print("请运行以下命令安装：")
-    print("    pip install openpyxl")
-    print("=" * 60)
-    sys.exit(1)
+from tkinter import *
+from tkinter import ttk, filedialog, messagebox
+from openpyxl import load_workbook
 
 
-def select_folder():
-    """弹出文件夹选择对话框"""
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes('-topmost', True)
-    folder_path = filedialog.askdirectory(title="请选择要扫描的文件夹")
-    root.destroy()
-    return folder_path
-
-
-def get_ids_from_user():
-    """弹出对话框让用户输入ID"""
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes('-topmost', True)
-
-    dialog = tk.Toplevel(root)
-    dialog.title("输入要搜索的 ID")
-    dialog.geometry("500x300")
-    dialog.attributes('-topmost', True)
-    dialog.transient(root)
-
-    tk.Label(dialog, text="输入要搜索的 ID（一行一个，支持逗号分隔）:", font=("Microsoft Yahei", 11)).pack(pady=10)
-
-    text_widget = scrolledtext.ScrolledText(dialog, height=10, font=("Microsoft Yahei", 10))
-    text_widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-    text_widget.insert(tk.END, "示例：\n1757610,1778200\n1778199\n1530042")
-
-    result = []
-    dialog_closed = False
-
-    def on_confirm():
-        nonlocal result, dialog_closed
-        if dialog_closed:
-            return
-        content = text_widget.get("1.0", tk.END).strip()
-        lines = content.split('\n')
-        ids = []
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            parts = re.split(r'[,，\s]+', line)
-            for p in parts:
-                p = p.strip()
-                if p:
-                    ids.append(p)
-        result = ids
-        dialog_closed = True
-        dialog.destroy()
-        root.destroy()
-
-    def on_cancel():
-        nonlocal dialog_closed
-        if dialog_closed:
-            return
-        dialog_closed = True
-        dialog.destroy()
-        root.destroy()
-
-    btn_frame = tk.Frame(dialog)
-    btn_frame.pack(pady=10)
-    tk.Button(btn_frame, text="确认", command=on_confirm, width=10, bg="#2563eb", fg="white",
-              font=("Microsoft Yahei", 10)).pack(side=tk.LEFT, padx=5)
-    tk.Button(btn_frame, text="取消", command=on_cancel, width=10, bg="#e5e7eb",
-              font=("Microsoft Yahei", 10)).pack(side=tk.LEFT, padx=5)
-
-    dialog.protocol("WM_DELETE_WINDOW", on_cancel)
-    dialog.grab_set()
-    root.wait_window(dialog)
-
-    return result
-
-
-def get_path_keywords():
-    """弹出对话框让用户输入关键路径（可选）"""
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes('-topmost', True)
-
-    keywords = simpledialog.askstring(
-        "关键路径（可选）",
-        "输入关键路径词（用于筛选文件夹，多个用逗号分隔）：\n留空表示搜索所有文件夹",
-        parent=root
-    )
-    root.destroy()
-
-    if keywords:
-        return [k.strip() for k in re.split(r'[,，\s]+', keywords) if k.strip()]
-    return []
-
-
-def is_excel_file(filename):
-    """检查是否为 Excel 文件"""
-    ext = os.path.splitext(filename)[1].lower()
-    return ext in ['.xlsx', '.xls', '.xlsm', '.xlsb']
-
-
-def search_excel_file(file_path, ids):
-    """在单个 Excel 文件中搜索 ID，返回匹配结果"""
-    matches = []
-    try:
-        wb = load_workbook(file_path, data_only=True, read_only=True)
-        for sheet_name in wb.sheetnames:
-            sheet = wb[sheet_name]
-            for row in sheet.iter_rows(values_only=True):
-                if not row:
-                    continue
-                for cell_val in row:
-                    if cell_val is None:
-                        continue
-                    str_val = str(cell_val)
-                    if not str_val:
-                        continue
-                    for id_val in ids:
-                        if id_val in str_val:
-                            matches.append({
-                                "keyword": id_val,
-                                "sheet": sheet_name,
-                                "value": str_val
-                            })
-        wb.close()
-    except Exception as e:
-        print(f"⚠️ 读取文件失败 {os.path.basename(file_path)}: {e}")
-    return matches
-
-
-def main():
-    print("=" * 60)
-    print("📊 Excel 批量搜索工具 (Python版)")
-    print("=" * 60)
-    print("")
-
-    # 1. 选择文件夹
-    folder_path = select_folder()
-    if not folder_path:
-        print("❌ 未选择文件夹，程序退出。")
-        return
-    print(f"📁 已选择文件夹: {folder_path}")
-    print("")
-
-    # 2. 输入ID
-    ids = get_ids_from_user()
-    if not ids:
-        print("❌ 未输入 ID，程序退出。")
-        return
-    print(f"🔑 搜索 ID ({len(ids)} 个): {', '.join(ids)}")
-    print("")
-
-    # 3. 输入关键路径（可选）
-    path_keywords = get_path_keywords()
-    if path_keywords:
-        print(f"📌 关键路径: {', '.join(path_keywords)}")
-    else:
-        print("📌 关键路径: 无（搜索所有文件夹）")
-    print("")
-
-    # 4. 扫描文件夹，收集 Excel 文件（每10个文件输出进度）
-    print("📂 正在扫描 Excel 文件...")
-    excel_files = []
-    scanned_count = 0
-    found_count = 0
-
-    for root, dirs, files in os.walk(folder_path):
-        for file in files:
-            scanned_count += 1
-            if scanned_count % 10 == 0:
-                print(f"   🔄 已扫描 {scanned_count} 个文件，找到 {found_count} 个 Excel...", end='\r')
-
-            if is_excel_file(file):
-                full_path = os.path.join(root, file)
-                # 关键路径筛选（使用相对路径）
-                if path_keywords:
-                    rel_path = os.path.relpath(full_path, folder_path)
-                    rel_path_lower = rel_path.lower()
-                    matched = False
-                    for kw in path_keywords:
-                        if kw.lower() in rel_path_lower:
-                            matched = True
-                            break
-                    if not matched:
-                        continue
-                excel_files.append(full_path)
-                found_count += 1
-
-    # 换行，覆盖扫描进度
-    print("")
-    print(f"✅ 扫描完成！共扫描 {scanned_count} 个文件，找到 {found_count} 个 Excel 文件")
-    print("")
-
-    if not excel_files:
-        print("❌ 未找到任何 Excel 文件，程序退出。")
-        return
-
-    # 5. 搜索（每10个文件输出进度）
-    print("🔍 正在搜索 Excel 内容...")
-    print("   (这可能需要一些时间，请耐心等待)")
-    results = []
-    total_matches = 0
-    processed = 0
-    total = len(excel_files)
-
-    for file_path in excel_files:
-        processed += 1
-        if processed % 10 == 0:
-            pct = int(processed / total * 100)
-            print(f"   🔍 进度: {processed}/{total} ({pct}%)", end='\r')
-
-        matches = search_excel_file(file_path, ids)
-        if matches:
-            # 按ID分组
-            kw_groups = {}
-            for m in matches:
-                if m["keyword"] not in kw_groups:
-                    kw_groups[m["keyword"]] = []
-                kw_groups[m["keyword"]].append(m)
-
-            # 获取文件修改时间
+# ========== 索引引擎 ==========
+class IndexBuilder:
+    """索引构建器"""
+    
+    def __init__(self, config_path="config.json"):
+        self.config_path = config_path
+        self.config = self.load_config()
+    
+    def load_config(self):
+        if os.path.exists(self.config_path):
             try:
-                mtime = os.path.getmtime(file_path)
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
             except:
-                mtime = None
+                return {"data_sources": []}
+        return {"data_sources": []}
+    
+    def save_config(self):
+        with open(self.config_path, 'w', encoding='utf-8') as f:
+            json.dump(self.config, f, ensure_ascii=False, indent=2)
+    
+    def add_source(self, name, path):
+        for s in self.config["data_sources"]:
+            if s["name"] == name:
+                return False, f"名称 '{name}' 已存在"
+            if s["path"] == path:
+                return False, f"路径 '{path}' 已被使用"
+        
+        self.config["data_sources"].append({
+            "name": name,
+            "path": path,
+            "enabled": True
+        })
+        self.save_config()
+        return True, f"已添加 '{name}'"
+    
+    def remove_source(self, name):
+        self.config["data_sources"] = [
+            s for s in self.config["data_sources"] if s["name"] != name
+        ]
+        self.save_config()
+    
+    def toggle_source(self, name):
+        for s in self.config["data_sources"]:
+            if s["name"] == name:
+                s["enabled"] = not s["enabled"]
+                break
+        self.save_config()
+    
+    def parse_excel(self, file_path):
+        """提取IPN Sheet中Ocatan-ID列的所有非空值"""
+        try:
+            wb = load_workbook(file_path, data_only=True, read_only=True)
+            if 'IPN' not in wb.sheetnames:
+                wb.close()
+                return []
+            
+            sheet = wb['IPN']
+            
+            # 查找 Ocatan-ID 列
+            ocatan_col_index = None
+            first_row = list(sheet.iter_rows(min_row=1, max_row=1, values_only=True))[0]
+            for idx, cell_value in enumerate(first_row):
+                if cell_value and str(cell_value).strip() == 'Ocatan-ID':
+                    ocatan_col_index = idx
+                    break
+            
+            if ocatan_col_index is None:
+                wb.close()
+                return []
+            
+            # 提取非空值
+            ids = []
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                if ocatan_col_index < len(row):
+                    value = row[ocatan_col_index]
+                    if value is not None and str(value).strip():
+                        ids.append(str(value).strip())
+            
+            wb.close()
+            return ids
+        except Exception as e:
+            return []
+    
+    def build_index(self, source_name, output_dir=".", callback=None):
+        """为单个数据源构建索引"""
+        source = None
+        for s in self.config["data_sources"]:
+            if s["name"] == source_name:
+                source = s
+                break
+        
+        if not source:
+            return {"error": f"数据源 '{source_name}' 不存在"}
+        if not source["enabled"]:
+            return {"error": f"数据源 '{source_name}' 未启用"}
+        
+        folder_path = Path(source["path"])
+        if not folder_path.exists():
+            return {"error": f"路径不存在: {folder_path}"}
+        
+        if callback:
+            callback("status", f"扫描: {folder_path}")
+        
+        # 获取所有Excel文件
+        excel_files = []
+        for ext in ['.xlsx', '.xls', '.xlsm', '.xlsb']:
+            excel_files.extend(folder_path.rglob(f'*{ext}'))
+        
+        if not excel_files:
+            return {"error": "未找到Excel文件"}
+        
+        if callback:
+            callback("status", f"找到 {len(excel_files)} 个Excel文件")
+        
+        # 构建索引
+        data = {
+            "version": "1.0",
+            "build_time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "source_name": source_name,
+            "source_path": str(folder_path),
+            "total_files": 0,
+            "total_ids": 0,
+            "files": {},
+            "id_index": {}
+        }
+        
+        processed = 0
+        id_set = set()
+        
+        for idx, file_path in enumerate(excel_files, 1):
+            rel_path = str(file_path.relative_to(folder_path))
+            
+            if callback:
+                callback("progress", idx, len(excel_files), rel_path[:50])
+            
+            ids = self.parse_excel(file_path)
+            
+            if ids:
+                stat = file_path.stat()
+                data["files"][rel_path] = {
+                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "ids": ids
+                }
+                
+                for id_val in ids:
+                    if id_val not in data["id_index"]:
+                        data["id_index"][id_val] = []
+                    data["id_index"][id_val].append(rel_path)
+                    id_set.add(id_val)
+                
+                processed += 1
+        
+        data["total_files"] = processed
+        data["total_ids"] = len(id_set)
+        
+        # 保存JSON
+        output_file = os.path.join(output_dir, f"{source_name}.json")
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        
+        if callback:
+            callback("done", f"完成! 文件: {processed}, ID: {len(id_set)}")
+        
+        return {
+            "success": True,
+            "file": output_file,
+            "total_files": processed,
+            "total_ids": len(id_set)
+        }
+    
+    def build_all(self, output_dir=".", callback=None):
+        """为所有启用的数据源构建索引"""
+        sources = [s for s in self.config["data_sources"] if s["enabled"]]
+        
+        if not sources:
+            if callback:
+                callback("error", "没有启用的数据源")
+            return []
+        
+        results = []
+        for idx, source in enumerate(sources, 1):
+            if callback:
+                callback("source", f"({idx}/{len(sources)}) {source['name']}")
+            result = self.build_index(source["name"], output_dir, callback)
+            results.append({
+                "name": source["name"],
+                "result": result
+            })
+        
+        return results
 
-            file_entry = {
-                "file": file_path,
-                "last_modified": mtime,
-                "keywords": []
-            }
-            for kw, items in kw_groups.items():
-                file_entry["keywords"].append({
-                    "keyword": kw,
-                    "count": len(items),
-                    "sheets": list(set([m["sheet"] for m in items]))
-                })
-                total_matches += len(items)
-            results.append(file_entry)
 
-    # 换行，覆盖搜索进度
-    print("")
-    print(f"✅ 搜索完成，共 {total_matches} 次命中，命中 {len(results)} 个文件")
-    print("")
+# ========== 图形界面 ==========
+class IndexerGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("📊 Excel Ocatan-ID 索引生成器")
+        self.root.geometry("750x550")
+        self.root.minsize(600, 400)
+        
+        self.builder = IndexBuilder("config.json")
+        self.output_dir = os.getcwd()
+        self.is_running = False
+        
+        self.create_widgets()
+        self.refresh_list()
+    
+    def create_widgets(self):
+        # 主框架
+        main_frame = ttk.Frame(self.root, padding="10")
+        main_frame.pack(fill=BOTH, expand=True)
+        
+        # === 数据源管理 ===
+        source_frame = ttk.LabelFrame(main_frame, text="📁 数据源管理", padding="10")
+        source_frame.pack(fill=BOTH, expand=True, pady=(0, 10))
+        
+        # 列表 + 滚动条
+        list_frame = ttk.Frame(source_frame)
+        list_frame.pack(fill=BOTH, expand=True)
+        
+        scrollbar = ttk.Scrollbar(list_frame)
+        scrollbar.pack(side=RIGHT, fill=Y)
+        
+        self.listbox = Listbox(list_frame, yscrollcommand=scrollbar.set, font=("", 11))
+        self.listbox.pack(fill=BOTH, expand=True)
+        scrollbar.config(command=self.listbox.yview)
+        
+        # 按钮行
+        btn_frame = ttk.Frame(source_frame)
+        btn_frame.pack(fill=X, pady=(10, 0))
+        
+        ttk.Button(btn_frame, text="➕ 添加", command=self.add_source).pack(side=LEFT, padx=2)
+        ttk.Button(btn_frame, text="✖ 删除", command=self.remove_source).pack(side=LEFT, padx=2)
+        ttk.Button(btn_frame, text="⏻ 启用/禁用", command=self.toggle_source).pack(side=LEFT, padx=2)
+        
+        # === 输出设置 ===
+        output_frame = ttk.LabelFrame(main_frame, text="💾 输出设置", padding="10")
+        output_frame.pack(fill=X, pady=(0, 10))
+        
+        output_row = ttk.Frame(output_frame)
+        output_row.pack(fill=X)
+        
+        ttk.Label(output_row, text="输出目录:").pack(side=LEFT, padx=(0, 10))
+        self.output_label = ttk.Label(output_row, text=os.getcwd(), foreground="#2563eb")
+        self.output_label.pack(side=LEFT, fill=X, expand=True)
+        ttk.Button(output_row, text="📂 选择", command=self.select_output_dir).pack(side=LEFT, padx=5)
+        
+        # === 操作按钮 ===
+        action_frame = ttk.Frame(main_frame)
+        action_frame.pack(fill=X, pady=(0, 10))
+        
+        self.build_all_btn = ttk.Button(action_frame, text="🚀 构建所有索引", command=self.build_all)
+        self.build_all_btn.pack(side=LEFT, padx=2)
+        
+        self.build_selected_btn = ttk.Button(action_frame, text="▶ 构建选中", command=self.build_selected)
+        self.build_selected_btn.pack(side=LEFT, padx=2)
+        
+        ttk.Button(action_frame, text="📂 打开输出目录", command=self.open_output_dir).pack(side=LEFT, padx=2)
+        
+        # === 日志 ===
+        log_frame = ttk.LabelFrame(main_frame, text="📋 运行日志", padding="10")
+        log_frame.pack(fill=BOTH, expand=True)
+        
+        self.log_text = Text(log_frame, height=10, font=("Consolas", 10), wrap=WORD)
+        log_scroll = ttk.Scrollbar(log_frame, orient=VERTICAL, command=self.log_text.yview)
+        self.log_text.config(yscrollcommand=log_scroll.set)
+        
+        log_scroll.pack(side=RIGHT, fill=Y)
+        self.log_text.pack(fill=BOTH, expand=True)
+        
+        # 进度条
+        self.progress_bar = ttk.Progressbar(main_frame, mode='determinate')
+        self.progress_bar.pack(fill=X, pady=(5, 0))
+        
+        # 状态栏
+        self.status_var = StringVar(value="就绪")
+        status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=SUNKEN, anchor=W)
+        status_bar.pack(fill=X, pady=(5, 0))
+    
+    def refresh_list(self):
+        self.listbox.delete(0, END)
+        for source in self.builder.config["data_sources"]:
+            status = "✅" if source["enabled"] else "❌"
+            self.listbox.insert(END, f"{status} {source['name']}  →  {source['path']}")
+    
+    def get_selected_name(self):
+        selection = self.listbox.curselection()
+        if selection and selection[0] < len(self.builder.config["data_sources"]):
+            return self.builder.config["data_sources"][selection[0]]["name"]
+        return None
+    
+    def add_source(self):
+        dialog = Toplevel(self.root)
+        dialog.title("添加数据源")
+        dialog.geometry("500x200")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        ttk.Label(dialog, text="名称:").pack(anchor=W, padx=20, pady=(15, 0))
+        name_entry = ttk.Entry(dialog, width=50)
+        name_entry.pack(padx=20, pady=5)
+        
+        ttk.Label(dialog, text="文件夹路径:").pack(anchor=W, padx=20, pady=(10, 0))
+        path_frame = ttk.Frame(dialog)
+        path_frame.pack(fill=X, padx=20, pady=5)
+        path_entry = ttk.Entry(path_frame, width=40)
+        path_entry.pack(side=LEFT, fill=X, expand=True)
+        ttk.Button(path_frame, text="浏览", command=lambda: self.browse_folder(path_entry)).pack(side=LEFT, padx=5)
+        
+        def confirm():
+            name = name_entry.get().strip()
+            path = path_entry.get().strip()
+            if not name:
+                messagebox.showerror("错误", "请输入名称")
+                return
+            if not path:
+                messagebox.showerror("错误", "请选择文件夹")
+                return
+            if not os.path.exists(path):
+                messagebox.showerror("错误", "路径不存在")
+                return
+            
+            success, msg = self.builder.add_source(name, path)
+            if success:
+                self.refresh_list()
+                self.log(f"✅ {msg}")
+                dialog.destroy()
+            else:
+                messagebox.showerror("错误", msg)
+        
+        btn_frame = ttk.Frame(dialog)
+        btn_frame.pack(fill=X, padx=20, pady=20)
+        ttk.Button(btn_frame, text="确认", command=confirm).pack(side=RIGHT, padx=5)
+        ttk.Button(btn_frame, text="取消", command=dialog.destroy).pack(side=RIGHT, padx=5)
+    
+    def browse_folder(self, entry):
+        folder = filedialog.askdirectory()
+        if folder:
+            entry.delete(0, END)
+            entry.insert(0, folder)
+    
+    def remove_source(self):
+        name = self.get_selected_name()
+        if not name:
+            messagebox.showwarning("警告", "请先选择一个数据源")
+            return
+        if messagebox.askyesno("确认", f"确定删除 '{name}' 吗？"):
+            self.builder.remove_source(name)
+            self.refresh_list()
+            self.log(f"🗑️ 已删除: {name}")
+    
+    def toggle_source(self):
+        name = self.get_selected_name()
+        if not name:
+            messagebox.showwarning("警告", "请先选择一个数据源")
+            return
+        self.builder.toggle_source(name)
+        self.refresh_list()
+        self.log(f"⏻ 已切换: {name}")
+    
+    def select_output_dir(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.output_dir = folder
+            self.output_label.config(text=folder)
+            self.log(f"📂 输出目录: {folder}")
+    
+    def open_output_dir(self):
+        if os.path.exists(self.output_dir):
+            if os.name == 'nt':
+                os.startfile(self.output_dir)
+            else:
+                os.system(f'open "{self.output_dir}"')
+        else:
+            messagebox.showerror("错误", f"目录不存在: {self.output_dir}")
+    
+    def log(self, msg):
+        self.log_text.insert(END, f"{msg}\n")
+        self.log_text.see(END)
+    
+    def progress_callback(self, msg_type, *args):
+        if msg_type == "status":
+            self.root.after(0, lambda: self.status_var.set(args[0]))
+        elif msg_type == "progress":
+            idx, total, name = args
+            self.root.after(0, lambda: self.progress_bar.config(value=(idx / total) * 100))
+            self.root.after(0, lambda: self.status_var.set(f"{idx}/{total}: {name}"))
+        elif msg_type == "done":
+            self.root.after(0, lambda: self.status_var.set(args[0]))
+            self.root.after(0, lambda: self.log(f"✅ {args[0]}"))
+        elif msg_type == "source":
+            self.root.after(0, lambda: self.log(f"\n📁 {args[0]}"))
+        elif msg_type == "error":
+            self.root.after(0, lambda: messagebox.showerror("错误", args[0]))
+            self.root.after(0, lambda: self.status_var.set("错误"))
+        elif msg_type == "result":
+            result = args[0]
+            if result.get("success"):
+                self.root.after(0, lambda: self.log(f"   📄 {result['file']}"))
+                self.root.after(0, lambda: self.log(f"   📊 文件: {result['total_files']}, ID: {result['total_ids']}"))
+            else:
+                self.root.after(0, lambda: self.log(f"   ❌ {result.get('error', '未知错误')}"))
+    
+    def build_selected(self):
+        if self.is_running:
+            return
+        name = self.get_selected_name()
+        if not name:
+            messagebox.showwarning("警告", "请先选择一个数据源")
+            return
+        
+        self.is_running = True
+        self.build_all_btn.config(state=DISABLED)
+        self.build_selected_btn.config(state=DISABLED)
+        self.progress_bar.config(value=0)
+        
+        def run():
+            result = self.builder.build_index(name, self.output_dir, self.progress_callback)
+            self.root.after(0, lambda: self.progress_callback("result", result))
+            self.root.after(0, lambda: self.set_idle())
+        
+        threading.Thread(target=run, daemon=True).start()
+    
+    def build_all(self):
+        if self.is_running:
+            return
+        
+        self.is_running = True
+        self.build_all_btn.config(state=DISABLED)
+        self.build_selected_btn.config(state=DISABLED)
+        self.progress_bar.config(value=0)
+        
+        def run():
+            results = self.builder.build_all(self.output_dir, self.progress_callback)
+            self.root.after(0, lambda: self.log(f"\n📊 全部完成! 处理了 {len(results)} 个数据源"))
+            for r in results:
+                self.root.after(0, lambda r=r: self.progress_callback("result", r["result"]))
+            self.root.after(0, lambda: self.set_idle())
+        
+        threading.Thread(target=run, daemon=True).start()
+    
+    def set_idle(self):
+        self.is_running = False
+        self.build_all_btn.config(state=NORMAL)
+        self.build_selected_btn.config(state=NORMAL)
+        self.progress_bar.config(value=0)
+        self.status_var.set("就绪")
 
-    # 6. 生成结果 JSON
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    output_path = os.path.join(script_dir, f"search_result_{timestamp}.json")
 
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump({
-            "folder": folder_path,
-            "ids": ids,
-            "path_keywords": path_keywords,
-            "total_files_scanned": len(excel_files),
-            "total_hits": total_matches,
-            "matched_files": len(results),
-            "scan_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "results": results
-        }, f, ensure_ascii=False, indent=2)
-
-    print("=" * 60)
-    print("✅ 搜索完成！")
-    print(f"📁 扫描路径: {folder_path}")
-    print(f"📄 扫描文件: {len(excel_files)} 个")
-    print(f"🔑 搜索 ID: {len(ids)} 个")
-    print(f"✅ 命中文件: {len(results)} 个")
-    print(f"🔍 总命中次数: {total_matches}")
-    print("")
-    print("📄 结果已保存到:")
-    print(f"   {output_path}")
-    print("=" * 60)
-
-    # 弹出提示框
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes('-topmost', True)
-    messagebox.showinfo(
-        "搜索完成",
-        f"✅ 搜索完成！\n\n"
-        f"📁 扫描路径: {folder_path}\n"
-        f"📄 扫描文件: {len(excel_files)} 个\n"
-        f"🔑 搜索 ID: {len(ids)} 个\n"
-        f"✅ 命中文件: {len(results)} 个\n"
-        f"🔍 总命中次数: {total_matches}\n\n"
-        f"📄 结果已保存到:\n{output_path}\n\n"
-        f"💡 提示: 在 HTML 工具中点击\n"
-        f"「📊 加载搜索结果 JSON」导入查看"
-    )
-    root.destroy()
-
-    # 自动打开文件夹（Windows）
-    try:
-        import subprocess
-        if os.name == 'nt':
-            subprocess.Popen(['explorer', script_dir])
-    except:
-        pass
-
-
-if __name__ == "__main__":
-    main()
+# ========== 启动 ==========
+if __name__ == '__main__':
+    root = Tk()  # 修复：直接使用 Tk() 而不是 tk.Tk()
+    app = IndexerGUI(root)
+    root.mainloop()
