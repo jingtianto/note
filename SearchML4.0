@@ -7,7 +7,6 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js">
     </script>
     <style>
-        /* ===== 样式与原版相同（省略，实际使用时复制完整样式） ===== */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -859,6 +858,17 @@
                 allKeywords: []
             };
 
+            // ---- 工具：日期转时间戳 ----
+            function parseDateToTimestamp(dateStr) {
+                if (!dateStr) return Date.now();
+                if (typeof dateStr === 'number') return dateStr;
+                if (typeof dateStr === 'string') {
+                    var ts = Date.parse(dateStr);
+                    return isNaN(ts) ? Date.now() : ts;
+                }
+                return Date.now();
+            }
+
             // ---- Toast ----
             var toastTimer = null;
 
@@ -1126,11 +1136,23 @@
                 if (!data.id_index || !data.files) {
                     return false;
                 }
+                // 转换所有修改时间为时间戳
+                var files = {};
+                var filePaths = Object.keys(data.files);
+                for (var fi = 0; fi < filePaths.length; fi++) {
+                    var fpath = filePaths[fi];
+                    var fileInfo = data.files[fpath];
+                    files[fpath] = {
+                        modified: parseDateToTimestamp(fileInfo.modified),
+                        ids: fileInfo.ids || []
+                    };
+                }
+
                 jsonIndexes.push({
                     name: fileName || data.source_name || '未命名索引',
                     source_path: data.source_path || '',
                     id_index: data.id_index,
-                    files: data.files,
+                    files: files,
                     total_files: data.total_files || Object.keys(data.files).length,
                     total_ids: data.total_ids || Object.keys(data.id_index).length
                 });
@@ -1248,7 +1270,7 @@
                         for (var ri = 0; ri < results.length; ri++) {
                             var result = results[ri];
                             var filePath = result.file;
-                            var lastModified = result.last_modified || Date.now();
+                            var lastModified = parseDateToTimestamp(result.last_modified);
 
                             fileMap[filePath] = {
                                 file: filePath,
@@ -1799,6 +1821,7 @@
                     for (var hki = 0; hki < hitKeywords.length; hki++) {
                         var kw = hitKeywords[hki];
                         var entries = keywordMap[kw] || [];
+                        // 按修改时间降序排列（最新的在前）
                         var sorted = entries.slice().sort(function(a, b) {
                             return (b.lastModified || 0) - (a.lastModified || 0);
                         });
@@ -1824,6 +1847,7 @@
                                 var entry = sorted[idx];
                                 var sheetsStr = (entry.sheets && entry.sheets.length > 0) ?
                                     ' (Sheet: ' + entry.sheets.join(', ') + ')' : '';
+                                // 颜色标记：最新(第1)为绿色，第2为黄色，第3为橙色
                                 var highlightClass = '';
                                 if (idx === 0) highlightClass = 'highlight-green';
                                 else if (idx === 1) highlightClass = 'highlight-yellow';
@@ -1881,6 +1905,7 @@
                             lastModified: entries[ei].lastModified || 0
                         });
                     }
+                    // 按修改时间降序
                     fileEntries.sort(function(a, b) {
                         return b.lastModified - a.lastModified;
                     });
@@ -2383,7 +2408,7 @@
                 }, 100);
             });
 
-            // ===== 修复：加载 JSON 索引（支持多选，修复闭包和计数） =====
+            // 加载 JSON 索引
             loadJsonBtn.addEventListener('click', function() {
                 jsonPicker.click();
             });
