@@ -323,7 +323,6 @@
             height: 26px;
             font-size: 13px;
         }
-        /* 日志窗口 */
         .log-area {
             background: #1e293b;
             color: #e2e8f0;
@@ -522,7 +521,7 @@
         } else if (color.rgb) {
             rgb = color.rgb;
         } else if (color.theme !== undefined) {
-            // 主题色无法直接映射，尝试通过主题索引？但无法准确，返回 blank
+            // 主题色无法直接映射，返回 blank
             return 'blank';
         }
         if (!rgb) return 'blank';
@@ -563,6 +562,10 @@
         entry.textContent = message;
         area.appendChild(entry);
         area.scrollTop = area.scrollHeight;
+        // 同时输出到控制台
+        if (type === 'error') console.error(message);
+        else if (type === 'success') console.log(message);
+        else console.info(message);
     }
 
     function clearLog() {
@@ -1046,7 +1049,9 @@
         });
     })();
 
-    // ----- 统计执行 -----
+    // ============================================================
+    // 统计执行（增强错误捕获）
+    // ============================================================
     async function runStatistics() {
         const scheme = schemes.find(s => s.id === currentSchemeId);
         if (!scheme) { alert('请先选择或创建方案'); return; }
@@ -1055,21 +1060,33 @@
 
         log('开始统计...', 'info');
         const workbooks = [];
+        let hasError = false;
+
         for (let f of uploadedFiles) {
             try {
                 const wb = new ExcelJS.Workbook();
+                // 尝试加载，若文件受保护可能会抛出异常
                 await wb.xlsx.load(f.data);
                 workbooks.push({ name: f.name, workbook: wb });
                 log(`文件 ${f.name} 解析成功`, 'success');
             } catch(e) {
-                alert(`解析文件 ${f.name} 失败：${e.message}`);
-                log(`文件 ${f.name} 解析失败：${e.message}`, 'error');
-                return;
+                const errorMsg = `文件 ${f.name} 解析失败：${e.message}\n堆栈：${e.stack}`;
+                log(errorMsg, 'error');
+                console.error(errorMsg);
+                // 提示用户可能原因
+                alert(`解析文件 ${f.name} 失败！\n可能原因：文件受保护、需要“启用编辑”或格式异常。\n请先将文件保存到本地并取消保护，然后重新上传。\n详细错误请查看控制台或日志窗口。`);
+                hasError = true;
+                // 继续下一个文件
             }
         }
 
+        if (workbooks.length === 0) {
+            alert('没有可用的文件，请检查上传的文件是否有效');
+            log('没有可用的文件', 'error');
+            return;
+        }
+
         const results = [];
-        let hasError = false;
         for (let wbData of workbooks) {
             try {
                 const result = processWorkbook(wbData.workbook, scheme);
@@ -1080,7 +1097,7 @@
                     hasError = true;
                 }
             } catch(e) {
-                log(`文件 ${wbData.name} 统计异常：${e.message}`, 'error');
+                log(`文件 ${wbData.name} 统计异常：${e.message}\n${e.stack}`, 'error');
                 hasError = true;
             }
         }
@@ -1126,7 +1143,7 @@
                 if (row.hidden) continue;
                 let found = false;
                 row.eachCell((cell, colNumber) => {
-                    if (!col && cell.value && cell.value.toString().includes(kw.keywordText)) {
+                    if (!col && cell && cell.value && cell.value.toString().includes(kw.keywordText)) {
                         col = colNumber;
                         rowNum = r;
                         found = true;
@@ -1153,32 +1170,36 @@
         const cellData = [];
         for (let info of kwInfos) {
             if (info.kw.collectType !== 'cell') continue;
-            const row = info.sheet.getRow(info.rowNum);
-            const cell = row.getCell(info.col);
-            let val = cell.value;
-            if (val && typeof val === 'object' && val.result) val = val.result;
-            else if (val && val.text) val = val.text;
-            else if (val && val.richText) val = val.richText.map(t => t.text).join('');
-            else if (val && typeof val === 'object') val = JSON.stringify(val);
-            else if (val === undefined || val === null) val = null;
-            let color = 'blank';
-            if (info.kw.collectColor) {
-                color = getCellColorName(cell);
-            }
-            let valid = true;
-            if (info.kw.excludeEmpty && (val === null || val === undefined || val === '')) valid = false;
-            if (valid && info.kw.excludeValues && info.kw.excludeValues.length > 0) {
-                if (val !== null && val !== undefined) {
-                    const strVal = String(val).trim();
-                    if (info.kw.excludeValues.some(ev => ev.trim() === strVal)) valid = false;
+            try {
+                const row = info.sheet.getRow(info.rowNum);
+                const cell = row.getCell(info.col);
+                let val = cell.value;
+                if (val && typeof val === 'object' && val.result) val = val.result;
+                else if (val && val.text) val = val.text;
+                else if (val && val.richText) val = val.richText.map(t => t.text).join('');
+                else if (val && typeof val === 'object') val = JSON.stringify(val);
+                else if (val === undefined || val === null) val = null;
+                let color = 'blank';
+                if (info.kw.collectColor) {
+                    color = getCellColorName(cell);
                 }
-            }
-            if (valid) {
-                cellData.push({
-                    keyword: info.kw,
-                    value: val,
-                    color: color
-                });
+                let valid = true;
+                if (info.kw.excludeEmpty && (val === null || val === undefined || val === '')) valid = false;
+                if (valid && info.kw.excludeValues && info.kw.excludeValues.length > 0) {
+                    if (val !== null && val !== undefined) {
+                        const strVal = String(val).trim();
+                        if (info.kw.excludeValues.some(ev => ev.trim() === strVal)) valid = false;
+                    }
+                }
+                if (valid) {
+                    cellData.push({
+                        keyword: info.kw,
+                        value: val,
+                        color: color
+                    });
+                }
+            } catch(e) {
+                log(`处理单元格时出错：${e.message}`, 'error');
             }
         }
 
@@ -1201,20 +1222,28 @@
                 const rowValues = [];
                 let valid = true;
                 for (let info of colInfos) {
-                    const row = info.sheet.getRow(rowNum);
-                    const cell = row.getCell(info.col);
-                    let val = cell.value;
-                    if (val && typeof val === 'object' && val.result) val = val.result;
-                    else if (val && val.text) val = val.text;
-                    else if (val && val.richText) val = val.richText.map(t => t.text).join('');
-                    else if (val && typeof val === 'object') val = JSON.stringify(val);
-                    else if (val === undefined || val === null) val = null;
-                    let color = 'blank';
-                    if (info.kw.collectColor) {
-                        color = getCellColorName(cell);
+                    try {
+                        const row = info.sheet.getRow(rowNum);
+                        const cell = row.getCell(info.col);
+                        let val = cell.value;
+                        if (val && typeof val === 'object' && val.result) val = val.result;
+                        else if (val && val.text) val = val.text;
+                        else if (val && val.richText) val = val.richText.map(t => t.text).join('');
+                        else if (val && typeof val === 'object') val = JSON.stringify(val);
+                        else if (val === undefined || val === null) val = null;
+                        let color = 'blank';
+                        if (info.kw.collectColor) {
+                            color = getCellColorName(cell);
+                        }
+                        rowValues.push({ value: val, color: color });
+                    } catch(e) {
+                        log(`读取单元格时出错：${e.message}`, 'error');
+                        valid = false;
+                        break;
                     }
-                    rowValues.push({ value: val, color: color });
                 }
+                if (!valid) continue;
+
                 // 基准列非空检查
                 if (baseKeyIdx >= 0) {
                     const colIndex = colInfos.findIndex(info => info.kw.index === baseKeyIdx);
@@ -1267,7 +1296,9 @@
         };
     }
 
-    // ----- 显示结果 (包含颜色含义) -----
+    // ============================================================
+    // 显示结果（颜色列显示含义）
+    // ============================================================
     function setIndependentLayout(layout) {
         independentLayout = layout;
         document.querySelectorAll('#tab1 .btn-outline[data-layout]').forEach(btn => {
@@ -1374,7 +1405,7 @@
         return frag;
     }
 
-    // ===== 合并展示 =====
+    // ----- 合并展示 -----
     function renderMergedResults(stats) {
         const container = document.getElementById('mergedResults');
         container.innerHTML = '';
@@ -1436,7 +1467,7 @@
         const trHead = document.createElement('tr');
         trHead.innerHTML = '<th>关键字</th><th>值</th>';
         let hasColor = cellData.some(d => d.keyword.collectColor);
-        if (hasColor) trHead.innerHTML += '<th>结果</th>'; // 改为"结果"
+        if (hasColor) trHead.innerHTML += '<th>结果</th>';
         thead.appendChild(trHead);
         table.appendChild(thead);
         const tbody = document.createElement('tbody');
@@ -1482,7 +1513,7 @@
             trHead.appendChild(th);
             if (kw.addColorCol) {
                 const thColor = document.createElement('th');
-                thColor.textContent = '结果'; // 改为"结果"
+                thColor.textContent = '结果';
                 trHead.appendChild(thColor);
             }
         });
