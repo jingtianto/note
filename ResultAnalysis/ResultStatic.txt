@@ -460,7 +460,7 @@
     let keywordsExpanded = true;
 
     // ============================================================
-    // 颜色识别（严格基于 ColorIndex）
+    // 颜色识别（修正 indexed / index 字段）
     // ============================================================
     const COLOR_INDEX_MAP = {
         3: '红色',
@@ -486,7 +486,6 @@
         return null;
     }
 
-    // rgb 仅作为备用，若出现未知颜色则返回 '其他'
     function rgbToColorName(rgb) {
         if (!rgb) return 'blank';
         let hex = normalizeRgb(rgb);
@@ -495,6 +494,7 @@
         return '其他';
     }
 
+    // 核心修正：优先使用 indexed，若无则尝试 index（兼容 SheetJS）
     function getCellColorName(cell) {
         if (!cell || !cell.s || !cell.s.fill) return 'blank';
         const fill = cell.s.fill;
@@ -502,10 +502,13 @@
         let index = null;
         let theme = null;
 
-        // 优先从 fgColor 获取
+        // 从 fgColor 获取
         if (fill.fgColor) {
             const fg = fill.fgColor;
-            if (fg.index !== undefined) {
+            // 优先使用 indexed（ExcelJS 标准）
+            if (fg.indexed !== undefined) {
+                index = fg.indexed;
+            } else if (fg.index !== undefined) {
                 index = fg.index;
             } else if (fg.rgb) {
                 rgb = normalizeRgb(fg.rgb);
@@ -516,7 +519,9 @@
         // 若 fgColor 无有效信息，尝试 bgColor
         if (index === null && rgb === null && theme === null && fill.bgColor) {
             const bg = fill.bgColor;
-            if (bg.index !== undefined) {
+            if (bg.indexed !== undefined) {
+                index = bg.indexed;
+            } else if (bg.index !== undefined) {
                 index = bg.index;
             } else if (bg.rgb) {
                 rgb = normalizeRgb(bg.rgb);
@@ -530,20 +535,17 @@
             if (COLOR_INDEX_MAP[index]) {
                 return COLOR_INDEX_MAP[index];
             }
-            // 如果 index 不在映射表中，记录日志
             console.warn('未知 ColorIndex:', index, 'fill 对象:', fill);
-            // 继续检查 rgb
         }
 
         // 2. 检查 rgb（备用）
         if (rgb) {
             const colorName = rgbToColorName(rgb);
             if (colorName !== 'blank') return colorName;
-            // 若 rgb 为白色，返回 blank
             return 'blank';
         }
 
-        // 3. 检查 theme（简略映射，仅作参考）
+        // 3. 检查 theme（简略映射）
         if (theme !== null) {
             if (theme === 2) return '红色';
             if (theme === 3) return '绿色';
@@ -600,7 +602,7 @@
     }
 
     // ============================================================
-    // 方案管理
+    // 方案管理（保持不变）
     // ============================================================
     function loadSchemes() {
         try {
@@ -1077,7 +1079,7 @@
     })();
 
     // ============================================================
-    // 统计执行（使用 SheetJS）
+    // 统计执行
     // ============================================================
     async function runStatistics() {
         const scheme = schemes.find(s => s.id === currentSchemeId);
@@ -1140,7 +1142,7 @@
         }
     }
 
-    // ----- 核心数据处理（SheetJS 版本，已修复基准列索引）-----
+    // ----- 核心数据处理 -----
     function processWorkbookSheetJS(workbook, scheme) {
         const keywords = scheme.keywords;
         const baseKeyIdx = scheme.baseKey !== '' ? parseInt(scheme.baseKey) : -1;
@@ -1148,7 +1150,6 @@
         const sheetNames = workbook.SheetNames;
         const kwInfos = [];
 
-        // 遍历所有关键字，定位列和行
         for (let idx = 0; idx < keywords.length; idx++) {
             const kw = keywords[idx];
             const sheetName = kw.sheet;
@@ -1199,7 +1200,6 @@
             }
             if (targetCol < 0) targetCol = 0;
 
-            // 存储时同时保存关键字索引，以便后续基准列匹配
             kwInfos.push({ sheet, sheetName, col: targetCol, rowNum, kw, index: idx });
         }
 
@@ -1236,7 +1236,6 @@
         const colInfos = kwInfos.filter(info => info.kw.collectType === 'column');
         const columnData = { rows: [], keywords: colInfos.map(info => info.kw) };
         if (colInfos.length > 0) {
-            // 收集所有列模式工作表的行号（排除隐藏行和表头行）
             const allRowNumbers = new Set();
             colInfos.forEach(info => {
                 const sheet = info.sheet;
@@ -1263,7 +1262,6 @@
                     rowValues.push({ value: val, color: color });
                 }
 
-                // 基准列非空检查（使用存储的索引）
                 if (baseKeyIdx >= 0) {
                     const colIndex = colInfos.findIndex(info => info.index === baseKeyIdx);
                     if (colIndex >= 0) {
@@ -1274,7 +1272,6 @@
                     }
                 }
 
-                // 排除空和特定值
                 for (let i = 0; i < colInfos.length; i++) {
                     const kw = colInfos[i].kw;
                     const val = rowValues[i].value;
@@ -1480,7 +1477,7 @@
         }
     }
 
-    // ----- 表格构建函数（颜色列显示含义）-----
+    // ----- 表格构建函数 -----
     function buildCellResultTable(cellData) {
         const table = document.createElement('table');
         const thead = document.createElement('thead');
@@ -1916,7 +1913,7 @@
     if (schemes.length > 0) {
         selectScheme(schemes[0].id);
     }
-    log('工具已加载，使用 SheetJS 解析引擎，颜色识别基于 ColorIndex', 'info');
+    log('工具已加载，颜色识别已修正为 indexed 字段', 'info');
 </script>
 </body>
 </html>
