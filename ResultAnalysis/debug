@@ -3,33 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Excel 颜色调试工具</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <title>ExcelJS 颜色完整调试</title>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f4f8; }
-        .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        body { font-family: 'Segoe UI', monospace; padding: 20px; background: #f0f4f8; max-width: 1200px; margin: 0 auto; }
+        .container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         h1 { color: #0f172a; border-bottom: 2px solid #475569; padding-bottom: 8px; }
-        .log-area { background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 4px; max-height: 600px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 13px; white-space: pre-wrap; word-wrap: break-word; }
+        .log-area { background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 4px; max-height: 600px; overflow-y: auto; font-size: 13px; white-space: pre-wrap; word-wrap: break-word; }
         .log-area .error { color: #fca5a5; }
         .log-area .success { color: #86efac; }
         .log-area .info { color: #93c5fd; }
-        .btn { padding: 8px 16px; background: #3b82f6; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        .log-area .warn { color: #fcd34d; }
+        .btn { padding: 8px 16px; background: #3b82f6; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin: 8px 4px; }
         .btn:hover { background: #2563eb; }
         .file-input { margin: 16px 0; }
+        select, input { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
+        .flex { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>🔍 Excel 颜色调试工具</h1>
-    <p>上传一个 Excel 文件，将读取 <strong>IPN 页的 A24 单元格</strong>，并输出其所有样式属性。</p>
+    <h1>🔍 ExcelJS 颜色完整调试</h1>
+    <p>上传 Excel 文件，将显示每个工作表的名称，并可选择任意单元格查看其完整样式信息。</p>
     <div class="file-input">
         <input type="file" id="fileInput" accept=".xlsx,.xls" />
-        <button class="btn" onclick="debugColor()">开始调试</button>
+        <button class="btn" onclick="loadWorkbook()">加载文件</button>
+    </div>
+    <div id="controls" style="display:none;" class="flex">
+        <label>选择工作表：<select id="sheetSelect"></select></label>
+        <label>单元格地址：<input type="text" id="cellAddress" value="A24" style="width:80px;" /></label>
+        <button class="btn" onclick="inspectCell()">查看样式</button>
     </div>
     <div id="logArea" class="log-area">等待操作...</div>
 </div>
 
 <script>
+    let workbook = null;
+
     function log(message, type = 'info') {
         const area = document.getElementById('logArea');
         const entry = document.createElement('div');
@@ -39,73 +49,126 @@
         area.scrollTop = area.scrollHeight;
     }
 
-    function debugColor() {
+    function clearLog() {
+        document.getElementById('logArea').innerHTML = '';
+    }
+
+    function loadWorkbook() {
         const fileInput = document.getElementById('fileInput');
         const file = fileInput.files[0];
         if (!file) {
-            log('请先选择一个 Excel 文件', 'error');
+            alert('请先选择一个 Excel 文件');
             return;
         }
-
+        clearLog();
+        log('正在加载文件...', 'info');
         const reader = new FileReader();
         reader.onload = function(e) {
             try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array', cellStyles: true });
-                log('文件解析成功，工作表: ' + workbook.SheetNames.join(', '), 'success');
-
-                const sheetName = 'IPN';
-                if (!workbook.SheetNames.includes(sheetName)) {
-                    log(`未找到名为 "${sheetName}" 的工作表`, 'error');
-                    return;
-                }
-
-                const sheet = workbook.Sheets[sheetName];
-                const cellAddress = 'A24';
-                const cell = sheet[cellAddress];
-
-                if (!cell) {
-                    log(`单元格 ${cellAddress} 为空或不存在`, 'error');
-                    return;
-                }
-
-                log(`========== 单元格 ${cellAddress} 的完整信息 ==========`, 'info');
-                log(`值 (v): ${cell.v}`, 'info');
-                log(`类型 (t): ${cell.t}`, 'info');
-
-                // 检查样式对象
-                if (cell.s) {
-                    log('样式对象 (s):', 'info');
-                    log(JSON.stringify(cell.s, null, 2), 'info');
-                } else {
-                    log('无样式信息 (cell.s 为空)', 'error');
-                }
-
-                // 单独提取 fill 信息
-                if (cell.s && cell.s.fill) {
-                    log('填充对象 (fill):', 'info');
-                    log(JSON.stringify(cell.s.fill, null, 2), 'info');
-                    // 尝试提取 fgColor 和 bgColor 的所有属性
-                    const fill = cell.s.fill;
-                    if (fill.fgColor) {
-                        log('fgColor 属性: ' + JSON.stringify(fill.fgColor, null, 2), 'info');
-                    }
-                    if (fill.bgColor) {
-                        log('bgColor 属性: ' + JSON.stringify(fill.bgColor, null, 2), 'info');
-                    }
-                } else {
-                    log('无填充信息 (fill 为空)', 'error');
-                }
-
-                log('========== 调试信息结束 ==========', 'info');
-                log('请将以上输出复制并反馈，特别是 "fgColor" 和 "bgColor" 的结构。', 'info');
-
+                const data = e.target.result;
+                workbook = new ExcelJS.Workbook();
+                workbook.xlsx.load(data).then(() => {
+                    log('文件加载成功！', 'success');
+                    const sheetNames = workbook.worksheets.map(ws => ws.name);
+                    log('工作表列表: ' + sheetNames.join(', '), 'info');
+                    // 填充下拉框
+                    const select = document.getElementById('sheetSelect');
+                    select.innerHTML = '';
+                    sheetNames.forEach(name => {
+                        const opt = document.createElement('option');
+                        opt.value = name;
+                        opt.textContent = name;
+                        select.appendChild(opt);
+                    });
+                    document.getElementById('controls').style.display = 'flex';
+                    // 默认加载第一个工作表的 A24
+                    inspectCell();
+                }).catch(err => {
+                    log('加载失败: ' + err.message, 'error');
+                });
             } catch(err) {
-                log('解析失败: ' + err.message + '\n堆栈: ' + err.stack, 'error');
+                log('解析异常: ' + err.message + '\n堆栈: ' + err.stack, 'error');
             }
         };
         reader.readAsArrayBuffer(file);
     }
+
+    function inspectCell() {
+        if (!workbook) {
+            log('请先加载文件', 'error');
+            return;
+        }
+        const sheetName = document.getElementById('sheetSelect').value;
+        const cellAddress = document.getElementById('cellAddress').value.trim();
+        if (!sheetName) {
+            log('请选择工作表', 'error');
+            return;
+        }
+        const worksheet = workbook.getWorksheet(sheetName);
+        if (!worksheet) {
+            log(`工作表 "${sheetName}" 不存在`, 'error');
+            return;
+        }
+        const cell = worksheet.getCell(cellAddress);
+        if (!cell) {
+            log(`单元格 ${cellAddress} 为空`, 'error');
+            return;
+        }
+
+        clearLog();
+        log(`========== 工作表: ${sheetName}  单元格: ${cellAddress} ==========`, 'success');
+        log(`值: ${cell.value}`, 'info');
+        log(`类型: ${cell.type}`, 'info');
+
+        // 完整样式对象
+        if (cell.style) {
+            log('完整 style 对象:', 'info');
+            log(JSON.stringify(cell.style, (key, value) => {
+                // 将 Buffer 转为可读字符串
+                if (value && value.type === 'Buffer') {
+                    return 'Buffer';
+                }
+                return value;
+            }, 2), 'info');
+        } else {
+            log('无 style 信息', 'warn');
+        }
+
+        // 重点提取 fill
+        if (cell.style && cell.style.fill) {
+            const fill = cell.style.fill;
+            log('fill 对象:', 'info');
+            log(JSON.stringify(fill, null, 2), 'info');
+            // 检查 fgColor 和 bgColor
+            if (fill.fgColor) {
+                log(`fgColor 属性: ${JSON.stringify(fill.fgColor)}`, 'info');
+                // 列出所有可能字段
+                const fields = ['argb', 'rgb', 'theme', 'tint', 'indexed'];
+                fields.forEach(f => {
+                    if (fill.fgColor[f] !== undefined) {
+                        log(`  fgColor.${f} = ${fill.fgColor[f]}`, 'info');
+                    }
+                });
+            }
+            if (fill.bgColor) {
+                log(`bgColor 属性: ${JSON.stringify(fill.bgColor)}`, 'info');
+                const fields = ['argb', 'rgb', 'theme', 'tint', 'indexed'];
+                fields.forEach(f => {
+                    if (fill.bgColor[f] !== undefined) {
+                        log(`  bgColor.${f} = ${fill.bgColor[f]}`, 'info');
+                    }
+                });
+            }
+        } else {
+            log('无 fill 信息', 'warn');
+        }
+
+        log('========== 调试信息结束 ==========', 'success');
+        log('请将以上输出复制反馈，特别是 fgColor 和 bgColor 的完整结构。', 'info');
+    }
+
+    // 初始提示
+    document.getElementById('logArea').innerHTML = '请上传 Excel 文件并点击 "加载文件"';
 </script>
 </body>
 </html>
