@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel 颜色调试工具</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f0f4f8; }
+        .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        h1 { color: #0f172a; border-bottom: 2px solid #475569; padding-bottom: 8px; }
+        .log-area { background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 4px; max-height: 600px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 13px; white-space: pre-wrap; word-wrap: break-word; }
+        .log-area .error { color: #fca5a5; }
+        .log-area .success { color: #86efac; }
+        .log-area .info { color: #93c5fd; }
+        .btn { padding: 8px 16px; background: #3b82f6; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #2563eb; }
+        .file-input { margin: 16px 0; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🔍 Excel 颜色调试工具</h1>
+    <p>上传一个 Excel 文件，将读取 <strong>IPN 页的 A24 单元格</strong>，并输出其所有样式属性。</p>
+    <div class="file-input">
+        <input type="file" id="fileInput" accept=".xlsx,.xls" />
+        <button class="btn" onclick="debugColor()">开始调试</button>
+    </div>
+    <div id="logArea" class="log-area">等待操作...</div>
+</div>
+
+<script>
+    function log(message, type = 'info') {
+        const area = document.getElementById('logArea');
+        const entry = document.createElement('div');
+        entry.className = type;
+        entry.textContent = message;
+        area.appendChild(entry);
+        area.scrollTop = area.scrollHeight;
+    }
+
+    function debugColor() {
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        if (!file) {
+            log('请先选择一个 Excel 文件', 'error');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array', cellStyles: true });
+                log('文件解析成功，工作表: ' + workbook.SheetNames.join(', '), 'success');
+
+                const sheetName = 'IPN';
+                if (!workbook.SheetNames.includes(sheetName)) {
+                    log(`未找到名为 "${sheetName}" 的工作表`, 'error');
+                    return;
+                }
+
+                const sheet = workbook.Sheets[sheetName];
+                const cellAddress = 'A24';
+                const cell = sheet[cellAddress];
+
+                if (!cell) {
+                    log(`单元格 ${cellAddress} 为空或不存在`, 'error');
+                    return;
+                }
+
+                log(`========== 单元格 ${cellAddress} 的完整信息 ==========`, 'info');
+                log(`值 (v): ${cell.v}`, 'info');
+                log(`类型 (t): ${cell.t}`, 'info');
+
+                // 检查样式对象
+                if (cell.s) {
+                    log('样式对象 (s):', 'info');
+                    log(JSON.stringify(cell.s, null, 2), 'info');
+                } else {
+                    log('无样式信息 (cell.s 为空)', 'error');
+                }
+
+                // 单独提取 fill 信息
+                if (cell.s && cell.s.fill) {
+                    log('填充对象 (fill):', 'info');
+                    log(JSON.stringify(cell.s.fill, null, 2), 'info');
+                    // 尝试提取 fgColor 和 bgColor 的所有属性
+                    const fill = cell.s.fill;
+                    if (fill.fgColor) {
+                        log('fgColor 属性: ' + JSON.stringify(fill.fgColor, null, 2), 'info');
+                    }
+                    if (fill.bgColor) {
+                        log('bgColor 属性: ' + JSON.stringify(fill.bgColor, null, 2), 'info');
+                    }
+                } else {
+                    log('无填充信息 (fill 为空)', 'error');
+                }
+
+                log('========== 调试信息结束 ==========', 'info');
+                log('请将以上输出复制并反馈，特别是 "fgColor" 和 "bgColor" 的结构。', 'info');
+
+            } catch(err) {
+                log('解析失败: ' + err.message + '\n堆栈: ' + err.stack, 'error');
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+</script>
+</body>
+</html>
