@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XML 批注清理验证工具</title>
-    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+    <title>Open XML 颜色验证工具</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -23,23 +22,30 @@
         .log-warn { color: #fcd34d; }
         .log-bold { font-weight: bold; color: #ffffff; }
         input[type="file"] { padding: 6px; border: 1px solid #d1d9e6; border-radius: 4px; }
-        .file-list { background: #0f172a; padding: 8px; border-radius: 4px; margin: 4px 0; font-size: 12px; max-height: 200px; overflow-y: auto; }
+        input[type="text"] { padding: 6px 10px; border: 1px solid #d1d9e6; border-radius: 4px; width: 120px; }
+        .color-swatch { display: inline-block; width: 16px; height: 16px; border: 1px solid #64748b; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>🧹 XML 批注清理验证工具</h1>
-    <p>上传 Excel 文件，自动清理 sheet XML 中的批注标签，然后加载并验证颜色。</p>
-    <div class="flex">
+    <h1>📄 Open XML 颜色验证工具</h1>
+    <p>直接从 Excel 文件的 XML 中读取颜色索引，完全绕过 ExcelJS。</p>
+    <div class="flex" style="margin-bottom: 12px;">
         <input type="file" id="fileInput" accept=".xlsx,.xls" />
-        <button class="btn" onclick="runCleanTest()">🚀 清理并验证</button>
+        <label>工作表名称：</label>
+        <input type="text" id="sheetName" value="IPN" style="width: 120px;" />
+        <label>单元格地址：</label>
+        <input type="text" id="cellAddress" value="A24" style="width: 100px;" />
+        <button class="btn" onclick="runOpenXMLTest()">🔍 读取颜色</button>
         <button class="btn btn-success" onclick="clearLog()">清空日志</button>
     </div>
     <div id="logArea" class="log-area">等待操作...</div>
 </div>
 
 <script>
-    // 颜色映射表
+    // ============================================================
+    // 颜色映射表（fgColor.indexed → 颜色含义）
+    // ============================================================
     const COLOR_MAP = {
         10: { name: '红色', meaning: 'failed' },
         35: { name: '浅蓝色', meaning: 'signal missing' },
@@ -72,36 +78,100 @@
         log('日志已清空', 'info');
     }
 
-    // 从 XML 字符串中删除所有 comments 相关的节点
-    function removeCommentsFromXML(xmlString) {
+    // ============================================================
+    // 核心：从 XML 中提取颜色索引
+    // ============================================================
+    function extractColorIndexFromXML(xmlString, cellAddress) {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
 
-        // 查找所有 comments 相关的元素
-        const commentsElements = xmlDoc.querySelectorAll('comments');
-        commentsElements.forEach(el => el.remove());
+        // 查找单元格
+        const cells = xmlDoc.querySelectorAll('c');
+        let targetCell = null;
 
-        // 查找所有 comment 元素（在 sheet 中）
-        const commentElements = xmlDoc.querySelectorAll('comment');
-        commentElements.forEach(el => el.remove());
-
-        // 查找所有 comment 引用（可能在 rels 中，但这里不处理）
-        // 额外：删除 comment 相关的属性（如果有）
-        const allElements = xmlDoc.querySelectorAll('*');
-        allElements.forEach(el => {
-            if (el.hasAttribute('r:id')) {
-                const val = el.getAttribute('r:id');
-                if (val && val.startsWith('rId') && val.includes('comment')) {
-                    el.removeAttribute('r:id');
-                }
+        for (let cell of cells) {
+            const r = cell.getAttribute('r');
+            if (r && r.toUpperCase() === cellAddress.toUpperCase()) {
+                targetCell = cell;
+                break;
             }
-        });
+        }
 
-        // 序列化回字符串
-        return new XMLSerializer().serializeToString(xmlDoc);
+        if (!targetCell) {
+            return { success: false, message: '未找到单元格 ' + cellAddress };
+        }
+
+        // 查找样式引用
+        const sAttr = targetCell.getAttribute('s');
+        if (sAttr === null || sAttr === undefined) {
+            return { success: true, indexed: null, message: '单元格无样式引用 (s 属性为空)' };
+        }
+
+        const styleIndex = parseInt(sAttr);
+        return { success: true, styleIndex: styleIndex, message: '找到样式索引: ' + styleIndex };
     }
 
-    async function runCleanTest() {
+    // ============================================================
+    // 从 styles.xml 中提取颜色索引
+    // ============================================================
+    function extractColorFromStyles(xmlString, styleIndex) {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+
+        // 查找样式
+        const cells = xmlDoc.querySelectorAll('xf');
+        if (styleIndex >= cells.length) {
+            return { success: false, message: '样式索引 ' + styleIndex + ' 超出范围 (共 ' + cells.length + ' 个样式)' };
+        }
+
+        const xf = cells[styleIndex];
+        if (!xf) {
+            return { success: false, message: '样式 ' + styleIndex + ' 不存在' };
+        }
+
+        // 检查是否有填充
+        const fillIdAttr = xf.getAttribute('fillId');
+        if (fillIdAttr === null || fillIdAttr === undefined) {
+            return { success: true, indexed: null, message: '样式无填充 (fillId 为空)' };
+        }
+
+        const fillId = parseInt(fillIdAttr);
+
+        // 查找填充
+        const fills = xmlDoc.querySelectorAll('fill');
+        if (fillId >= fills.length) {
+            return { success: false, message: '填充索引 ' + fillId + ' 超出范围 (共 ' + fills.length + ' 个填充)' };
+        }
+
+        const fill = fills[fillId];
+        if (!fill) {
+            return { success: false, message: '填充 ' + fillId + ' 不存在' };
+        }
+
+        // 查找 fgColor
+        const fgColor = fill.querySelector('fgColor');
+        if (!fgColor) {
+            return { success: true, indexed: null, message: '填充无 fgColor' };
+        }
+
+        const indexed = fgColor.getAttribute('indexed');
+        if (indexed === null || indexed === undefined) {
+            // 检查是否有 rgb
+            const rgb = fgColor.getAttribute('rgb');
+            if (rgb) {
+                return { success: true, indexed: null, rgb: rgb, message: '找到 rgb: ' + rgb + ' (非索引颜色)' };
+            }
+            return { success: true, indexed: null, message: 'fgColor 无 indexed 属性' };
+        }
+
+        const indexedValue = parseInt(indexed);
+        return { success: true, indexed: indexedValue, message: '找到 fgColor.indexed = ' + indexedValue };
+    }
+
+    // ============================================================
+    // 主函数
+    // ============================================================
+    async function runOpenXMLTest() {
         const fileInput = document.getElementById('fileInput');
         const file = fileInput.files[0];
         if (!file) {
@@ -109,131 +179,180 @@
             return;
         }
 
+        const sheetName = document.getElementById('sheetName').value.trim() || 'IPN';
+        const cellAddress = document.getElementById('cellAddress').value.trim().toUpperCase();
+        if (!cellAddress) {
+            alert('请输入单元格地址');
+            return;
+        }
+
         clearLog();
         log('📁 文件: ' + file.name, 'info');
-        log('📏 大小: ' + (file.size / 1024).toFixed(1) + ' KB', 'info');
-
-        const originalData = await file.arrayBuffer();
-
-        // ========== 第一步：解压并清理 ==========
-        log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-        log('【第一步】解压并清理批注标签', 'bold');
-
-        let cleanedCount = 0;
-        let sheetFiles = [];
+        log('📄 工作表: ' + sheetName, 'info');
+        log('📍 单元格: ' + cellAddress, 'info');
 
         try {
-            const copyData = new Uint8Array(originalData);
-            const zip = await JSZip.loadAsync(copyData);
+            const arrayBuffer = await file.arrayBuffer();
+            const zip = await JSZip.loadAsync(arrayBuffer);
 
-            // 查找所有 sheet XML 文件
+            // 列出所有文件
+            const fileList = [];
             zip.forEach((relativePath, file) => {
-                if (relativePath.match(/xl\/worksheets\/sheet.*\.xml/)) {
-                    sheetFiles.push(relativePath);
-                }
+                fileList.push(relativePath);
             });
+            log('📋 ZIP 包含 ' + fileList.length + ' 个文件', 'info');
 
-            log('📋 找到 ' + sheetFiles.length + ' 个工作表 XML 文件', 'info');
-
-            // 逐个处理 sheet XML
-            for (let sheetPath of sheetFiles) {
-                const file = zip.file(sheetPath);
-                if (file) {
-                    const content = await file.async('string');
-                    // 检查是否包含批注标签
-                    if (content.includes('<comment') || content.includes('<comments')) {
-                        const cleaned = removeCommentsFromXML(content);
-                        zip.file(sheetPath, cleaned);
-                        cleanedCount++;
-                        log('✅ 清理批注标签: ' + sheetPath, 'success');
-                    } else {
-                        log('ℹ️ 无批注标签: ' + sheetPath, 'info');
-                    }
-                }
-            }
-
-            // 也删除 comments 文件本身（如果有）
-            const commentsFiles = [];
-            zip.forEach((relativePath, file) => {
-                if (relativePath.match(/xl\/comments.*\.xml/)) {
-                    commentsFiles.push(relativePath);
-                }
-            });
-            commentsFiles.forEach(path => {
-                zip.remove(path);
-                log('🗑️ 删除批注文件: ' + path, 'warn');
-            });
-
-            // 重新打包
-            const cleanedData = await zip.generateAsync({ type: 'arraybuffer' });
-            log('✅ 重新打包完成，大小: ' + (cleanedData.byteLength / 1024).toFixed(1) + ' KB', 'success');
-
-            // ========== 第二步：加载清理后的文件 ==========
+            // ========== 第一步：定位工作表 ==========
             log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-            log('【第二步】加载清理后的文件', 'bold');
+            log('【第一步】定位工作表', 'bold');
 
-            try {
-                const wb = new ExcelJS.Workbook();
-                await wb.xlsx.load(cleanedData);
-                log('✅ 清理后加载成功！', 'success');
-
-                // ========== 第三步：读取颜色 ==========
-                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-                log('【第三步】读取颜色', 'bold');
-
-                const sheet = wb.getWorksheet('IPN');
-                if (!sheet) {
-                    log('⚠️ 未找到工作表 "IPN"', 'warn');
-                    log('📋 可用工作表: ' + wb.worksheets.map(ws => ws.name).join(', '), 'info');
-                    return;
-                }
-
-                // 读取 A24 验证颜色
-                const cell = sheet.getCell('A24');
-                let indexed = null;
-                let colorName = '未识别';
-                let meaning = '';
-
-                if (cell.style && cell.style.fill && cell.style.fill.fgColor) {
-                    indexed = cell.style.fill.fgColor.indexed;
-                }
-
-                if (indexed !== undefined && indexed !== null) {
-                    const mapped = COLOR_MAP[indexed];
-                    if (mapped) {
-                        colorName = mapped.name;
-                        meaning = mapped.meaning;
-                        log('🎨 A24: fgColor.indexed = ' + indexed + ' → ' + colorName + ' (' + meaning + ')', 'success');
-                    } else {
-                        colorName = '未知索引 (' + indexed + ')';
-                        log('⚠️ A24: fgColor.indexed = ' + indexed + ' (未映射)', 'warn');
-                    }
-                } else {
-                    colorName = '无颜色';
-                    meaning = 'blank';
-                    log('ℹ️ A24 无填充颜色', 'info');
-                }
-
-                // 输出单元格值
-                log('📝 A24 值: ' + (cell.value !== undefined && cell.value !== null ? cell.value : '(空)'), 'info');
-
-                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-                log('✅ 验证完成', 'success');
-
-            } catch (e) {
-                log('❌ 清理后加载失败: ' + e.message, 'error');
-                log('📋 错误堆栈: ' + e.stack, 'error');
-                log('💡 可能原因: 文件包含其他不兼容元素', 'warn');
-                log('💡 建议: 手动用 Excel 打开并"另存为"', 'warn');
+            // 读取 workbook.xml 获取 sheet 映射
+            const workbookXml = zip.file('xl/workbook.xml');
+            if (!workbookXml) {
+                log('❌ 未找到 xl/workbook.xml', 'error');
+                return;
             }
+
+            const workbookContent = await workbookXml.async('string');
+            const parser = new DOMParser();
+            const workbookDoc = parser.parseFromString(workbookContent, 'text/xml');
+
+            // 查找所有 sheet
+            const sheets = workbookDoc.querySelectorAll('sheet');
+            let sheetId = null;
+            let sheetPath = null;
+
+            for (let sheet of sheets) {
+                const name = sheet.getAttribute('name');
+                if (name === sheetName) {
+                    const rId = sheet.getAttribute('r:id');
+                    if (rId) {
+                        // 从 workbook.xml.rels 查找对应的文件路径
+                        // 直接构造路径：xl/worksheets/sheetX.xml
+                        // 但更精确的是通过 rels 查找
+                        sheetId = rId;
+                        // 尝试从 rels 查找
+                        const relsFile = zip.file('xl/workbook.xml.rels');
+                        if (relsFile) {
+                            const relsContent = await relsFile.async('string');
+                            const relsDoc = parser.parseFromString(relsContent, 'text/xml');
+                            const rels = relsDoc.querySelectorAll('Relationship');
+                            for (let rel of rels) {
+                                const id = rel.getAttribute('Id');
+                                if (id === rId) {
+                                    let target = rel.getAttribute('Target');
+                                    if (target && target.startsWith('worksheets/')) {
+                                        sheetPath = 'xl/' + target;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        // 如果没找到 rels，使用默认命名
+                        if (!sheetPath) {
+                            const sheetIndex = Array.from(sheets).indexOf(sheet) + 1;
+                            sheetPath = 'xl/worksheets/sheet' + sheetIndex + '.xml';
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (!sheetPath) {
+                log('❌ 未找到工作表 "' + sheetName + '"', 'error');
+                log('📋 可用工作表: ' + Array.from(sheets).map(s => s.getAttribute('name')).join(', '), 'info');
+                return;
+            }
+
+            log('✅ 找到工作表: ' + sheetPath, 'success');
+
+            // ========== 第二步：读取单元格样式索引 ==========
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            log('【第二步】读取单元格样式索引', 'bold');
+
+            const sheetFile = zip.file(sheetPath);
+            if (!sheetFile) {
+                log('❌ 未找到工作表文件: ' + sheetPath, 'error');
+                return;
+            }
+
+            const sheetContent = await sheetFile.async('string');
+            const cellResult = extractColorIndexFromXML(sheetContent, cellAddress);
+
+            if (!cellResult.success) {
+                log('❌ ' + cellResult.message, 'error');
+                return;
+            }
+
+            log('✅ ' + cellResult.message, 'success');
+
+            if (cellResult.styleIndex === undefined || cellResult.styleIndex === null) {
+                log('⚠️ 单元格无样式，可能无颜色填充', 'warn');
+                return;
+            }
+
+            // ========== 第三步：从 styles.xml 读取颜色 ==========
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            log('【第三步】从 styles.xml 读取颜色', 'bold');
+
+            const stylesFile = zip.file('xl/styles.xml');
+            if (!stylesFile) {
+                log('❌ 未找到 xl/styles.xml', 'error');
+                return;
+            }
+
+            const stylesContent = await stylesFile.async('string');
+            const colorResult = extractColorFromStyles(stylesContent, cellResult.styleIndex);
+
+            if (!colorResult.success) {
+                log('❌ ' + colorResult.message, 'error');
+                return;
+            }
+
+            log('✅ ' + colorResult.message, 'success');
+
+            // ========== 第四步：显示结果 ==========
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            log('【第四步】显示结果', 'bold');
+
+            let indexed = colorResult.indexed;
+            let colorName = '未识别';
+            let meaning = '';
+            let colorCss = '#ffffff';
+
+            if (indexed !== undefined && indexed !== null) {
+                const mapped = COLOR_MAP[indexed];
+                if (mapped) {
+                    colorName = mapped.name;
+                    meaning = mapped.meaning;
+                    colorCss = COLOR_CSS[colorName] || '#ffffff';
+                    log('🎨 fgColor.indexed = ' + indexed + ' → ' + colorName + ' (' + meaning + ')', 'success');
+                } else {
+                    colorName = '未知索引 (' + indexed + ')';
+                    log('⚠️ fgColor.indexed = ' + indexed + ' (未映射)', 'warn');
+                }
+            } else {
+                if (colorResult.rgb) {
+                    log('🔍 使用 RGB: ' + colorResult.rgb + ' (非索引颜色，无法映射)', 'warn');
+                } else {
+                    log('ℹ️ 单元格无填充颜色', 'info');
+                }
+                colorName = 'blank';
+                meaning = 'blank';
+                colorCss = '#f1f5f9';
+            }
+
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            log('✅ 验证完成', 'success');
 
         } catch (e) {
             log('❌ 处理失败: ' + e.message, 'error');
+            log('📋 堆栈: ' + e.stack, 'error');
         }
     }
 
     // 初始提示
-    log('请上传 Excel 文件，点击 "清理并验证"', 'info');
+    log('请上传 Excel 文件，输入工作表名和单元格地址，点击 "读取颜色"', 'info');
 </script>
 </body>
 </html>
