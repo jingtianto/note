@@ -3,82 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>自定义单元格颜色验证工具</title>
+    <title>增强版 Excel 调试工具</title>
     <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', monospace; background: #f0f4f8; padding: 20px; }
-        .container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .container { max-width: 1200px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         h1 { font-size: 24px; border-bottom: 2px solid #475569; padding-bottom: 12px; margin-bottom: 16px; }
         .flex { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
         .btn { padding: 8px 20px; background: #3b82f6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
         .btn:hover { background: #2563eb; }
-        .btn-success { background: #22c55e; }
-        .btn-success:hover { background: #16a34a; }
-        .log-area { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; max-height: 500px; overflow-y: auto; font-size: 13px; white-space: pre-wrap; margin-top: 16px; font-family: 'Consolas', monospace; }
+        .log-area { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; max-height: 600px; overflow-y: auto; font-size: 13px; white-space: pre-wrap; margin-top: 16px; }
         .log-error { color: #fca5a5; }
         .log-success { color: #86efac; }
         .log-info { color: #93c5fd; }
         .log-warn { color: #fcd34d; }
         .log-bold { font-weight: bold; color: #ffffff; }
+        .file-list { background: #0f172a; padding: 8px; border-radius: 4px; margin: 4px 0; font-size: 12px; }
         input[type="file"] { padding: 6px; border: 1px solid #d1d9e6; border-radius: 4px; }
-        input[type="text"] { padding: 6px 10px; border: 1px solid #d1d9e6; border-radius: 4px; width: 120px; }
-        .color-swatch { display: inline-block; width: 16px; height: 16px; border: 1px solid #64748b; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
-        .cell-result { background: #f8fafc; padding: 4px 10px; border-radius: 4px; margin: 2px 0; border-left: 4px solid #475569; }
-        .section-title { color: #93c5fd; font-weight: bold; margin-top: 8px; }
-        .status-pass { border-left-color: #22c55e; }
-        .status-fail { border-left-color: #ef4444; }
-        .status-unknown { border-left-color: #f59e0b; }
-        .flex-vertical { display: flex; flex-direction: column; gap: 8px; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>🧪 自定义单元格颜色验证</h1>
-    <p>上传 Excel 文件，指定工作表名称和单元格地址，验证颜色索引。</p>
-
+    <h1>🔧 增强版 Excel 调试工具</h1>
+    <p>上传 Excel 文件，自动解压、清理并报告详细错误。</p>
     <div class="flex">
         <input type="file" id="fileInput" accept=".xlsx,.xls" />
-    </div>
-
-    <div class="flex" style="margin: 12px 0;">
-        <label>工作表名称：</label>
-        <input type="text" id="sheetName" value="IPN" style="width: 150px;" />
-        <label>单元格地址：</label>
-        <input type="text" id="cellAddress" value="A24" style="width: 100px;" />
-        <button class="btn" onclick="runTest()">🔍 验证颜色</button>
+        <button class="btn" onclick="runDeepDebug()">🔍 深度调试</button>
         <button class="btn btn-success" onclick="clearLog()">清空日志</button>
     </div>
-
     <div id="logArea" class="log-area">等待操作...</div>
 </div>
 
 <script>
-    // ============================================================
-    // 颜色映射表（fgColor.indexed → 颜色含义）
-    // ============================================================
+    // 颜色映射（仅用于显示）
     const COLOR_MAP = {
-        10: { name: '红色', meaning: 'failed' },
-        35: { name: '浅蓝色', meaning: 'signal missing' },
-        52: { name: '橙色', meaning: 'trigger not occurred' },
-        13: { name: '黄色', meaning: 'warning' },
-        11: { name: '绿色', meaning: 'passed' },
-        9:  { name: 'blank', meaning: 'blank' }
+        10: '红色 (failed)',
+        35: '浅蓝色 (signal missing)',
+        52: '橙色 (trigger not occurred)',
+        13: '黄色 (warning)',
+        11: '绿色 (passed)',
+        9: 'blank'
     };
 
-    const COLOR_CSS = {
-        '红色': '#FF0000',
-        '绿色': '#00FF00',
-        '浅蓝色': '#99CCFF',
-        '橙色': '#FF9900',
-        '黄色': '#FFFF00',
-        'blank': '#f1f5f9'
-    };
-
-    // ============================================================
-    // 日志
-    // ============================================================
     function log(message, type = 'info') {
         const area = document.getElementById('logArea');
         const entry = document.createElement('div');
@@ -93,10 +61,7 @@
         log('日志已清空', 'info');
     }
 
-    // ============================================================
-    // 核心验证函数
-    // ============================================================
-    async function runTest() {
+    async function runDeepDebug() {
         const fileInput = document.getElementById('fileInput');
         const file = fileInput.files[0];
         if (!file) {
@@ -104,183 +69,156 @@
             return;
         }
 
-        const sheetName = document.getElementById('sheetName').value.trim() || 'IPN';
-        const cellAddress = document.getElementById('cellAddress').value.trim().toUpperCase();
-        if (!cellAddress) {
-            alert('请输入单元格地址');
-            return;
-        }
-
         clearLog();
         log('📁 文件: ' + file.name, 'info');
-        log('📄 工作表: ' + sheetName, 'info');
-        log('📍 单元格: ' + cellAddress, 'info');
-        log('📏 文件大小: ' + (file.size / 1024).toFixed(1) + ' KB', 'info');
+        log('📏 大小: ' + (file.size / 1024).toFixed(1) + ' KB', 'info');
 
-        // 读取原始数据
         const originalData = await file.arrayBuffer();
 
-        // ---------- 第一轮：尝试 ExcelJS 直接加载 ----------
+        // ========== 第一步：列出所有内部文件 ==========
         log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-        log('【第一轮】ExcelJS 直接加载', 'bold');
+        log('【第一步】解压并列出所有文件', 'bold');
 
-        let directLoadSuccess = false;
-        let workbook = null;
-
-        try {
-            const wb = new ExcelJS.Workbook();
-            await wb.xlsx.load(originalData);
-            workbook = wb;
-            directLoadSuccess = true;
-            log('✅ 直接加载成功', 'success');
-        } catch (e) {
-            log('❌ 直接加载失败: ' + e.message, 'error');
-            if (e.message.includes('comments')) {
-                log('🔍 检测到批注问题，将尝试清理', 'warn');
-            }
-        }
-
-        // ---------- 第二轮：尝试清理后加载 ----------
-        log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-        log('【第二轮】清理批注后加载', 'bold');
-
-        let cleanedLoadSuccess = false;
-        let cleanedWorkbook = null;
+        let allFiles = [];
+        let zip;
 
         try {
             const copyData = new Uint8Array(originalData);
-            const zip = await JSZip.loadAsync(copyData);
-
-            const filesToRemove = [];
+            zip = await JSZip.loadAsync(copyData);
+            allFiles = [];
             zip.forEach((relativePath, file) => {
-                if (relativePath.match(/xl\/comments.*\.xml/)) {
-                    filesToRemove.push(relativePath);
+                allFiles.push(relativePath);
+            });
+            allFiles.sort();
+            log('📋 共 ' + allFiles.length + ' 个文件', 'info');
+            log('📋 文件列表:\n' + allFiles.map(f => '  ' + f).join('\n'), 'info');
+        } catch (e) {
+            log('❌ 解压失败: ' + e.message, 'error');
+            return;
+        }
+
+        // ========== 第二步：尝试清理所有批注相关文件 ==========
+        log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+        log('【第二步】清理批注相关文件', 'bold');
+
+        const toRemove = [];
+        const patterns = [
+            /xl\/comments.*\.xml/,
+            /xl\/comments\/.*\.xml/,
+            /xl\/worksheets\/_rels\/.*\.xml\.rels/,
+            /xl\/comments.*\.xml\.rels/,
+            /xl\/workbook\.xml\.rels/  // 谨慎删除，可能包含其他重要引用
+        ];
+
+        // 但为了彻底，我们只删除明确的批注文件及其引用
+        // 更安全的做法：只删除 comment 相关文件
+        const safePatterns = [
+            /xl\/comments.*\.xml/,
+            /xl\/comments\/.*\.xml/
+        ];
+
+        zip.forEach((relativePath, file) => {
+            for (let pattern of safePatterns) {
+                if (pattern.test(relativePath)) {
+                    toRemove.push(relativePath);
+                    break;
                 }
-                if (relativePath.match(/xl\/comments\/.*\.xml/)) {
-                    filesToRemove.push(relativePath);
+            }
+        });
+
+        if (toRemove.length > 0) {
+            log('🗑️ 删除批注文件: ' + toRemove.join(', '), 'warn');
+            toRemove.forEach(path => zip.remove(path));
+        } else {
+            log('ℹ️ 未找到批注文件', 'info');
+        }
+
+        // ========== 第三步：尝试加载清理后的文件 ==========
+        log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+        log('【第三步】加载清理后的文件', 'bold');
+
+        let cleanedData;
+        try {
+            cleanedData = await zip.generateAsync({ type: 'arraybuffer' });
+            log('✅ 重新打包完成，大小: ' + (cleanedData.byteLength / 1024).toFixed(1) + ' KB', 'success');
+        } catch (e) {
+            log('❌ 重新打包失败: ' + e.message, 'error');
+            return;
+        }
+
+        // 尝试加载
+        try {
+            const wb = new ExcelJS.Workbook();
+            await wb.xlsx.load(cleanedData);
+            log('✅ 清理后加载成功！', 'success');
+
+            // 尝试读取一个单元格的颜色
+            const sheet = wb.getWorksheet('IPN');
+            if (sheet) {
+                const cell = sheet.getCell('A24');
+                let indexed = null;
+                if (cell.style && cell.style.fill && cell.style.fill.fgColor) {
+                    indexed = cell.style.fill.fgColor.indexed;
                 }
-                // 也尝试删除批注引用
-                if (relativePath.match(/xl\/worksheets\/_rels\/.*\.xml\.rels/)) {
-                    // 可能需要更精细处理，暂时不删除
+                if (indexed !== undefined && indexed !== null) {
+                    const color = COLOR_MAP[indexed] || '未知索引 ' + indexed;
+                    log('🎨 A24 颜色: ' + color, 'success');
+                } else {
+                    log('⚠️ A24 无颜色信息', 'warn');
+                }
+            }
+        } catch (e) {
+            log('❌ 清理后仍然加载失败: ' + e.message, 'error');
+            log('📋 错误堆栈: ' + e.stack, 'error');
+
+            // ========== 第四步：尝试更激进的清理 ==========
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            log('【第四步】尝试更激进的清理（删除 worksheet rels）', 'bold');
+
+            // 重新加载原始 ZIP
+            const freshCopy = new Uint8Array(originalData);
+            const freshZip = await JSZip.loadAsync(freshCopy);
+            const aggressiveRemove = [];
+
+            freshZip.forEach((relativePath, file) => {
+                // 删除所有可能与批注相关的文件
+                if (/xl\/comments/.test(relativePath)) {
+                    aggressiveRemove.push(relativePath);
+                }
+                if (/xl\/worksheets\/_rels\/.*\.xml\.rels/.test(relativePath)) {
+                    // 检查 rels 文件中是否包含 comment 引用
+                    aggressiveRemove.push(relativePath);
+                }
+                // 也删除 comments 相关的 rels
+                if (/xl\/comments.*\.rels/.test(relativePath)) {
+                    aggressiveRemove.push(relativePath);
                 }
             });
 
-            if (filesToRemove.length > 0) {
-                log('🗑️ 删除批注文件: ' + filesToRemove.join(', '), 'warn');
-                filesToRemove.forEach(path => zip.remove(path));
+            // 去重
+            const uniqueRemove = [...new Set(aggressiveRemove)];
+            if (uniqueRemove.length > 0) {
+                log('🗑️ 激进删除: ' + uniqueRemove.join(', '), 'warn');
+                uniqueRemove.forEach(path => freshZip.remove(path));
             } else {
-                log('ℹ️ 未找到批注文件', 'info');
+                log('ℹ️ 未找到额外可删除的文件', 'info');
             }
 
-            const cleanedData = await zip.generateAsync({ type: 'arraybuffer' });
-            log('✅ 重新打包完成', 'success');
-
-            const wb = new ExcelJS.Workbook();
-            await wb.xlsx.load(cleanedData);
-            cleanedWorkbook = wb;
-            cleanedLoadSuccess = true;
-            log('✅ 清理后加载成功', 'success');
-
-        } catch (e) {
-            log('❌ 清理后加载失败: ' + e.message, 'error');
-        }
-
-        // ---------- 第三轮：读取颜色 ----------
-        log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-        log('【第三轮】读取颜色', 'bold');
-
-        const targetWorkbook = cleanedLoadSuccess ? cleanedWorkbook : (directLoadSuccess ? workbook : null);
-
-        if (!targetWorkbook) {
-            log('❌ 没有可用的工作簿', 'error');
-            return;
-        }
-
-        const sheet = targetWorkbook.getWorksheet(sheetName);
-        if (!sheet) {
-            log('❌ 工作表 "' + sheetName + '" 不存在', 'error');
-            log('📋 可用工作表: ' + targetWorkbook.worksheets.map(ws => ws.name).join(', '), 'info');
-            return;
-        }
-
-        try {
-            const cell = sheet.getCell(cellAddress);
-            const cellValue = cell.value;
-            let indexed = null;
-            let colorName = '未识别';
-            let meaning = '';
-            let fillObj = null;
-
-            // 获取完整的样式信息
-            if (cell.style) {
-                log('📋 样式对象:', 'info');
-                log(JSON.stringify(cell.style, null, 2), 'info');
-                if (cell.style.fill) {
-                    fillObj = cell.style.fill;
-                    log('📋 fill 对象:', 'info');
-                    log(JSON.stringify(fillObj, null, 2), 'info');
-                    if (cell.style.fill.fgColor) {
-                        indexed = cell.style.fill.fgColor.indexed;
-                        log('📋 fgColor 完整对象: ' + JSON.stringify(cell.style.fill.fgColor), 'info');
-                    }
-                }
+            try {
+                const aggressiveData = await freshZip.generateAsync({ type: 'arraybuffer' });
+                const wb2 = new ExcelJS.Workbook();
+                await wb2.xlsx.load(aggressiveData);
+                log('✅ 激进清理后加载成功！', 'success');
+            } catch (e2) {
+                log('❌ 激进清理后仍然失败: ' + e2.message, 'error');
+                log('📋 可能原因是文件包含其他不兼容元素', 'error');
+                log('💡 建议: 手动用 Excel 打开并"另存为"', 'warn');
             }
-
-            // 输出单元格基本信息
-            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-            log('📍 单元格: ' + cellAddress, 'bold');
-            log('📝 值: ' + (cellValue !== undefined && cellValue !== null ? cellValue : '(空)'), 'info');
-            log('📝 类型: ' + cell.type, 'info');
-
-            // 颜色识别
-            if (indexed !== undefined && indexed !== null) {
-                const mapped = COLOR_MAP[indexed];
-                if (mapped) {
-                    colorName = mapped.name;
-                    meaning = mapped.meaning;
-                    log('🎨 fgColor.indexed = ' + indexed + ' → ' + colorName + ' (' + meaning + ')', 'success');
-                } else {
-                    colorName = '未知索引 (' + indexed + ')';
-                    log('⚠️ fgColor.indexed = ' + indexed + ' (未映射)', 'warn');
-                }
-            } else {
-                // 尝试检查是否真的无颜色
-                if (fillObj && fillObj.fgColor) {
-                    // 可能还有其他属性
-                    const fg = fillObj.fgColor;
-                    if (fg.rgb) {
-                        log('🔍 fgColor.rgb = ' + fg.rgb, 'info');
-                    }
-                    if (fg.argb) {
-                        log('🔍 fgColor.argb = ' + fg.argb, 'info');
-                    }
-                    if (fg.theme !== undefined) {
-                        log('🔍 fgColor.theme = ' + fg.theme, 'info');
-                    }
-                    if (fg.tint !== undefined) {
-                        log('🔍 fgColor.tint = ' + fg.tint, 'info');
-                    }
-                    log('⚠️ fgColor 存在但无 indexed 属性', 'warn');
-                }
-                colorName = '无颜色 (blank)';
-                meaning = 'blank';
-                log('ℹ️ 该单元格无填充颜色', 'info');
-            }
-
-            // 显示色块
-            const colorCss = COLOR_CSS[colorName] || '#ffffff';
-            log('🎨 色块: ' + colorName + ' → ' + colorCss, 'info');
-
-            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-            log('✅ 验证完成', 'success');
-
-        } catch (e) {
-            log('❌ 读取单元格失败: ' + e.message, 'error');
         }
     }
 
     // 初始提示
-    log('请上传 Excel 文件，输入工作表名和单元格地址，点击 "验证颜色"', 'info');
+    log('请上传 Excel 文件，点击 "深度调试"', 'info');
 </script>
 </body>
 </html>
