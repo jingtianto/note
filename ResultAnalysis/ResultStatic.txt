@@ -4,10 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Excel 统计分析工具</title>
-    <!-- 仅使用 ExcelJS 解析和导出 -->
+    <!-- 使用 SheetJS 解析（支持批注） -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- 使用 ExcelJS 导出 -->
     <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <style>
+        /* (样式与之前完全相同，为节省篇幅已省略，实际使用时保留完整样式) */
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
@@ -465,16 +468,14 @@
     let keywordsExpanded = true;
 
     // ============================================================
-    // 颜色识别（基于 ExcelJS fgColor.indexed）
+    // 颜色识别（基于 RGB，适用于 SheetJS）
     // ============================================================
-    // 映射表：fgColor.indexed → 颜色名称
-    const COLOR_INDEXED_MAP = {
-        10: '红色',   // failed
-        11: '绿色',   // passed
-        35: '浅蓝色', // signal missing
-        52: '橙色',   // trigger not occurred
-        13: '黄色',   // warning
-        9: 'blank'    // 无色
+    const COLOR_RGB_MAP = {
+        'FF0000': '红色',
+        '00FF00': '绿色',
+        '99CCFF': '浅蓝色',
+        'FF9900': '橙色',
+        'FFFF00': '黄色'
     };
     const COLOR_MEANING = {
         '红色': 'failed',
@@ -486,39 +487,72 @@
         '其他': 'unknown'
     };
 
+    function normalizeRgb(rgb) {
+        if (!rgb) return null;
+        let hex = rgb.replace('#', '').toLowerCase();
+        if (hex.length === 8) hex = hex.substring(2); // 去掉 alpha
+        if (hex.length === 6) return hex.toUpperCase();
+        return null;
+    }
+
+    // 从 SheetJS 单元格对象获取颜色名称
     function getCellColorName(cell) {
-        if (!cell || !cell.style || !cell.style.fill) return 'blank';
-        const fill = cell.style.fill;
-        let indexed = null;
-
-        // 优先读取 fgColor.indexed
-        if (fill.fgColor && fill.fgColor.indexed !== undefined) {
-            indexed = fill.fgColor.indexed;
-        } else if (fill.bgColor && fill.bgColor.indexed !== undefined) {
-            indexed = fill.bgColor.indexed;
-        }
-
-        if (indexed !== null) {
-            if (COLOR_INDEXED_MAP[indexed]) {
-                return COLOR_INDEXED_MAP[indexed];
-            }
-            // 未知索引，记录日志
-            console.warn('未知 fgColor.indexed:', indexed);
-            return 'blank';
-        }
-
-        // 如果没有 indexed，尝试 rgb/argb（备用）
+        if (!cell || !cell.s || !cell.s.fill) return 'blank';
+        const fill = cell.s.fill;
         let rgb = null;
-        if (fill.fgColor && fill.fgColor.argb) {
-            rgb = fill.fgColor.argb;
-        } else if (fill.fgColor && fill.fgColor.rgb) {
-            rgb = fill.fgColor.rgb;
+        let theme = null;
+        let tint = 0;
+
+        // 优先从 fgColor 获取
+        if (fill.fgColor) {
+            if (fill.fgColor.rgb) {
+                rgb = normalizeRgb(fill.fgColor.rgb);
+            } else if (fill.fgColor.theme !== undefined) {
+                theme = fill.fgColor.theme;
+                tint = fill.fgColor.tint || 0;
+            }
         }
+        // 若 fgColor 无信息，尝试 bgColor
+        if (!rgb && theme === null && fill.bgColor) {
+            if (fill.bgColor.rgb) {
+                rgb = normalizeRgb(fill.bgColor.rgb);
+            } else if (fill.bgColor.theme !== undefined) {
+                theme = fill.bgColor.theme;
+                tint = fill.bgColor.tint || 0;
+            }
+        }
+
+        // 如果获取到 rgb，进行映射
         if (rgb) {
-            const hex = rgb.replace('#', '').toLowerCase();
-            if (hex === 'ffffff' || hex === 'ffffffff') return 'blank';
+            if (rgb === 'FFFFFF') return 'blank';
+            const colorName = COLOR_RGB_MAP[rgb];
+            if (colorName) return colorName;
+            // 近似匹配（简单容差）
+            const r = parseInt(rgb.substring(0,2),16);
+            const g = parseInt(rgb.substring(2,4),16);
+            const b = parseInt(rgb.substring(4,6),16);
+            if (g > 150 && r < 100 && b < 100) return '绿色';
+            if (r > 150 && g > 150 && b < 100) return '黄色';
+            if (r > 180 && g > 80 && g < 180 && b < 80) return '橙色';
+            if (r > 180 && g < 100 && b < 100) return '红色';
+            if (r > 150 && g > 150 && b > 200) return '浅蓝色';
             return '其他';
         }
+
+        // 如果只有 theme，尝试转换为 RGB（简略版）
+        if (theme !== null) {
+            // 常用主题色：0=黑色,1=白色,2=红色,3=绿色,4=蓝色,5=黄色,6=橙色,7=蓝色变体
+            const themeMap = {
+                2: '红色',
+                3: '绿色',
+                4: '浅蓝色',
+                5: '黄色',
+                6: '橙色'
+            };
+            if (themeMap[theme]) return themeMap[theme];
+            return '其他';
+        }
+
         return 'blank';
     }
 
@@ -565,7 +599,7 @@
     }
 
     // ============================================================
-    // 方案管理（保持不变）
+    // 方案管理（保持不变，省略详细代码以节省篇幅，但实际需完整包含）
     // ============================================================
     function loadSchemes() {
         try {
@@ -1042,7 +1076,7 @@
     })();
 
     // ============================================================
-    // 统计执行（使用 ExcelJS）
+    // 统计执行（使用 SheetJS 解析，支持批注）
     // ============================================================
     async function runStatistics() {
         const scheme = schemes.find(s => s.id === currentSchemeId);
@@ -1056,19 +1090,15 @@
 
         for (let f of uploadedFiles) {
             try {
-                const wb = new ExcelJS.Workbook();
-                await wb.xlsx.load(f.data);
+                const data = new Uint8Array(f.data);
+                const wb = XLSX.read(data, { type: 'array', cellStyles: true });
                 workbooks.push({ name: f.name, workbook: wb });
                 log(`文件 ${f.name} 解析成功`, 'success');
             } catch(e) {
                 const errorMsg = `文件 ${f.name} 解析失败：${e.message}\n堆栈：${e.stack}`;
                 log(errorMsg, 'error');
                 console.error(errorMsg);
-                if (e.message.includes('comments')) {
-                    alert(`文件 ${f.name} 包含批注，ExcelJS 无法解析。请用 Excel 打开并删除所有批注（审阅→删除所有批注），然后重新上传。`);
-                } else {
-                    alert(`解析文件 ${f.name} 失败！\n请确认文件未损坏且为有效的 Excel 格式。\n详细错误请查看控制台或日志窗口。`);
-                }
+                alert(`解析文件 ${f.name} 失败！\n请确认文件未损坏且为有效的 Excel 格式。\n详细错误请查看控制台或日志窗口。`);
                 hasError = true;
             }
         }
@@ -1082,7 +1112,7 @@
         const results = [];
         for (let wbData of workbooks) {
             try {
-                const result = processWorkbookExcelJS(wbData.workbook, scheme);
+                const result = processWorkbookSheetJS(wbData.workbook, scheme);
                 if (result) {
                     results.push({ name: wbData.name, data: result });
                     log(`文件 ${wbData.name} 统计完成`, 'success');
@@ -1109,81 +1139,79 @@
         }
     }
 
-    // ----- 核心数据处理（ExcelJS 版本）-----
-    function processWorkbookExcelJS(workbook, scheme) {
+    // ----- 核心数据处理（SheetJS 版本）-----
+    function processWorkbookSheetJS(workbook, scheme) {
         const keywords = scheme.keywords;
         const baseKeyIdx = scheme.baseKey !== '' ? parseInt(scheme.baseKey) : -1;
 
+        const sheetNames = workbook.SheetNames;
         const kwInfos = [];
+
         for (let idx = 0; idx < keywords.length; idx++) {
             const kw = keywords[idx];
-            const sheet = workbook.getWorksheet(kw.sheet);
-            if (!sheet) {
-                log(`Sheet "${kw.sheet}" 未找到`, 'error');
+            const sheetName = kw.sheet;
+            if (!sheetNames.includes(sheetName)) {
+                log(`Sheet "${sheetName}" 未找到`, 'error');
                 return null;
             }
-
-            // 关键字搜索范围
-            let startRow = 1;
-            let endRow = sheet.rowCount;
+            const sheet = workbook.Sheets[sheetName];
+            const range = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']) : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+            let startRow = range.s.r;
+            let endRow = range.e.r;
             if (kw.searchRange === 'rows') {
-                startRow = kw.startRow || 1;
-                endRow = kw.endRow || sheet.rowCount;
+                startRow = (kw.startRow || 1) - 1;
+                endRow = (kw.endRow || range.e.r + 1) - 1;
             } else if (kw.searchRange === 'row') {
-                startRow = kw.rowNumber || 1;
+                startRow = (kw.rowNumber || 1) - 1;
                 endRow = startRow;
             }
+            startRow = Math.max(range.s.r, Math.min(startRow, range.e.r));
+            endRow = Math.max(range.s.r, Math.min(endRow, range.e.r));
 
             let col = null;
             let rowNum = null;
             for (let r = startRow; r <= endRow; r++) {
-                const row = sheet.getRow(r);
-                if (row.hidden) continue;
+                if (sheet['!rows'] && sheet['!rows'][r] && sheet['!rows'][r].hidden) continue;
                 let found = false;
-                row.eachCell((cell, colNumber) => {
-                    if (!col && cell.value && cell.value.toString().includes(kw.keywordText)) {
-                        col = colNumber;
+                for (let c = range.s.c; c <= range.e.c; c++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: r, c: c });
+                    const cell = sheet[cellAddress];
+                    if (cell && cell.v && cell.v.toString().includes(kw.keywordText)) {
+                        col = c;
                         rowNum = r;
                         found = true;
+                        break;
                     }
-                });
+                }
                 if (found) break;
             }
-            if (!col || !rowNum) {
-                log(`在Sheet "${kw.sheet}" 的指定范围内未找到关键字 "${kw.keywordText}"`, 'error');
+            if (col === null || rowNum === null) {
+                log(`在Sheet "${sheetName}" 的指定范围内未找到关键字 "${kw.keywordText}"`, 'error');
                 return null;
             }
-
-            // 值的采集位置
             let targetCol = col;
             if (kw.valuePosition === 'left') {
                 targetCol = col - (kw.offset || 1);
             } else if (kw.valuePosition === 'right') {
                 targetCol = col + (kw.offset || 1);
             }
-            if (targetCol < 1) targetCol = 1;
+            if (targetCol < 0) targetCol = 0;
 
-            kwInfos.push({ sheet, col: targetCol, rowNum, kw, index: idx });
+            kwInfos.push({ sheet, sheetName, col: targetCol, rowNum, kw, index: idx });
         }
 
         // ---- cell 模式 ----
         const cellData = [];
         for (let info of kwInfos) {
             if (info.kw.collectType !== 'cell') continue;
-            const row = info.sheet.getRow(info.rowNum);
-            const cell = row.getCell(info.col);
-            let val = cell.value;
-            if (val && typeof val === 'object' && val.result) val = val.result;
-            else if (val && val.text) val = val.text;
-            else if (val && val.richText) val = val.richText.map(t => t.text).join('');
-            else if (val && typeof val === 'object') val = JSON.stringify(val);
-            else if (val === undefined || val === null) val = null;
-
+            const cellAddress = XLSX.utils.encode_cell({ r: info.rowNum, c: info.col });
+            const cell = info.sheet[cellAddress];
+            let val = cell ? cell.v : null;
+            if (val && typeof val === 'object') val = JSON.stringify(val);
             let color = 'blank';
             if (info.kw.collectColor) {
                 color = getCellColorName(cell);
             }
-
             let valid = true;
             if (info.kw.excludeEmpty && (val === null || val === undefined || val === '')) valid = false;
             if (valid && info.kw.excludeValues && info.kw.excludeValues.length > 0) {
@@ -1205,13 +1233,12 @@
         const colInfos = kwInfos.filter(info => info.kw.collectType === 'column');
         const columnData = { rows: [], keywords: colInfos.map(info => info.kw) };
         if (colInfos.length > 0) {
-            // 收集所有可见行（排除隐藏行和表头行）
             const allRowNumbers = new Set();
             colInfos.forEach(info => {
                 const sheet = info.sheet;
-                for (let r = 1; r <= sheet.rowCount; r++) {
-                    const row = sheet.getRow(r);
-                    if (row.hidden) continue;
+                const range = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']) : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+                for (let r = range.s.r; r <= range.e.r; r++) {
+                    if (sheet['!rows'] && sheet['!rows'][r] && sheet['!rows'][r].hidden) continue;
                     if (r === info.rowNum) continue;
                     allRowNumbers.add(r);
                 }
@@ -1221,14 +1248,10 @@
                 const rowValues = [];
                 let valid = true;
                 for (let info of colInfos) {
-                    const row = info.sheet.getRow(rowNum);
-                    const cell = row.getCell(info.col);
-                    let val = cell.value;
-                    if (val && typeof val === 'object' && val.result) val = val.result;
-                    else if (val && val.text) val = val.text;
-                    else if (val && val.richText) val = val.richText.map(t => t.text).join('');
-                    else if (val && typeof val === 'object') val = JSON.stringify(val);
-                    else if (val === undefined || val === null) val = null;
+                    const cellAddress = XLSX.utils.encode_cell({ r: rowNum, c: info.col });
+                    const cell = info.sheet[cellAddress];
+                    let val = cell ? cell.v : null;
+                    if (val && typeof val === 'object') val = JSON.stringify(val);
                     let color = 'blank';
                     if (info.kw.collectColor) {
                         color = getCellColorName(cell);
@@ -1236,7 +1259,6 @@
                     rowValues.push({ value: val, color: color });
                 }
 
-                // 基准列非空检查
                 if (baseKeyIdx >= 0) {
                     const colIndex = colInfos.findIndex(info => info.index === baseKeyIdx);
                     if (colIndex >= 0) {
@@ -1247,7 +1269,6 @@
                     }
                 }
 
-                // 排除空和特定值
                 for (let i = 0; i < colInfos.length; i++) {
                     const kw = colInfos[i].kw;
                     const val = rowValues[i].value;
@@ -1889,7 +1910,7 @@
     if (schemes.length > 0) {
         selectScheme(schemes[0].id);
     }
-    log('工具已加载，使用 ExcelJS 解析，颜色映射基于 fgColor.indexed', 'info');
+    log('工具已加载，使用 SheetJS 解析，颜色识别基于 RGB 映射', 'info');
 </script>
 </body>
 </html>
