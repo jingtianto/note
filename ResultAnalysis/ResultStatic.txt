@@ -4,12 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Excel 统计分析工具</title>
-    <!-- 使用 ExcelJS 解析（样式读取准确） -->
+    <!-- 仅使用 ExcelJS 解析和导出 -->
     <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-    <!-- 使用 FileSaver 导出 -->
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <style>
-        /* (样式与之前完全相同，略) */
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
@@ -354,6 +352,7 @@
 <div class="container">
     <h1>📊 Excel 统计分析工具</h1>
 
+    <!-- 方案管理 -->
     <div class="card">
         <div class="card-title">
             <span>📁 统计方案管理</span>
@@ -398,6 +397,7 @@
         </div>
     </div>
 
+    <!-- 文件上传 -->
     <div class="card" id="uploadCard">
         <div class="card-title"><span>📂 上传 Excel 文件（.xlsx）</span></div>
         <div class="flex-wrap">
@@ -410,6 +410,7 @@
         <div style="margin-top:6px;font-size:13px;color:#64748b;">💡 也可拖拽文件到此区域上传</div>
     </div>
 
+    <!-- 执行统计 -->
     <div class="card">
         <div class="flex-wrap">
             <button class="btn btn-success" onclick="runStatistics()">▶️ 执行统计</button>
@@ -417,6 +418,7 @@
         </div>
     </div>
 
+    <!-- 结果展示 -->
     <div class="card" id="resultArea" style="display:none;">
         <div class="tab-bar">
             <div class="tab active" data-tab="tab1" onclick="switchTab('tab1')">📋 独立展示</div>
@@ -441,6 +443,7 @@
         </div>
     </div>
 
+    <!-- 日志 -->
     <div class="card">
         <div class="card-title">
             <span>📋 解析日志</span>
@@ -462,7 +465,7 @@
     let keywordsExpanded = true;
 
     // ============================================================
-    // 颜色识别（基于 ExcelJS 的 fgColor.indexed 映射）
+    // 颜色识别（基于 ExcelJS fgColor.indexed）
     // ============================================================
     // 映射表：fgColor.indexed → 颜色名称
     const COLOR_INDEXED_MAP = {
@@ -470,7 +473,7 @@
         11: '绿色',   // passed
         35: '浅蓝色', // signal missing
         52: '橙色',   // trigger not occurred
-        13: '黄色',   // warning（可选）
+        13: '黄色',   // warning
         9: 'blank'    // 无色
     };
     const COLOR_MEANING = {
@@ -483,7 +486,6 @@
         '其他': 'unknown'
     };
 
-    // 从单元格获取颜色名称
     function getCellColorName(cell) {
         if (!cell || !cell.style || !cell.style.fill) return 'blank';
         const fill = cell.style.fill;
@@ -492,23 +494,20 @@
         // 优先读取 fgColor.indexed
         if (fill.fgColor && fill.fgColor.indexed !== undefined) {
             indexed = fill.fgColor.indexed;
-        }
-        // 如果 fgColor 没有 indexed，尝试 bgColor（但通常为空）
-        else if (fill.bgColor && fill.bgColor.indexed !== undefined) {
+        } else if (fill.bgColor && fill.bgColor.indexed !== undefined) {
             indexed = fill.bgColor.indexed;
         }
 
-        // 如果获取到 indexed，进行映射
         if (indexed !== null) {
             if (COLOR_INDEXED_MAP[indexed]) {
                 return COLOR_INDEXED_MAP[indexed];
             }
-            // 未知索引，记录日志并返回 blank
-            console.warn('未知 fgColor.indexed:', indexed, '单元格值:', cell.value);
+            // 未知索引，记录日志
+            console.warn('未知 fgColor.indexed:', indexed);
             return 'blank';
         }
 
-        // 如果没有 indexed，检查是否有 rgb 或 argb（备用）
+        // 如果没有 indexed，尝试 rgb/argb（备用）
         let rgb = null;
         if (fill.fgColor && fill.fgColor.argb) {
             rgb = fill.fgColor.argb;
@@ -516,13 +515,10 @@
             rgb = fill.fgColor.rgb;
         }
         if (rgb) {
-            // 简单判断：如果是白色或 #FFFFFF，视为 blank
             const hex = rgb.replace('#', '').toLowerCase();
             if (hex === 'ffffff' || hex === 'ffffffff') return 'blank';
-            // 否则返回 '其他'
             return '其他';
         }
-
         return 'blank';
     }
 
@@ -550,7 +546,7 @@
     }
 
     // ============================================================
-    // 日志管理
+    // 日志
     // ============================================================
     function log(message, type = 'info') {
         const area = document.getElementById('logArea');
@@ -1046,7 +1042,7 @@
     })();
 
     // ============================================================
-    // 统计执行（使用 ExcelJS 解析）
+    // 统计执行（使用 ExcelJS）
     // ============================================================
     async function runStatistics() {
         const scheme = schemes.find(s => s.id === currentSchemeId);
@@ -1068,7 +1064,6 @@
                 const errorMsg = `文件 ${f.name} 解析失败：${e.message}\n堆栈：${e.stack}`;
                 log(errorMsg, 'error');
                 console.error(errorMsg);
-                // 提示用户可能的解决方案
                 if (e.message.includes('comments')) {
                     alert(`文件 ${f.name} 包含批注，ExcelJS 无法解析。请用 Excel 打开并删除所有批注（审阅→删除所有批注），然后重新上传。`);
                 } else {
@@ -1295,7 +1290,7 @@
     }
 
     // ============================================================
-    // 显示结果（保持不变）
+    // 显示结果（与之前相同）
     // ============================================================
     function setIndependentLayout(layout) {
         independentLayout = layout;
