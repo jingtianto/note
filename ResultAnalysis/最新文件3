@@ -1,0 +1,2170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel 统计分析工具</title>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+            background: #f1f5f9;
+            color: #0f172a;
+            padding: 16px;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+        .container { max-width: 1600px; margin: 0 auto; }
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #0f172a;
+            border-bottom: 3px solid #475569;
+            padding-bottom: 6px;
+            margin-bottom: 16px;
+            letter-spacing: 0.3px;
+        }
+        .card {
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            padding: 14px 18px;
+            margin-bottom: 14px;
+            border: 1px solid #94a3b8;
+        }
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .flex-wrap { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+        .btn {
+            padding: 6px 14px;
+            border: 1px solid #d1d9e6;
+            border-radius: 4px;
+            background: #3b82f6;
+            color: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: 0.15s;
+            white-space: nowrap;
+        }
+        .btn:hover { background: #2563eb; }
+        .btn-success { background: #22c55e; }
+        .btn-success:hover { background: #16a34a; }
+        .btn-danger { background: #ef4444; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-warning { background: #f59e0b; }
+        .btn-warning:hover { background: #d97706; }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #d1d9e6;
+            color: #1e293b;
+        }
+        .btn-outline:hover { background: #f1f5f9; }
+        .btn-outline.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: #fff;
+        }
+        .btn-sm { padding: 4px 10px; font-size: 13px; }
+        .input-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin: 6px 0;
+        }
+        .input-group label {
+            font-weight: 500;
+            min-width: 70px;
+            font-size: 14px;
+        }
+        .input-group input, .input-group select {
+            padding: 4px 8px;
+            border: 1px solid #d1d9e6;
+            border-radius: 4px;
+            font-size: 14px;
+            background: #fff;
+            flex: 0 1 auto;
+            min-width: 60px;
+            height: 32px;
+        }
+        .input-group input[type="number"] {
+            width: 60px;
+            min-width: 50px;
+        }
+        .keyword-row {
+            background: #f8fafc;
+            border: 1px solid #d1d9e6;
+            border-radius: 4px;
+            padding: 6px 10px;
+            margin-bottom: 6px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 8px;
+            align-items: center;
+        }
+        .keyword-row .field {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            flex: 0 1 auto;
+        }
+        .keyword-row .field label {
+            font-size: 12px;
+            font-weight: 500;
+            min-width: 30px;
+            color: #334155;
+        }
+        .keyword-row .field input, .keyword-row .field select {
+            padding: 2px 4px;
+            border: 1px solid #d1d9e6;
+            border-radius: 3px;
+            height: 26px;
+            font-size: 12px;
+            background: #fff;
+        }
+        .keyword-row .field input[type="number"] {
+            width: 45px;
+        }
+        .keyword-row .field input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            margin: 0;
+            border: 1px solid #d1d9e6;
+        }
+        .keyword-row .field-small { flex: 0 0 auto; }
+        .badge {
+            background: #3b82f6;
+            color: #fff;
+            border-radius: 4px;
+            padding: 0 10px;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 22px;
+            display: inline-block;
+            border: 1px solid #d1d9e6;
+        }
+        .keywords-collapsible {
+            transition: max-height 0.3s ease;
+            overflow: hidden;
+            max-height: 0;
+        }
+        .keywords-collapsible.expanded {
+            max-height: 2000px;
+        }
+        .tab-bar {
+            display: flex;
+            gap: 0;
+            border-bottom: 2px solid #475569;
+            margin: 12px 0 16px;
+        }
+        .tab-bar .tab {
+            padding: 8px 20px;
+            cursor: pointer;
+            border: 1px solid #d1d9e6;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            background: #f1f5f9;
+            margin-right: 4px;
+            font-weight: 600;
+            font-size: 15px;
+        }
+        .tab-bar .tab.active {
+            background: #fff;
+            border-bottom: 2px solid #fff;
+            margin-bottom: -2px;
+            color: #0f172a;
+        }
+        .tab-content { display: none; padding: 12px 0; }
+        .tab-content.active { display: block; }
+        table {
+            width: auto;
+            border-collapse: collapse;
+            font-size: 14px;
+            margin: 0;
+        }
+        th, td {
+            border: 1px solid #e2e8f0;
+            padding: 4px 10px;
+            text-align: left;
+            white-space: nowrap;
+        }
+        th {
+            background: #f1f5f9;
+            color: #1e293b;
+            font-weight: 600;
+        }
+        tbody tr:nth-child(even) { background: #fafcff; }
+        .table-wrap {
+            overflow-x: auto;
+            border: 1px solid #e2e8f0;
+            display: inline-block;
+            max-width: 100%;
+            margin-top: 4px;
+            background: #fff;
+        }
+        .stat-card {
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+            background: #fafcff;
+        }
+        .stat-card:last-child { margin-bottom: 0; }
+        .stat-card .stat-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #cbd5e1;
+        }
+        .horizontal-scroll {
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            gap: 14px;
+            padding-bottom: 8px;
+            align-items: flex-start;
+        }
+        .file-card {
+            flex: 0 0 auto;
+            min-width: 280px;
+            max-width: 95%;
+            border: 1px solid #94a3b8;
+            border-radius: 4px;
+            padding: 10px 12px;
+            background: #ffffff;
+        }
+        .file-card h4 {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+            color: #0f172a;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #cbd5e1;
+        }
+        .file-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #475569;
+        }
+        .file-tabs .tab-btn {
+            padding: 4px 14px;
+            background: #f1f5f9;
+            border: 1px solid #d1d9e6;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .file-tabs .tab-btn.active {
+            background: #fff;
+            border-bottom: 2px solid #fff;
+            margin-bottom: -2px;
+            color: #0f172a;
+        }
+        .file-tab-content { display: none; }
+        .file-tab-content.active { display: block; }
+        .file-item {
+            background: #f1f5f9;
+            padding: 2px 12px;
+            border-radius: 4px;
+            margin: 2px 4px 2px 0;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid #d1d9e6;
+        }
+        .file-item .remove { cursor: pointer; color: #ef4444; font-weight: bold; }
+        .scheme-item {
+            background: #f1f5f9;
+            border-radius: 4px;
+            padding: 2px 12px;
+            margin: 2px 4px 2px 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            border: 1px solid #d1d9e6;
+        }
+        .scheme-item .del { cursor: pointer; color: #ef4444; font-weight: bold; }
+        .empty-value { color: #94a3b8; font-style: italic; }
+        .color-green { background: #d4edda; color: #155724; }
+        .color-yellow { background: #fff3cd; color: #856404; }
+        .color-orange { background: #ffe5b4; color: #8a6d3b; }
+        .color-red { background: #f8d7da; color: #721c24; }
+        .color-blank { background: #f1f5f9; color: #64748b; }
+        .color-other { background: #e2e8f0; color: #334155; }
+        .legend-item { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; font-size: 14px; }
+        .legend-color { display: inline-block; width: 20px; height: 20px; border: 1px solid #d1d9e6; border-radius: 4px; }
+        .range-inputs {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            font-size: 13px;
+        }
+        .range-inputs input {
+            width: 60px;
+            padding: 2px 4px;
+            border: 1px solid #d1d9e6;
+            border-radius: 4px;
+            height: 26px;
+            font-size: 13px;
+        }
+        .log-area {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 8px 12px;
+            border-radius: 4px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            margin-top: 10px;
+            border: 1px solid #475569;
+        }
+        .log-area .log-error { color: #fca5a5; }
+        .log-area .log-success { color: #86efac; }
+        .log-area .log-info { color: #93c5fd; }
+        .mt-10 { margin-top: 10px; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+        .align-help { font-size: 12px; color: #64748b; margin-left: 4px; }
+        @media (max-width: 768px) {
+            .keyword-row { flex-direction: column; align-items: stretch; }
+            .input-group { flex-direction: column; align-items: stretch; }
+            .file-card { min-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📊 Excel 统计分析工具</h1>
+
+    <!-- 方案管理 -->
+    <div class="card">
+        <div class="card-title">
+            <span>📁 统计方案管理</span>
+            <span class="badge" id="schemeCount">0 个方案</span>
+        </div>
+        <div class="flex-wrap">
+            <button class="btn btn-success" onclick="newScheme()">➕ 新建方案</button>
+            <button class="btn btn-warning" onclick="exportSchemes()">📥 导出方案</button>
+            <button class="btn btn-info" onclick="document.getElementById('importSchemeInput').click()">📤 导入方案</button>
+            <input type="file" id="importSchemeInput" accept=".json" style="display:none" onchange="importSchemes(event)">
+            <span style="font-weight:500;">当前方案：</span>
+            <select id="schemeSelector" onchange="selectScheme(this.value)" style="padding:4px 8px;border-radius:4px;border:1px solid #d1d9e6;font-size:14px;min-width:140px;"></select>
+        </div>
+        <div id="schemeList" class="mt-10" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+        <div id="schemeEditor" style="margin-top:12px;display:none;border-top:1px solid #cbd5e1;padding-top:12px;">
+            <div class="flex-between">
+                <div class="input-group">
+                    <label style="min-width:70px;">方案名称</label>
+                    <input id="schemeName" type="text" placeholder="输入名称" style="flex:1;min-width:150px;border:1px solid #d1d9e6;">
+                </div>
+                <div class="flex-wrap">
+                    <button class="btn btn-success" onclick="saveCurrentScheme()">💾 保存</button>
+                    <button class="btn btn-danger" onclick="deleteCurrentScheme()">🗑️ 删除</button>
+                </div>
+            </div>
+            <div class="input-group">
+                <label>非空基准列</label>
+                <select id="baseKeySelect" style="flex:1;min-width:120px;border:1px solid #d1d9e6;">
+                    <option value="">无</option>
+                </select>
+                <span class="hint">仅对"列"模式生效</span>
+            </div>
+            <div class="input-group">
+                <label>对齐基准列</label>
+                <select id="alignBaseKey" style="flex:1;min-width:120px;border:1px solid #d1d9e6;">
+                    <option value="">无（不进行对齐）</option>
+                </select>
+                <span class="hint">选择后，独立展示和合并展示均按此列的值对齐</span>
+            </div>
+            <div class="flex-between" style="margin:10px 0 6px;">
+                <h4 style="font-size:16px;font-weight:600;">关键字定义（最多30个）</h4>
+                <div>
+                    <button class="btn btn-outline btn-sm" onclick="toggleKeywordsCollapse()" id="toggleKeywordsBtn">展开</button>
+                    <button class="btn btn-primary btn-sm" onclick="addKeyword()">➕ 添加</button>
+                    <span class="badge" id="keywordCount">0 / 30</span>
+                </div>
+            </div>
+            <div id="keywordsContainer" class="keywords-collapsible" style="max-height:0;"></div>
+        </div>
+    </div>
+
+    <!-- 文件上传 -->
+    <div class="card" id="uploadCard">
+        <div class="card-title"><span>📂 上传 Excel 文件（.xlsx）</span></div>
+        <div class="flex-wrap">
+            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">📎 选择文件</button>
+            <input type="file" id="fileInput" accept=".xlsx" multiple style="display:none" onchange="handleFiles(event)">
+            <span id="fileCount">已上传 0 个文件</span>
+            <button class="btn btn-danger" onclick="clearFiles()">清除所有</button>
+        </div>
+        <div id="fileList" class="mt-10" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+        <div style="margin-top:6px;font-size:13px;color:#64748b;">💡 也可拖拽文件夹到此区域上传（自动识别文件夹名）</div>
+    </div>
+
+    <!-- 执行统计 -->
+    <div class="card">
+        <div class="flex-wrap">
+            <button class="btn btn-success" onclick="runStatistics()">▶️ 执行统计</button>
+            <span id="statusMsg" style="color:#64748b;font-size:14px;"></span>
+        </div>
+    </div>
+
+    <!-- 结果展示 -->
+    <div class="card" id="resultArea" style="display:none;">
+        <div class="tab-bar">
+            <div class="tab active" data-tab="tab1" onclick="switchTab('tab1')">📋 独立展示</div>
+            <div class="tab" data-tab="tab2" onclick="switchTab('tab2')">📊 合并展示</div>
+        </div>
+        <div id="tab1" class="tab-content active">
+            <div class="flex-wrap" style="margin-bottom:8px;">
+                <span style="font-weight:600;">布局：</span>
+                <button class="btn btn-outline active" data-layout="horizontal" onclick="setIndependentLayout('horizontal')">横向平铺</button>
+                <button class="btn btn-outline" data-layout="tabs" onclick="setIndependentLayout('tabs')">标签切换</button>
+            </div>
+            <div id="independentResults"></div>
+            <div class="flex-wrap mt-10">
+                <button class="btn btn-success" onclick="exportIndependentExcel()">📥 导出独立统计</button>
+            </div>
+        </div>
+        <div id="tab2" class="tab-content">
+            <div id="mergedResults"></div>
+            <div class="flex-wrap mt-10">
+                <button class="btn btn-success" onclick="exportMergedExcel()">📥 导出合并统计</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 日志 -->
+    <div class="card">
+        <div class="card-title">
+            <span>📋 解析日志</span>
+            <button class="btn btn-sm btn-outline" onclick="clearLog()">清空</button>
+        </div>
+        <div id="logArea" class="log-area">等待操作...</div>
+    </div>
+</div>
+
+<script>
+    // ============================================================
+    // 全局状态
+    // ============================================================
+    let schemes = [];
+    let currentSchemeId = null;
+    let uploadedFiles = [];
+    let statisticsResults = null;
+    let independentLayout = 'horizontal';
+    let keywordsExpanded = false;
+
+    const COLOR_MAP = {
+        10: { name: '红色', meaning: 'failed', css: '#FF0000' },
+        35: { name: '浅蓝色', meaning: 'signal missing', css: '#99CCFF' },
+        52: { name: '橙色', meaning: 'trigger not occurred', css: '#FF9900' },
+        13: { name: '黄色', meaning: 'warning', css: '#FFFF00' },
+        11: { name: '绿色', meaning: 'passed', css: '#00FF00' },
+        9:  { name: 'blank', meaning: 'blank', css: '#f1f5f9' }
+    };
+    const COLOR_MEANING = {
+        '红色': 'failed',
+        '绿色': 'passed',
+        '浅蓝色': 'signal missing',
+        '橙色': 'trigger not occurred',
+        '黄色': 'warning',
+        'blank': 'blank',
+        '其他': 'unknown'
+    };
+
+    function getColorCss(colorName) {
+        const map = {
+            '绿色': '#00FF00',
+            '黄色': '#FFFF00',
+            '橙色': '#FF9900',
+            '红色': '#FF0000',
+            '浅蓝色': '#99CCFF',
+            'blank': '#f1f5f9',
+            '其他': '#e2e8f0'
+        };
+        return map[colorName] || '#ffffff';
+    }
+
+    function getColorArgb(colorName) {
+        const map = {
+            '绿色': 'FF00FF00',
+            '黄色': 'FFFFFF00',
+            '橙色': 'FFFF9900',
+            '红色': 'FFFF0000',
+            '浅蓝色': 'FF99CCFF'
+        };
+        return map[colorName] || null;
+    }
+
+    function getColorMeaning(colorName) {
+        return COLOR_MEANING[colorName] || colorName;
+    }
+
+    function log(message, type = 'info') {
+        const area = document.getElementById('logArea');
+        const entry = document.createElement('div');
+        entry.className = 'log-' + type;
+        entry.textContent = message;
+        area.appendChild(entry);
+        area.scrollTop = area.scrollHeight;
+        if (type === 'error') console.error(message);
+        else if (type === 'success') console.log(message);
+        else console.info(message);
+    }
+
+    function clearLog() {
+        document.getElementById('logArea').innerHTML = '';
+        log('日志已清空', 'info');
+    }
+
+    // ============================================================
+    // 方案管理
+    // ============================================================
+    function loadSchemes() {
+        try {
+            const data = localStorage.getItem('excelStatsSchemes');
+            if (data) schemes = JSON.parse(data);
+            else schemes = [];
+        } catch(e) { schemes = []; }
+        renderSchemeSelector();
+        renderSchemeList();
+        if (schemes.length > 0) {
+            selectScheme(schemes[0].id);
+        } else {
+            document.getElementById('schemeEditor').style.display = 'none';
+        }
+        document.getElementById('schemeCount').textContent = schemes.length + ' 个方案';
+    }
+
+    function saveSchemes() {
+        localStorage.setItem('excelStatsSchemes', JSON.stringify(schemes));
+        renderSchemeSelector();
+        renderSchemeList();
+        document.getElementById('schemeCount').textContent = schemes.length + ' 个方案';
+    }
+
+    function renderSchemeSelector() {
+        const sel = document.getElementById('schemeSelector');
+        const current = sel.value;
+        sel.innerHTML = '';
+        schemes.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.name;
+            sel.appendChild(opt);
+        });
+        if (current && schemes.some(s => s.id === current)) sel.value = current;
+        else if (schemes.length > 0) sel.value = schemes[0].id;
+    }
+
+    function renderSchemeList() {
+        const container = document.getElementById('schemeList');
+        container.innerHTML = '';
+        schemes.forEach(s => {
+            const div = document.createElement('span');
+            div.className = 'scheme-item';
+            div.innerHTML = `<span>${s.name}</span> <span class="badge">${s.keywords ? s.keywords.length : 0}</span> <span class="del" onclick="deleteScheme('${s.id}')">✕</span>`;
+            container.appendChild(div);
+        });
+    }
+
+    function newScheme() {
+        const name = prompt('请输入新方案名称：', '方案' + (schemes.length+1));
+        if (!name) return;
+        const id = Date.now().toString(36) + Math.random().toString(36).substr(2,4);
+        const scheme = {
+            id: id,
+            name: name,
+            baseKey: '',
+            alignBaseKey: '',
+            keywords: []
+        };
+        schemes.push(scheme);
+        saveSchemes();
+        selectScheme(id);
+        document.getElementById('schemeEditor').style.display = 'block';
+    }
+
+    function selectScheme(id) {
+        currentSchemeId = id;
+        const scheme = schemes.find(s => s.id === id);
+        if (!scheme) {
+            document.getElementById('schemeEditor').style.display = 'none';
+            return;
+        }
+        document.getElementById('schemeEditor').style.display = 'block';
+        document.getElementById('schemeName').value = scheme.name;
+        renderKeywords(scheme);
+        updateKeywordCount(scheme);
+        document.getElementById('schemeSelector').value = id;
+        updateAlignBaseSelect(scheme);
+        document.getElementById('alignBaseKey').value = scheme.alignBaseKey || '';
+    }
+
+    function syncKeywordsFromDOM() {
+        const scheme = schemes.find(s => s.id === currentSchemeId);
+        if (!scheme) return;
+        const rows = document.querySelectorAll('.keyword-row');
+        const keywords = [];
+        rows.forEach(row => {
+            const sheet = row.querySelector('.kw-sheet').value;
+            const text = row.querySelector('.kw-text').value;
+            const valuePosition = row.querySelector('.kw-position').value;
+            const collectType = row.querySelector('.kw-collect-type').value;
+            const offset = parseInt(row.querySelector('.kw-offset').value) || 1;
+            const searchRange = row.querySelector('.kw-search-range').value;
+            let startRow = null, endRow = null, rowNumber = null;
+            if (searchRange === 'rows') {
+                startRow = parseInt(row.querySelector('.kw-start-row').value) || null;
+                endRow = parseInt(row.querySelector('.kw-end-row').value) || null;
+            } else if (searchRange === 'row') {
+                rowNumber = parseInt(row.querySelector('.kw-row-number').value) || null;
+            }
+            const excludeEmpty = row.querySelector('.kw-exclude-empty').checked;
+            const excludeValues = row.querySelector('.kw-exclude-values').value.split(',').map(s => s.trim()).filter(s => s);
+            const collectColor = row.querySelector('.kw-collect-color').checked;
+            const addColorCol = row.querySelector('.kw-add-color').checked;
+            const fontSize = parseInt(row.querySelector('.kw-font-size').value) || 14;
+            const columnWidth = parseInt(row.querySelector('.kw-column-width').value) || 120;
+            if (sheet && text) {
+                keywords.push({
+                    sheet: sheet,
+                    keywordText: text,
+                    valuePosition: valuePosition,
+                    collectType: collectType,
+                    offset: offset,
+                    searchRange: searchRange,
+                    startRow: startRow,
+                    endRow: endRow,
+                    rowNumber: rowNumber,
+                    excludeEmpty: excludeEmpty,
+                    excludeValues: excludeValues,
+                    collectColor: collectColor,
+                    addColorCol: addColorCol,
+                    fontSize: fontSize,
+                    columnWidth: columnWidth
+                });
+            }
+        });
+        scheme.keywords = keywords;
+    }
+
+    function saveCurrentScheme() {
+        const id = currentSchemeId;
+        const scheme = schemes.find(s => s.id === id);
+        if (!scheme) return alert('请先选择一个方案');
+        syncKeywordsFromDOM();
+        const name = document.getElementById('schemeName').value.trim();
+        if (!name) return alert('方案名称不能为空');
+        scheme.name = name;
+        scheme.baseKey = document.getElementById('baseKeySelect').value;
+        scheme.alignBaseKey = document.getElementById('alignBaseKey').value;
+        if (scheme.keywords.length === 0) return alert('请至少添加一个有效关键字');
+        if (scheme.keywords.length > 30) return alert('关键字数量不能超过30个');
+        saveSchemes();
+        updateBaseKeySelect(scheme);
+        updateAlignBaseSelect(scheme);
+        document.getElementById('baseKeySelect').value = scheme.baseKey;
+        document.getElementById('alignBaseKey').value = scheme.alignBaseKey || '';
+        document.getElementById('schemeName').value = scheme.name;
+        log('方案 "' + scheme.name + '" 已保存', 'success');
+        alert('方案已保存');
+    }
+
+    function deleteCurrentScheme() {
+        if (!currentSchemeId) return;
+        if (!confirm('确定删除当前方案吗？')) return;
+        schemes = schemes.filter(s => s.id !== currentSchemeId);
+        saveSchemes();
+        if (schemes.length > 0) selectScheme(schemes[0].id);
+        else {
+            currentSchemeId = null;
+            document.getElementById('schemeEditor').style.display = 'none';
+            document.getElementById('schemeSelector').value = '';
+        }
+        log('方案已删除', 'info');
+    }
+
+    function deleteScheme(id) {
+        if (!confirm('删除方案？')) return;
+        schemes = schemes.filter(s => s.id !== id);
+        saveSchemes();
+        if (currentSchemeId === id) {
+            if (schemes.length > 0) selectScheme(schemes[0].id);
+            else {
+                currentSchemeId = null;
+                document.getElementById('schemeEditor').style.display = 'none';
+                document.getElementById('schemeSelector').value = '';
+            }
+        } else {
+            renderSchemeSelector();
+            renderSchemeList();
+        }
+        log('方案已删除', 'info');
+    }
+
+    function updateBaseKeySelect(scheme) {
+        const baseSel = document.getElementById('baseKeySelect');
+        baseSel.innerHTML = '<option value="">无</option>';
+        scheme.keywords.forEach((kw, idx) => {
+            const opt = document.createElement('option');
+            opt.value = idx;
+            let label = kw.keywordText || ('关键字'+(idx+1));
+            if (kw.valuePosition === 'left') label += ' ←' + kw.offset;
+            else if (kw.valuePosition === 'right') label += ' →' + kw.offset;
+            opt.textContent = label;
+            baseSel.appendChild(opt);
+        });
+    }
+
+    function updateAlignBaseSelect(scheme) {
+        const alignSel = document.getElementById('alignBaseKey');
+        alignSel.innerHTML = '<option value="">无（不进行对齐）</option>';
+        scheme.keywords.forEach((kw, idx) => {
+            if (kw.collectType === 'column') {
+                const opt = document.createElement('option');
+                opt.value = idx;
+                let label = kw.keywordText || ('关键字'+(idx+1));
+                if (kw.valuePosition === 'left') label += ' ←' + kw.offset;
+                else if (kw.valuePosition === 'right') label += ' →' + kw.offset;
+                opt.textContent = label;
+                alignSel.appendChild(opt);
+            }
+        });
+    }
+
+    function renderKeywords(scheme) {
+        const container = document.getElementById('keywordsContainer');
+        container.innerHTML = '';
+        scheme.keywords.forEach((kw, idx) => {
+            addKeywordRow(kw, idx);
+        });
+        updateKeywordCount(scheme);
+        updateBaseKeySelect(scheme);
+        updateAlignBaseSelect(scheme);
+        document.getElementById('baseKeySelect').value = scheme.baseKey !== undefined ? scheme.baseKey : '';
+        document.getElementById('alignBaseKey').value = scheme.alignBaseKey !== undefined ? scheme.alignBaseKey : '';
+        if (!keywordsExpanded) {
+            document.getElementById('keywordsContainer').style.maxHeight = '0';
+            document.getElementById('toggleKeywordsBtn').textContent = '展开';
+        } else {
+            document.getElementById('keywordsContainer').style.maxHeight = '2000px';
+            document.getElementById('toggleKeywordsBtn').textContent = '收起';
+        }
+    }
+
+    function toggleKeywordsCollapse() {
+        const container = document.getElementById('keywordsContainer');
+        const btn = document.getElementById('toggleKeywordsBtn');
+        keywordsExpanded = !keywordsExpanded;
+        if (keywordsExpanded) {
+            container.style.maxHeight = '2000px';
+            btn.textContent = '收起';
+        } else {
+            container.style.maxHeight = '0';
+            btn.textContent = '展开';
+        }
+    }
+
+    function addKeyword(kwData) {
+        const scheme = schemes.find(s => s.id === currentSchemeId);
+        if (!scheme) return alert('请先选择或新建一个方案');
+        if (scheme.keywords.length >= 30) return alert('最多30个关键字');
+        syncKeywordsFromDOM();
+        const newKw = kwData || {
+            sheet: '',
+            keywordText: '',
+            valuePosition: 'column',
+            collectType: 'column',
+            offset: 1,
+            searchRange: 'all',
+            startRow: null,
+            endRow: null,
+            rowNumber: null,
+            excludeEmpty: false,
+            excludeValues: [],
+            collectColor: false,
+            addColorCol: false,
+            fontSize: 14,
+            columnWidth: 120
+        };
+        scheme.keywords.push(newKw);
+        renderKeywords(scheme);
+        log('添加关键字 #' + scheme.keywords.length, 'info');
+    }
+
+    function addKeywordRow(kw, idx) {
+        const container = document.getElementById('keywordsContainer');
+        const row = document.createElement('div');
+        row.className = 'keyword-row';
+        row.dataset.index = idx;
+        const posOptions = ['column', 'left', 'right'];
+        const posLabels = ['所在列', '左边', '右边'];
+        let posHtml = `<select class="kw-position" style="width:75px;">`;
+        posOptions.forEach((p, i) => {
+            posHtml += `<option value="${p}" ${kw.valuePosition===p?'selected':''}>${posLabels[i]}</option>`;
+        });
+        posHtml += `</select>`;
+        const typeOptions = ['column', 'cell'];
+        const typeLabels = ['列', '单元格'];
+        let typeHtml = `<select class="kw-collect-type" style="width:70px;">`;
+        typeOptions.forEach((t, i) => {
+            typeHtml += `<option value="${t}" ${kw.collectType===t?'selected':''}>${typeLabels[i]}</option>`;
+        });
+        typeHtml += `</select>`;
+        const showOffset = (kw.valuePosition === 'left' || kw.valuePosition === 'right');
+        const rangeOptions = ['all', 'rows', 'row'];
+        const rangeLabels = ['整页', '指定行', '单一行'];
+        let rangeHtml = `<select class="kw-search-range" style="width:85px;">`;
+        rangeOptions.forEach((r, i) => {
+            rangeHtml += `<option value="${r}" ${kw.searchRange===r?'selected':''}>${rangeLabels[i]}</option>`;
+        });
+        rangeHtml += `</select>`;
+        const showRangeInputs = (kw.searchRange === 'rows' || kw.searchRange === 'row');
+        const rangeInputsHtml = `
+            <span class="range-inputs" id="rangeInputs_${idx}" style="${showRangeInputs?'':'display:none;'}">
+                ${kw.searchRange === 'rows' ? `
+                    <span>起始</span><input class="kw-start-row" type="number" min="1" value="${kw.startRow||''}" placeholder="起始">
+                    <span>结束</span><input class="kw-end-row" type="number" min="1" value="${kw.endRow||''}" placeholder="结束">
+                ` : `
+                    <span>行号</span><input class="kw-row-number" type="number" min="1" value="${kw.rowNumber||''}" placeholder="行号">
+                `}
+            </span>
+        `;
+        row.innerHTML = `
+            <span class="badge">#${idx+1}</span>
+            <div class="field"><label>Sheet</label><input class="kw-sheet" type="text" value="${kw.sheet || ''}" placeholder="Sheet名" style="width:70px;"></div>
+            <div class="field"><label>关键字</label><input class="kw-text" type="text" value="${kw.keywordText || ''}" placeholder="文本" style="width:90px;"></div>
+            <div class="field"><label>值位置</label>${posHtml}</div>
+            <div class="field"><label>采集范围</label>${typeHtml}</div>
+            <div class="field" id="offsetContainer_${idx}" style="${showOffset?'':'display:none;'}">
+                <label>偏移</label><input class="kw-offset" type="number" min="1" value="${kw.offset || 1}" style="width:50px;">
+            </div>
+            <div class="field"><label>关键字搜索范围</label>${rangeHtml}</div>
+            ${rangeInputsHtml}
+            <div class="field field-small"><label>排除空</label><input class="kw-exclude-empty" type="checkbox" ${kw.excludeEmpty?'checked':''}></div>
+            <div class="field"><label>排除值</label><input class="kw-exclude-values" type="text" value="${(kw.excludeValues||[]).join(',')}" placeholder="如 invalid" style="width:90px;"></div>
+            <div class="field field-small"><label>采集颜色</label><input class="kw-collect-color" type="checkbox" ${kw.collectColor?'checked':''}></div>
+            <div class="field field-small"><label>新增颜色列</label><input class="kw-add-color" type="checkbox" ${kw.addColorCol?'checked':''}></div>
+            <div class="field"><label>字体(px)</label><input class="kw-font-size" type="number" min="8" max="48" value="${kw.fontSize || 14}" style="width:50px;"></div>
+            <div class="field"><label>列宽(px)</label><input class="kw-column-width" type="number" min="50" max="600" value="${kw.columnWidth || 120}" style="width:60px;"></div>
+            <button class="btn btn-danger btn-sm" onclick="removeKeyword(this)">✕</button>
+        `;
+        container.appendChild(row);
+
+        const posSelect = row.querySelector('.kw-position');
+        const offsetContainer = row.querySelector(`#offsetContainer_${idx}`);
+        posSelect.addEventListener('change', function() {
+            const val = this.value;
+            if (val === 'left' || val === 'right') {
+                offsetContainer.style.display = 'flex';
+                const typeSel = row.querySelector('.kw-collect-type');
+                if (typeSel) typeSel.value = 'cell';
+            } else {
+                offsetContainer.style.display = 'none';
+                const typeSel = row.querySelector('.kw-collect-type');
+                if (typeSel) typeSel.value = 'column';
+            }
+        });
+
+        const rangeSelect = row.querySelector('.kw-search-range');
+        const rangeInputs = row.querySelector(`#rangeInputs_${idx}`);
+        rangeSelect.addEventListener('change', function() {
+            const val = this.value;
+            if (val === 'rows' || val === 'row') {
+                rangeInputs.style.display = 'flex';
+                if (val === 'rows') {
+                    rangeInputs.innerHTML = `
+                        <span>起始</span><input class="kw-start-row" type="number" min="1" value="" placeholder="起始">
+                        <span>结束</span><input class="kw-end-row" type="number" min="1" value="" placeholder="结束">
+                    `;
+                } else {
+                    rangeInputs.innerHTML = `
+                        <span>行号</span><input class="kw-row-number" type="number" min="1" value="" placeholder="行号">
+                    `;
+                }
+            } else {
+                rangeInputs.style.display = 'none';
+            }
+        });
+    }
+
+    function removeKeyword(btn) {
+        const row = btn.closest('.keyword-row');
+        if (!row) return;
+        const idx = parseInt(row.dataset.index);
+        const scheme = schemes.find(s => s.id === currentSchemeId);
+        if (!scheme) return;
+        if (!confirm(`删除关键字 #${idx+1}？`)) return;
+        syncKeywordsFromDOM();
+        scheme.keywords.splice(idx, 1);
+        renderKeywords(scheme);
+        log('关键字 #'+(idx+1)+' 已删除', 'info');
+    }
+
+    function updateKeywordCount(scheme) {
+        document.getElementById('keywordCount').textContent = `${scheme.keywords.length} / 30`;
+    }
+
+    // ----- 方案导入导出 -----
+    function exportSchemes() {
+        if (schemes.length === 0) return alert('没有方案可导出');
+        const data = JSON.stringify(schemes, null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        saveAs(blob, 'excel_stats_schemes.json');
+        log('方案已导出', 'success');
+    }
+
+    function importSchemes(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const imported = JSON.parse(e.target.result);
+                if (!Array.isArray(imported)) throw new Error('格式错误');
+                imported.forEach(s => {
+                    const exist = schemes.findIndex(x => x.id === s.id);
+                    if (exist >= 0) schemes[exist] = s;
+                    else schemes.push(s);
+                });
+                saveSchemes();
+                if (schemes.length > 0) selectScheme(schemes[0].id);
+                alert('导入成功');
+                log('导入 ' + imported.length + ' 个方案', 'success');
+            } catch(err) {
+                alert('导入失败：' + err.message);
+                log('导入失败：' + err.message, 'error');
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+    }
+
+    // ----- 文件上传 -----
+    function handleFiles(filesOrEvent) {
+        let files;
+        if (filesOrEvent && filesOrEvent.target) {
+            files = filesOrEvent.target.files;
+        } else if (filesOrEvent && filesOrEvent.length !== undefined) {
+            files = filesOrEvent;
+        } else {
+            return;
+        }
+
+        for (let f of files) {
+            if (!f.name.endsWith('.xlsx') && !f.name.endsWith('.xls')) {
+                alert(`文件 ${f.name} 不是 .xlsx 格式，跳过`);
+                log(`文件 ${f.name} 格式不支持，跳过`, 'error');
+                continue;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = e.target.result;
+                let folderName = '';
+                if (f.webkitRelativePath) {
+                    const pathParts = f.webkitRelativePath.split('/');
+                    if (pathParts.length > 1) {
+                        folderName = pathParts[0];
+                    }
+                }
+                uploadedFiles.push({
+                    name: f.name,
+                    data: data,
+                    folder: folderName || ''
+                });
+                renderFileList();
+                log(`文件 ${f.name} 上传成功${folderName ? ' (文件夹: ' + folderName + ')' : ''}`, 'success');
+            };
+            reader.readAsArrayBuffer(f);
+        }
+        if (filesOrEvent && filesOrEvent.target) filesOrEvent.target.value = '';
+    }
+
+    function renderFileList() {
+        const container = document.getElementById('fileList');
+        container.innerHTML = '';
+        uploadedFiles.forEach((f, idx) => {
+            const span = document.createElement('span');
+            span.className = 'file-item';
+            const displayName = f.folder ? `${f.folder}/${f.name}` : f.name;
+            span.innerHTML = `${displayName} <span class="remove" onclick="removeFile(${idx})">✕</span>`;
+            container.appendChild(span);
+        });
+        document.getElementById('fileCount').textContent = `已上传 ${uploadedFiles.length} 个文件`;
+    }
+
+    function removeFile(idx) {
+        const name = uploadedFiles[idx].name;
+        uploadedFiles.splice(idx, 1);
+        renderFileList();
+        log(`文件 ${name} 已移除`, 'info');
+    }
+
+    function clearFiles() {
+        if (uploadedFiles.length === 0) return;
+        if (!confirm('清除所有文件？')) return;
+        uploadedFiles = [];
+        renderFileList();
+        document.getElementById('resultArea').style.display = 'none';
+        statisticsResults = null;
+        log('所有文件已清除', 'info');
+    }
+
+    // ----- 拖拽 -----
+    (function setupDragDrop() {
+        const uploadCard = document.getElementById('uploadCard');
+        uploadCard.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadCard.classList.add('dragover');
+        });
+        uploadCard.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadCard.classList.remove('dragover');
+        });
+        uploadCard.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadCard.classList.remove('dragover');
+            const items = e.dataTransfer.items;
+            if (items) {
+                let hasFolder = false;
+                for (let item of items) {
+                    if (item.webkitGetAsEntry && item.webkitGetAsEntry().isDirectory) {
+                        hasFolder = true;
+                        break;
+                    }
+                }
+                if (hasFolder) {
+                    const files = e.dataTransfer.files;
+                    if (files.length) {
+                        handleFiles(files);
+                    }
+                    return;
+                }
+            }
+            const files = e.dataTransfer.files;
+            if (files.length) {
+                handleFiles(files);
+            }
+        });
+    })();
+
+    // ============================================================
+    // 统计执行
+    // ============================================================
+    async function runStatistics() {
+        const scheme = schemes.find(s => s.id === currentSchemeId);
+        if (!scheme) { alert('请先选择或创建方案'); return; }
+        if (scheme.keywords.length === 0) { alert('方案中没有关键字'); return; }
+        if (uploadedFiles.length === 0) { alert('请先上传Excel文件'); return; }
+
+        log('开始统计...', 'info');
+
+        const formData = new FormData();
+        for (let f of uploadedFiles) {
+            const blob = new Blob([f.data], { type: 'application/octet-stream' });
+            formData.append('files', blob, f.name);
+        }
+        formData.append('scheme', JSON.stringify(scheme));
+
+        try {
+            const response = await fetch('http://127.0.0.1:5000/api/analyze', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                log('统计失败: ' + (data.error || '未知错误'), 'error');
+                alert('统计失败，请查看日志');
+                return;
+            }
+
+            const results = data.results || [];
+            const successResults = results.filter(r => r.success);
+            const errorResults = results.filter(r => !r.success);
+
+            if (successResults.length === 0) {
+                alert('所有文件统计均失败，请查看日志');
+                log('所有文件统计失败', 'error');
+                return;
+            }
+
+            statisticsResults = {
+                scheme: scheme,
+                results: successResults.map((r, idx) => {
+                    const fileInfo = uploadedFiles[idx] || {};
+                    const displayName = fileInfo.folder ? `${fileInfo.folder}/${r.filename}` : r.filename;
+                    return {
+                        name: displayName,
+                        originalName: r.filename,
+                        folder: fileInfo.folder || '',
+                        data: {
+                            cellData: r.data.cell_data || [],
+                            columnData: r.data.column_data || { rows: [], keywords: [] },
+                            hasCell: r.data.has_cell || false,
+                            hasColumn: r.data.has_column || false,
+                            keywordLabels: r.data.keyword_labels || []
+                        }
+                    };
+                })
+            };
+
+            displayResults(statisticsResults);
+            document.getElementById('resultArea').style.display = 'block';
+            document.getElementById('statusMsg').textContent = `统计完成，共 ${successResults.length} 个文件`;
+
+            if (errorResults.length > 0) {
+                log(`部分文件失败: ${errorResults.map(r => r.filename + ': ' + r.error).join('; ')}`, 'error');
+            }
+            log(`统计完成，共 ${successResults.length} 个文件成功`, 'success');
+
+        } catch (error) {
+            log('请求后端失败: ' + error.message, 'error');
+            alert('无法连接到后端服务，请确认 Python 后端已启动 (python app.py)');
+        }
+    }
+
+    // ============================================================
+    // 对齐处理（用于独立展示和合并展示）
+    // ============================================================
+    function alignColumnData(results, alignKeyIdx) {
+        if (alignKeyIdx === null || alignKeyIdx === undefined || alignKeyIdx === '') {
+            return results.map(r => ({
+                ...r,
+                alignedRows: r.data.columnData.rows || []
+            }));
+        }
+
+        const alignKeyIndex = parseInt(alignKeyIdx);
+        if (isNaN(alignKeyIndex) || alignKeyIndex < 0) {
+            return results.map(r => ({
+                ...r,
+                alignedRows: r.data.columnData.rows || []
+            }));
+        }
+
+        const allValues = new Set();
+        results.forEach(res => {
+            const rows = res.data.columnData.rows || [];
+            rows.forEach(row => {
+                if (row.length > alignKeyIndex) {
+                    const val = row[alignKeyIndex].value;
+                    if (val !== null && val !== undefined && val !== '') {
+                        allValues.add(String(val));
+                    }
+                }
+            });
+        });
+
+        const sortedValues = Array.from(allValues).sort((a, b) => {
+            const aNum = parseFloat(a);
+            const bNum = parseFloat(b);
+            if (!isNaN(aNum) && !isNaN(bNum)) {
+                return aNum - bNum;
+            }
+            return a.localeCompare(b);
+        });
+
+        return results.map(res => {
+            const rows = res.data.columnData.rows || [];
+            const keywordCount = res.data.columnData.keywords ? res.data.columnData.keywords.length : 0;
+
+            const valueMap = {};
+            rows.forEach(row => {
+                if (row.length > alignKeyIndex) {
+                    const val = row[alignKeyIndex].value;
+                    if (val !== null && val !== undefined && val !== '') {
+                        valueMap[String(val)] = row;
+                    }
+                }
+            });
+
+            const alignedRows = [];
+            sortedValues.forEach(val => {
+                if (valueMap[val]) {
+                    alignedRows.push(valueMap[val]);
+                } else {
+                    const emptyRow = [];
+                    for (let i = 0; i < keywordCount; i++) {
+                        emptyRow.push({ value: null, color_indexed: null, color_name: null, color_meaning: null });
+                    }
+                    alignedRows.push(emptyRow);
+                }
+            });
+
+            return {
+                ...res,
+                alignedRows: alignedRows,
+                alignValues: sortedValues
+            };
+        });
+    }
+
+    // ============================================================
+    // 显示结果
+    // ============================================================
+    function setIndependentLayout(layout) {
+        independentLayout = layout;
+        document.querySelectorAll('#tab1 .btn-outline[data-layout]').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.layout === layout);
+        });
+        if (statisticsResults) {
+            renderIndependentResults(statisticsResults);
+        }
+    }
+
+    function displayResults(stats) {
+        statisticsResults = stats;
+        renderIndependentResults(stats);
+        renderMergedResults(stats);
+        document.getElementById('resultArea').style.display = 'block';
+    }
+
+    // ----- 独立展示（使用对齐）-----
+    function renderIndependentResults(stats) {
+        const container = document.getElementById('independentResults');
+        container.innerHTML = '';
+        if (stats.results.length === 0) {
+            container.innerHTML = '<p>无数据</p>';
+            return;
+        }
+
+        const scheme = stats.scheme;
+        const alignKeyIdx = scheme.alignBaseKey;
+        const hasAlign = alignKeyIdx !== null && alignKeyIdx !== undefined && alignKeyIdx !== '';
+
+        let processedResults = stats.results;
+        if (hasAlign) {
+            const aligned = alignColumnData(stats.results, alignKeyIdx);
+            processedResults = aligned;
+        }
+
+        if (independentLayout === 'horizontal') {
+            const scrollDiv = document.createElement('div');
+            scrollDiv.className = 'horizontal-scroll';
+            processedResults.forEach((res, idx) => {
+                const card = document.createElement('div');
+                card.className = 'file-card';
+                const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+                const title = document.createElement('h4');
+                title.textContent = `📄 ${displayName}`;
+                card.appendChild(title);
+                const content = buildFileContent(res.data, res.alignedRows, hasAlign);
+                card.appendChild(content);
+                scrollDiv.appendChild(card);
+            });
+            container.appendChild(scrollDiv);
+        } else {
+            const tabsDiv = document.createElement('div');
+            tabsDiv.className = 'file-tabs';
+            const contentsDiv = document.createElement('div');
+            contentsDiv.className = 'file-tab-contents';
+
+            processedResults.forEach((res, idx) => {
+                const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+                const tabBtn = document.createElement('button');
+                tabBtn.className = 'tab-btn' + (idx === 0 ? ' active' : '');
+                tabBtn.textContent = displayName;
+                tabBtn.dataset.index = idx;
+                tabBtn.onclick = function() {
+                    document.querySelectorAll('.file-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    document.querySelectorAll('.file-tab-content').forEach(c => c.classList.remove('active'));
+                    document.getElementById('file-tab-' + idx).classList.add('active');
+                };
+                tabsDiv.appendChild(tabBtn);
+
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'file-tab-content' + (idx === 0 ? ' active' : '');
+                contentDiv.id = 'file-tab-' + idx;
+                const title = document.createElement('h4');
+                title.textContent = `📄 ${displayName}`;
+                contentDiv.appendChild(title);
+                const content = buildFileContent(res.data, res.alignedRows, hasAlign);
+                contentDiv.appendChild(content);
+                contentsDiv.appendChild(contentDiv);
+            });
+            container.appendChild(tabsDiv);
+            container.appendChild(contentsDiv);
+        }
+    }
+
+    function buildFileContent(data, alignedRows, hasAlign) {
+        const frag = document.createElement('div');
+        if (data.hasCell) {
+            const statCard = document.createElement('div');
+            statCard.className = 'stat-card';
+            const title = document.createElement('div');
+            title.className = 'stat-title';
+            title.textContent = '单元格采集项';
+            statCard.appendChild(title);
+            const tableWrap = document.createElement('div');
+            tableWrap.className = 'table-wrap';
+            const table = buildCellResultTable(data.cellData || []);
+            tableWrap.appendChild(table);
+            statCard.appendChild(tableWrap);
+            frag.appendChild(statCard);
+        }
+        if (data.hasColumn) {
+            const statCard = document.createElement('div');
+            statCard.className = 'stat-card';
+            const title = document.createElement('div');
+            title.className = 'stat-title';
+            title.textContent = '列采集项' + (hasAlign ? ' (已对齐)' : '');
+            statCard.appendChild(title);
+            const tableWrap = document.createElement('div');
+            tableWrap.className = 'table-wrap';
+            const columnData = data.columnData || { rows: [], keywords: [] };
+            const rows = hasAlign ? alignedRows : (columnData.rows || []);
+            const table = buildColumnResultTableWithStyle(columnData, rows);
+            tableWrap.appendChild(table);
+            statCard.appendChild(tableWrap);
+            frag.appendChild(statCard);
+        }
+        return frag;
+    }
+
+    // ============================================================
+    // 合并展示（使用对齐）
+    // ============================================================
+    function renderMergedResults(stats) {
+        const container = document.getElementById('mergedResults');
+        container.innerHTML = '';
+        const fileResults = stats.results;
+        if (fileResults.length < 2) {
+            container.innerHTML = '<p>至少需要两个文件才能进行合并对比</p>';
+            return;
+        }
+
+        const scheme = stats.scheme;
+        const alignKeyIdx = scheme.alignBaseKey;
+        const hasAlign = alignKeyIdx !== null && alignKeyIdx !== undefined && alignKeyIdx !== '';
+
+        // 图例
+        const legendDiv = document.createElement('div');
+        legendDiv.className = 'flex-wrap';
+        legendDiv.style.marginBottom = '10px';
+        const legendColors = ['#e6f3e6', '#fff9e6', '#f0ede6', '#f0e6f0', '#e6f0f0', '#f0e6e6'];
+        fileResults.forEach((res, idx) => {
+            const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+            const item = document.createElement('span');
+            item.className = 'legend-item';
+            item.innerHTML = `<span class="legend-color" style="background-color:${legendColors[idx % legendColors.length]};"></span> ${displayName}`;
+            legendDiv.appendChild(item);
+        });
+        container.appendChild(legendDiv);
+
+        // 单元格采集项对比
+        const hasAnyCell = fileResults.some(r => r.data && r.data.hasCell);
+        if (hasAnyCell) {
+            const statCard = document.createElement('div');
+            statCard.className = 'stat-card';
+            const title = document.createElement('div');
+            title.className = 'stat-title';
+            title.textContent = '单元格采集项对比';
+            statCard.appendChild(title);
+            const tableWrap = document.createElement('div');
+            tableWrap.className = 'table-wrap';
+            const table = buildMergedCellTableMulti(fileResults);
+            tableWrap.appendChild(table);
+            statCard.appendChild(tableWrap);
+            container.appendChild(statCard);
+        }
+
+        // 列采集项对比（使用对齐）
+        const hasAnyColumn = fileResults.some(r => r.data && r.data.hasColumn);
+        if (hasAnyColumn) {
+            const statCard = document.createElement('div');
+            statCard.className = 'stat-card';
+            const title = document.createElement('div');
+            title.className = 'stat-title';
+            title.textContent = '列采集项对比' + (hasAlign ? ' (已对齐)' : '');
+            statCard.appendChild(title);
+            const tableWrap = document.createElement('div');
+            tableWrap.className = 'table-wrap';
+            const table = buildMergedColumnTableMulti(fileResults, hasAlign, alignKeyIdx);
+            tableWrap.appendChild(table);
+            statCard.appendChild(tableWrap);
+            container.appendChild(statCard);
+        }
+    }
+
+    // ----- 表格构建函数 -----
+    function buildCellResultTable(cellData) {
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const trHead = document.createElement('tr');
+        trHead.innerHTML = '<th>关键字</th><th>值</th>';
+        let hasColor = cellData.some(d => d.color_indexed !== null && d.color_indexed !== undefined);
+        if (hasColor) trHead.innerHTML += '<th>结果</th>';
+        thead.appendChild(trHead);
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        cellData.forEach(d => {
+            const tr = document.createElement('tr');
+            let label = d.keyword.keywordText || '';
+            if (d.keyword.valuePosition === 'left') label += ' ←' + d.keyword.offset;
+            else if (d.keyword.valuePosition === 'right') label += ' →' + d.keyword.offset;
+            const tdLabel = document.createElement('td');
+            tdLabel.textContent = label;
+            const fontSize = d.keyword.fontSize || 14;
+            tdLabel.style.fontSize = fontSize + 'px';
+            tr.appendChild(tdLabel);
+            const tdVal = document.createElement('td');
+            tdVal.textContent = d.value !== null && d.value !== undefined ? d.value : '';
+            tdVal.style.fontSize = fontSize + 'px';
+            if (d.value === null || d.value === undefined || d.value === '') tdVal.className = 'empty-value';
+            if (d.color_name && d.color_name !== 'blank') {
+                tdVal.style.backgroundColor = getColorCss(d.color_name);
+            }
+            tr.appendChild(tdVal);
+            if (hasColor) {
+                const tdColor = document.createElement('td');
+                const meaning = d.color_meaning || 'blank';
+                tdColor.textContent = meaning;
+                tdColor.style.fontSize = fontSize + 'px';
+                const colorName = d.color_name || 'blank';
+                const colorClass = 'color-' + (colorName === 'blank' ? 'blank' : colorName.toLowerCase());
+                tdColor.className = colorClass;
+                tr.appendChild(tdColor);
+            }
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        return table;
+    }
+
+    function buildColumnResultTableWithStyle(columnData, rows) {
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const trHead = document.createElement('tr');
+
+        const defaultFontSize = 14;
+        const defaultColumnWidth = 120;
+        const kwList = columnData.keywords || [];
+
+        kwList.forEach((kw, idx) => {
+            const fontSize = kw.fontSize || defaultFontSize;
+            const columnWidth = kw.columnWidth || defaultColumnWidth;
+            let label = kw.keywordText || '';
+            if (kw.valuePosition === 'left') label += ' ←' + kw.offset;
+            else if (kw.valuePosition === 'right') label += ' →' + kw.offset;
+            const th = document.createElement('th');
+            th.textContent = label;
+            th.style.fontSize = fontSize + 'px';
+            th.style.minWidth = columnWidth + 'px';
+            trHead.appendChild(th);
+            if (kw.addColorCol) {
+                const thColor = document.createElement('th');
+                thColor.textContent = '结果';
+                thColor.style.fontSize = fontSize + 'px';
+                thColor.style.minWidth = (columnWidth * 0.6) + 'px';
+                trHead.appendChild(thColor);
+            }
+        });
+        thead.appendChild(trHead);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        const rowsData = rows || [];
+        rowsData.forEach(row => {
+            const tr = document.createElement('tr');
+            row.forEach((cell, idx) => {
+                const kw = kwList[idx] || {};
+                const fontSize = kw.fontSize || defaultFontSize;
+                const columnWidth = kw.columnWidth || defaultColumnWidth;
+
+                const td = document.createElement('td');
+                td.textContent = cell.value !== null && cell.value !== undefined ? cell.value : '';
+                td.style.fontSize = fontSize + 'px';
+                td.style.minWidth = columnWidth + 'px';
+                if (cell.value === null || cell.value === undefined || cell.value === '') td.className = 'empty-value';
+                if (kw.collectColor && cell.color_name && cell.color_name !== 'blank') {
+                    td.style.backgroundColor = getColorCss(cell.color_name);
+                }
+                tr.appendChild(td);
+
+                if (kw.addColorCol) {
+                    const tdColor = document.createElement('td');
+                    const meaning = cell.color_meaning || 'blank';
+                    tdColor.textContent = meaning;
+                    tdColor.style.fontSize = fontSize + 'px';
+                    tdColor.style.minWidth = (columnWidth * 0.6) + 'px';
+                    const colorName = cell.color_name || 'blank';
+                    const colorClass = 'color-' + (colorName === 'blank' ? 'blank' : colorName.toLowerCase());
+                    tdColor.className = colorClass;
+                    tr.appendChild(tdColor);
+                }
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        return table;
+    }
+
+    // ----- 合并单元格表格 -----
+    function buildMergedCellTableMulti(fileResults) {
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const trHead = document.createElement('tr');
+        let hasColor = false;
+        const allCellData = fileResults.map(r => r.data.cellData || []);
+        allCellData.forEach(arr => {
+            if (arr.some(d => d.color_indexed !== null)) hasColor = true;
+        });
+        trHead.innerHTML = '<th>来源文件</th><th>关键字</th><th>值</th>';
+        if (hasColor) trHead.innerHTML += '<th>结果</th>';
+        thead.appendChild(trHead);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        const bgColors = ['#e6f3e6', '#fff9e6', '#f0ede6', '#f0e6f0', '#e6f0f0', '#f0e6e6'];
+        fileResults.forEach((res, fi) => {
+            const cellData = res.data.cellData || [];
+            if (cellData.length === 0) return;
+            const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+            cellData.forEach(d => {
+                const tr = document.createElement('tr');
+                tr.style.backgroundColor = bgColors[fi % bgColors.length];
+                const fontSize = d.keyword.fontSize || 14;
+                const tdFile = document.createElement('td');
+                tdFile.textContent = displayName;
+                tdFile.style.fontSize = fontSize + 'px';
+                tr.appendChild(tdFile);
+                let label = d.keyword.keywordText || '';
+                if (d.keyword.valuePosition === 'left') label += ' ←' + d.keyword.offset;
+                else if (d.keyword.valuePosition === 'right') label += ' →' + d.keyword.offset;
+                const tdLabel = document.createElement('td');
+                tdLabel.textContent = label;
+                tdLabel.style.fontSize = fontSize + 'px';
+                tr.appendChild(tdLabel);
+                const tdVal = document.createElement('td');
+                tdVal.textContent = d.value !== null && d.value !== undefined ? d.value : '';
+                tdVal.style.fontSize = fontSize + 'px';
+                if (d.value === null || d.value === undefined || d.value === '') tdVal.className = 'empty-value';
+                if (d.color_name && d.color_name !== 'blank') {
+                    tdVal.style.backgroundColor = getColorCss(d.color_name);
+                }
+                tr.appendChild(tdVal);
+                if (hasColor) {
+                    const tdColor = document.createElement('td');
+                    const meaning = d.color_meaning || 'blank';
+                    tdColor.textContent = meaning;
+                    tdColor.style.fontSize = fontSize + 'px';
+                    const colorName = d.color_name || 'blank';
+                    const colorClass = 'color-' + (colorName === 'blank' ? 'blank' : colorName.toLowerCase());
+                    tdColor.className = colorClass;
+                    tr.appendChild(tdColor);
+                }
+                tbody.appendChild(tr);
+            });
+        });
+        table.appendChild(tbody);
+        return table;
+    }
+
+    // ----- 无对齐模式的合并列表格 -----
+    function buildMergedColumnTableNoAlign(fileResults, tbody, firstKw, defaultFontSize, defaultColumnWidth) {
+        const bgColors = ['#e6f3e6', '#fff9e6', '#f0ede6', '#f0e6f0', '#e6f0f0', '#f0e6e6'];
+        let maxRows = 0;
+        fileResults.forEach(res => {
+            const rows = (res.data.columnData || { rows: [] }).rows || [];
+            if (rows && rows.length > maxRows) maxRows = rows.length;
+        });
+
+        for (let rowIdx = 0; rowIdx < maxRows; rowIdx++) {
+            fileResults.forEach((res, fi) => {
+                const columnData = res.data.columnData || { rows: [], keywords: [] };
+                const rows = columnData.rows || [];
+                const kw = columnData.keywords || [];
+                
+                if (rowIdx >= rows.length) return;
+
+                const tr = document.createElement('tr');
+                tr.style.backgroundColor = bgColors[fi % bgColors.length];
+
+                const tdFile = document.createElement('td');
+                const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+                tdFile.textContent = displayName;
+                tdFile.style.fontWeight = '500';
+                tdFile.style.minWidth = '120px';
+                tr.appendChild(tdFile);
+
+                const row = rows[rowIdx] || [];
+                row.forEach((cell, idx) => {
+                    const k = kw[idx] || {};
+                    const fontSize = k.fontSize || defaultFontSize;
+                    const columnWidth = k.columnWidth || defaultColumnWidth;
+                    const td = document.createElement('td');
+                    td.textContent = cell && cell.value !== null && cell.value !== undefined ? cell.value : '';
+                    td.style.fontSize = fontSize + 'px';
+                    td.style.minWidth = columnWidth + 'px';
+                    if (!cell || cell.value === null || cell.value === undefined || cell.value === '') td.className = 'empty-value';
+                    if (k.collectColor && cell && cell.color_name && cell.color_name !== 'blank') {
+                        td.style.backgroundColor = getColorCss(cell.color_name);
+                    }
+                    tr.appendChild(td);
+
+                    if (k.addColorCol) {
+                        const tdColor = document.createElement('td');
+                        const meaning = (cell && cell.color_meaning) || 'blank';
+                        tdColor.textContent = meaning;
+                        tdColor.style.fontSize = fontSize + 'px';
+                        tdColor.style.minWidth = (columnWidth * 0.6) + 'px';
+                        const colorName = (cell && cell.color_name) || 'blank';
+                        const colorClass = 'color-' + (colorName === 'blank' ? 'blank' : colorName.toLowerCase());
+                        tdColor.className = colorClass;
+                        tr.appendChild(tdColor);
+                    }
+                });
+                tbody.appendChild(tr);
+            });
+        }
+    }
+
+    // ----- 合并列表格（支持对齐）-----
+    function buildMergedColumnTableMulti(fileResults, hasAlign, alignKeyIdx) {
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const trHead = document.createElement('tr');
+
+        const defaultFontSize = 14;
+        const defaultColumnWidth = 120;
+
+        // 表头：文件名作为第一列
+        trHead.innerHTML = `<th>文件名</th>`;
+
+        // 获取第一个文件的关键字列表作为表头（假设所有文件关键字一致）
+        const firstKw = fileResults.length > 0 ? (fileResults[0].data.columnData.keywords || []) : [];
+        firstKw.forEach((kw) => {
+            const fontSize = kw.fontSize || defaultFontSize;
+            const columnWidth = kw.columnWidth || defaultColumnWidth;
+            let label = kw.keywordText || '';
+            if (kw.valuePosition === 'left') label += ' ←' + kw.offset;
+            else if (kw.valuePosition === 'right') label += ' →' + kw.offset;
+            const th = document.createElement('th');
+            th.textContent = label;
+            th.style.fontSize = fontSize + 'px';
+            th.style.minWidth = columnWidth + 'px';
+            trHead.appendChild(th);
+            if (kw.addColorCol) {
+                const thColor = document.createElement('th');
+                thColor.textContent = '结果';
+                thColor.style.fontSize = fontSize + 'px';
+                thColor.style.minWidth = (columnWidth * 0.6) + 'px';
+                trHead.appendChild(thColor);
+            }
+        });
+        thead.appendChild(trHead);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+
+        if (hasAlign && alignKeyIdx !== null && alignKeyIdx !== undefined && alignKeyIdx !== '') {
+            // ===== 使用对齐基准排序 =====
+            const alignKeyIndex = parseInt(alignKeyIdx);
+            if (!isNaN(alignKeyIndex) && alignKeyIndex >= 0) {
+                // 收集所有文件的数据行，并记录文件名
+                const allRows = [];
+                fileResults.forEach((res) => {
+                    const rows = res.data.columnData.rows || [];
+                    const filename = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+                    rows.forEach(row => {
+                        const alignValue = row.length > alignKeyIndex ? row[alignKeyIndex].value : null;
+                        if (alignValue !== null && alignValue !== undefined && alignValue !== '') {
+                            allRows.push({
+                                filename: filename,
+                                row: row,
+                                alignValue: String(alignValue),
+                                fileIndex: fileResults.indexOf(res)
+                            });
+                        }
+                    });
+                });
+
+                // 先按 alignValue 排序，再按文件顺序排序
+                allRows.sort((a, b) => {
+                    const aNum = parseFloat(a.alignValue);
+                    const bNum = parseFloat(b.alignValue);
+                    if (!isNaN(aNum) && !isNaN(bNum)) {
+                        if (aNum !== bNum) return aNum - bNum;
+                    } else {
+                        if (a.alignValue !== b.alignValue) return a.alignValue.localeCompare(b.alignValue);
+                    }
+                    return a.fileIndex - b.fileIndex;
+                });
+
+                let currentGroup = null;
+                let groupIndex = 0;
+                const groupColors = ['#f0f8ff', '#f5f5f5'];
+
+                allRows.forEach((item, index) => {
+                    const tr = document.createElement('tr');
+
+                    // 检测是否为新组（对齐值变化）
+                    if (item.alignValue !== currentGroup) {
+                        currentGroup = item.alignValue;
+                        groupIndex = (groupIndex + 1) % groupColors.length;
+                    }
+
+                    // 设置背景色（使用分组颜色，不覆盖采集的颜色）
+                    const hasCellColor = item.row.some(cell => cell.color_name && cell.color_name !== 'blank');
+                    if (!hasCellColor) {
+                        tr.style.backgroundColor = groupColors[groupIndex];
+                    }
+
+                    // 文件名列
+                    const tdFile = document.createElement('td');
+                    tdFile.textContent = item.filename;
+                    tdFile.style.fontWeight = '500';
+                    tdFile.style.minWidth = '120px';
+                    tr.appendChild(tdFile);
+
+                    // 数据列
+                    item.row.forEach((cell, idx) => {
+                        const kw = firstKw[idx] || {};
+                        const fontSize = kw.fontSize || defaultFontSize;
+                        const columnWidth = kw.columnWidth || defaultColumnWidth;
+                        
+                        const td = document.createElement('td');
+                        td.textContent = cell.value !== null && cell.value !== undefined ? cell.value : '';
+                        td.style.fontSize = fontSize + 'px';
+                        td.style.minWidth = columnWidth + 'px';
+                        if (cell.value === null || cell.value === undefined || cell.value === '') td.className = 'empty-value';
+                        if (kw.collectColor && cell.color_name && cell.color_name !== 'blank') {
+                            td.style.backgroundColor = getColorCss(cell.color_name);
+                        }
+                        tr.appendChild(td);
+
+                        if (kw.addColorCol) {
+                            const tdColor = document.createElement('td');
+                            const meaning = cell.color_meaning || 'blank';
+                            tdColor.textContent = meaning;
+                            tdColor.style.fontSize = fontSize + 'px';
+                            tdColor.style.minWidth = (columnWidth * 0.6) + 'px';
+                            const colorName = cell.color_name || 'blank';
+                            const colorClass = 'color-' + (colorName === 'blank' ? 'blank' : colorName.toLowerCase());
+                            tdColor.className = colorClass;
+                            tr.appendChild(tdColor);
+                        }
+                    });
+
+                    tbody.appendChild(tr);
+
+                    // 在每组最后一行添加粗边框分隔
+                    const nextItem = allRows[index + 1];
+                    if (!nextItem || nextItem.alignValue !== currentGroup) {
+                        tr.style.borderBottom = '3px solid #475569';
+                        tr.style.paddingBottom = '4px';
+                    }
+                });
+            } else {
+                // 无效的对齐索引，回退到无对齐模式
+                buildMergedColumnTableNoAlign(fileResults, tbody, firstKw, defaultFontSize, defaultColumnWidth);
+            }
+        } else {
+            // 无对齐模式
+            buildMergedColumnTableNoAlign(fileResults, tbody, firstKw, defaultFontSize, defaultColumnWidth);
+        }
+
+        table.appendChild(tbody);
+        return table;
+    }
+
+    // ----- Tab切换 -----
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+    }
+
+    // ============================================================
+    // 导出独立统计（修复工作表名称重复问题）
+    // ============================================================
+    async function exportIndependentExcel() {
+        if (!statisticsResults) {
+            alert('请先执行统计');
+            return;
+        }
+
+        log('开始导出独立统计...', 'info');
+        const wb = new ExcelJS.Workbook();
+
+        for (let idx = 0; idx < statisticsResults.results.length; idx++) {
+            const res = statisticsResults.results[idx];
+            const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+
+            // 修复：添加序号确保工作表名称唯一
+            let sheetName = displayName.substring(0, 28) + '_' + (idx + 1);
+            if (sheetName.length > 31) {
+                sheetName = sheetName.substring(0, 31);
+            }
+
+            const ws = wb.addWorksheet(sheetName);
+            let rowIdx = 1;
+
+            const cellData = res.data.cellData || [];
+            const columnData = res.data.columnData || { rows: [], keywords: [] };
+
+            if (cellData.length > 0) {
+                ws.addRow(['单元格采集项']);
+                const headers = ['关键字', '值'];
+                const hasColor = cellData.some(d => d.color_indexed !== null && d.color_indexed !== undefined);
+                if (hasColor) headers.push('结果');
+                const headerRow = ws.addRow(headers);
+                headerRow.font = { bold: true };
+                cellData.forEach(d => {
+                    const row = [];
+                    let label = d.keyword.keywordText || '';
+                    if (d.keyword.valuePosition === 'left') label += ' ←' + d.keyword.offset;
+                    else if (d.keyword.valuePosition === 'right') label += ' →' + d.keyword.offset;
+                    row.push(label);
+                    row.push(d.value !== null && d.value !== undefined ? d.value : '');
+                    if (hasColor) {
+                        const meaning = d.color_meaning || 'blank';
+                        row.push(meaning);
+                    }
+                    const rowObj = ws.addRow(row);
+                    rowObj.height = 20;
+                    if (d.color_name && d.color_name !== 'blank') {
+                        const cell = rowObj.getCell(2);
+                        const argb = getColorArgb(d.color_name);
+                        if (argb) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } };
+                    }
+                });
+                rowIdx = ws.rowCount + 2;
+            }
+
+            if ((columnData.rows || []).length > 0) {
+                if (rowIdx > 1) ws.addRow([]);
+                ws.addRow(['列采集项']);
+                const headers = [];
+                const colorColIndices = [];
+                const colWidths = [];
+                (columnData.keywords || []).forEach((kw, idx) => {
+                    let label = kw.keywordText || '';
+                    if (kw.valuePosition === 'left') label += ' ←' + kw.offset;
+                    else if (kw.valuePosition === 'right') label += ' →' + kw.offset;
+                    headers.push(label);
+                    colWidths.push(kw.columnWidth || 120);
+                    if (kw.addColorCol) {
+                        headers.push('结果');
+                        colorColIndices.push(idx * 2 + 1);
+                        colWidths.push((kw.columnWidth || 120) * 0.6);
+                    }
+                });
+                const headerRow = ws.addRow(headers);
+                headerRow.font = { bold: true };
+                colWidths.forEach((w, idx) => {
+                    ws.getColumn(idx + 1).width = w / 7;
+                });
+
+                const rowsToExport = res.alignedRows || columnData.rows || [];
+                rowsToExport.forEach(row => {
+                    const values = [];
+                    row.forEach((cell, idx) => {
+                        values.push(cell.value !== null && cell.value !== undefined ? cell.value : '');
+                        if ((columnData.keywords || [])[idx] && (columnData.keywords || [])[idx].addColorCol) {
+                            const meaning = cell.color_meaning || 'blank';
+                            values.push(meaning);
+                        }
+                    });
+                    const rowObj = ws.addRow(values);
+                    rowObj.height = 20;
+                    row.forEach((cell, idx) => {
+                        const kw = (columnData.keywords || [])[idx];
+                        if (kw && kw.collectColor && cell.color_name && cell.color_name !== 'blank') {
+                            const cellExcel = rowObj.getCell(idx + 1);
+                            const argb = getColorArgb(cell.color_name);
+                            if (argb) cellExcel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } };
+                        }
+                    });
+                    colorColIndices.forEach(colIndex => {
+                        const cell = rowObj.getCell(colIndex + 1);
+                        const colorName = values[colIndex];
+                        const argb = getColorArgb(colorName);
+                        if (argb) {
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } };
+                        }
+                    });
+                });
+            }
+            ws.columns.forEach(col => col.width = Math.max(col.width || 15, 15));
+        }
+
+        const buf = await wb.xlsx.writeBuffer();
+        saveAs(new Blob([buf], { type: 'application/octet-stream' }), '独立统计结果.xlsx');
+        log('独立统计 Excel 导出成功', 'success');
+    }
+
+    // ============================================================
+    // 导出合并统计
+    // ============================================================
+    async function exportMergedExcel() {
+        if (!statisticsResults) return alert('请先执行统计');
+        if (statisticsResults.results.length < 2) return alert('需要至少两个文件才能导出合并结果');
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('合并统计');
+
+        const fileResults = statisticsResults.results;
+        const validFiles = fileResults.filter(r => r.data && r.data.hasColumn);
+        if (validFiles.length < 2) {
+            alert('至少需要两个有列数据的文件才能导出合并结果');
+            return;
+        }
+
+        ws.addRow(['列采集项合并']);
+
+        const firstKw = validFiles[0].data.columnData.keywords || [];
+        const headers = ['文件名'];
+        const colorColIndices = [];
+        const colWidths = [120];
+
+        firstKw.forEach((kw, idx) => {
+            let label = kw.keywordText || '';
+            if (kw.valuePosition === 'left') label += ' ←' + kw.offset;
+            else if (kw.valuePosition === 'right') label += ' →' + kw.offset;
+            headers.push(label);
+            colWidths.push(kw.columnWidth || 120);
+            if (kw.addColorCol) {
+                headers.push('结果');
+                colorColIndices.push(idx * 2 + 1);
+                colWidths.push((kw.columnWidth || 120) * 0.6);
+            }
+        });
+
+        const headerRow = ws.addRow(headers);
+        headerRow.font = { bold: true };
+        colWidths.forEach((w, idx) => {
+            ws.getColumn(idx + 1).width = w / 7;
+        });
+
+        const scheme = statisticsResults.scheme;
+        const alignKeyIdx = scheme.alignBaseKey;
+        const hasAlign = alignKeyIdx !== null && alignKeyIdx !== undefined && alignKeyIdx !== '';
+
+        if (hasAlign) {
+            const alignKeyIndex = parseInt(alignKeyIdx);
+            if (!isNaN(alignKeyIndex) && alignKeyIndex >= 0) {
+                // 使用对齐基准排序导出
+                const allRows = [];
+                validFiles.forEach((res) => {
+                    const rows = res.data.columnData.rows || [];
+                    const filename = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+                    rows.forEach(row => {
+                        const alignValue = row.length > alignKeyIndex ? row[alignKeyIndex].value : null;
+                        if (alignValue !== null && alignValue !== undefined && alignValue !== '') {
+                            allRows.push({
+                                filename: filename,
+                                row: row,
+                                alignValue: String(alignValue),
+                                fileIndex: validFiles.indexOf(res)
+                            });
+                        }
+                    });
+                });
+
+                allRows.sort((a, b) => {
+                    const aNum = parseFloat(a.alignValue);
+                    const bNum = parseFloat(b.alignValue);
+                    if (!isNaN(aNum) && !isNaN(bNum)) {
+                        if (aNum !== bNum) return aNum - bNum;
+                    } else {
+                        if (a.alignValue !== b.alignValue) return a.alignValue.localeCompare(b.alignValue);
+                    }
+                    return a.fileIndex - b.fileIndex;
+                });
+
+                let currentGroup = null;
+                let groupIndex = 0;
+                const bgColors = ['e6f3e6', 'fff9e6', 'f0ede6', 'f0e6f0', 'e6f0f0', 'f0e6e6'];
+
+                allRows.forEach((item, index) => {
+                    if (item.alignValue !== currentGroup) {
+                        currentGroup = item.alignValue;
+                        groupIndex = (groupIndex + 1) % bgColors.length;
+                    }
+                    const values = [item.filename];
+                    item.row.forEach((cell, idx) => {
+                        values.push(cell.value !== null && cell.value !== undefined ? cell.value : '');
+                        if (firstKw[idx] && firstKw[idx].addColorCol) {
+                            const meaning = cell.color_meaning || 'blank';
+                            values.push(meaning);
+                        }
+                    });
+                    const rowObj = ws.addRow(values);
+                    rowObj.height = 20;
+                    // 行背景色（不覆盖采集颜色）
+                    const hasCellColor = item.row.some(cell => cell.color_name && cell.color_name !== 'blank');
+                    if (!hasCellColor) {
+                        rowObj.eachCell((cell) => {
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + bgColors[groupIndex % bgColors.length] } };
+                        });
+                    }
+                    // 值列背景色（采集颜色）
+                    item.row.forEach((cell, idx) => {
+                        const kw = firstKw[idx];
+                        if (kw && kw.collectColor && cell.color_name && cell.color_name !== 'blank') {
+                            const cellExcel = rowObj.getCell(idx + 2);
+                            const argb = getColorArgb(cell.color_name);
+                            if (argb) cellExcel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } };
+                        }
+                    });
+                    // 颜色列背景
+                    colorColIndices.forEach(colIndex => {
+                        const cell = rowObj.getCell(colIndex + 1);
+                        const colorName = values[colIndex];
+                        const argb = getColorArgb(colorName);
+                        if (argb) {
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } };
+                        }
+                    });
+                    // 组间粗边框
+                    const nextItem = allRows[index + 1];
+                    if (!nextItem || nextItem.alignValue !== currentGroup) {
+                        rowObj.eachCell((cell) => {
+                            cell.border = {
+                                bottom: { style: 'thick', color: { argb: 'FF475569' } }
+                            };
+                        });
+                    }
+                });
+            } else {
+                // 无效对齐索引，使用无对齐模式
+                exportMergedNoAlign(ws, validFiles, firstKw, colorColIndices);
+            }
+        } else {
+            // 无对齐模式
+            exportMergedNoAlign(ws, validFiles, firstKw, colorColIndices);
+        }
+
+        ws.columns.forEach(col => col.width = Math.max(col.width || 15, 15));
+        const buf = await wb.xlsx.writeBuffer();
+        saveAs(new Blob([buf], { type: 'application/octet-stream' }), '合并统计结果.xlsx');
+        log('合并统计 Excel 导出成功', 'success');
+    }
+
+    // 无对齐模式导出
+    function exportMergedNoAlign(ws, validFiles, firstKw, colorColIndices) {
+        let maxRows = 0;
+        validFiles.forEach(res => {
+            const rows = (res.data.columnData || { rows: [] }).rows || [];
+            if (rows && rows.length > maxRows) maxRows = rows.length;
+        });
+
+        const bgColors = ['e6f3e6', 'fff9e6', 'f0ede6', 'f0e6f0', 'e6f0f0', 'f0e6e6'];
+
+        for (let rowIdx = 0; rowIdx < maxRows; rowIdx++) {
+            validFiles.forEach((res, fi) => {
+                const columnData = res.data.columnData || { rows: [], keywords: [] };
+                const rows = columnData.rows || [];
+                const row = (rows && rows[rowIdx]) ? rows[rowIdx] : [];
+                if (row.length === 0) return;
+
+                const filename = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+                const values = [filename];
+                row.forEach((cell, idx) => {
+                    values.push(cell.value !== null && cell.value !== undefined ? cell.value : '');
+                    if (firstKw[idx] && firstKw[idx].addColorCol) {
+                        const meaning = cell.color_meaning || 'blank';
+                        values.push(meaning);
+                    }
+                });
+                const rowObj = ws.addRow(values);
+                rowObj.height = 20;
+                // 行背景色
+                rowObj.eachCell((cell) => {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + bgColors[fi % bgColors.length] } };
+                });
+                // 值列背景色（采集颜色）
+                row.forEach((cell, idx) => {
+                    const kw = firstKw[idx];
+                    if (kw && kw.collectColor && cell.color_name && cell.color_name !== 'blank') {
+                        const cellExcel = rowObj.getCell(idx + 2);
+                        const argb = getColorArgb(cell.color_name);
+                        if (argb) cellExcel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } };
+                    }
+                });
+                // 颜色列背景
+                colorColIndices.forEach(colIndex => {
+                    const cell = rowObj.getCell(colIndex + 1);
+                    const colorName = values[colIndex];
+                    const argb = getColorArgb(colorName);
+                    if (argb) {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } };
+                    }
+                });
+            });
+        }
+    }
+
+    // ============================================================
+    // 后端健康监测
+    // ============================================================
+    let backendAlive = true;
+
+    async function checkBackendHealth() {
+        try {
+            const response = await fetch('http://127.0.0.1:5000/api/health', {
+                method: 'GET',
+                signal: AbortSignal.timeout(3000)
+            });
+            if (!response.ok) {
+                throw new Error('后端响应异常');
+            }
+            if (!backendAlive) {
+                backendAlive = true;
+                console.log('🟢 后端已恢复连接');
+            }
+        } catch (error) {
+            if (backendAlive) {
+                backendAlive = false;
+                console.warn('🔴 后端服务已断开');
+                const statusMsg = document.getElementById('statusMsg');
+                if (statusMsg) {
+                    statusMsg.textContent = '⚠️ 后端服务已断开，请重启服务后刷新页面';
+                    statusMsg.style.color = '#ef4444';
+                }
+            }
+        }
+    }
+
+    setInterval(checkBackendHealth, 3000);
+
+    // ----- 初始化 -----
+    loadSchemes();
+    if (schemes.length > 0) {
+        selectScheme(schemes[0].id);
+    }
+    log('工具已加载，使用 Python 后端解析引擎', 'info');
+    log('请确保 Python 后端已启动: python app.py', 'info');
+</script>
+</body>
+</html>
