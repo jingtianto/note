@@ -96,8 +96,12 @@
             font-size: 14px;
             background: #fff;
             flex: 0 1 auto;
-            min-width: 80px;
+            min-width: 60px;
             height: 32px;
+        }
+        .input-group input[type="number"] {
+            width: 60px;
+            min-width: 50px;
         }
         .keyword-row {
             background: #f8fafc;
@@ -107,35 +111,39 @@
             margin-bottom: 6px;
             display: flex;
             flex-wrap: wrap;
-            gap: 6px 10px;
+            gap: 4px 8px;
             align-items: center;
         }
         .keyword-row .field {
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 3px;
             flex: 0 1 auto;
         }
         .keyword-row .field label {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 500;
-            min-width: 40px;
+            min-width: 30px;
             color: #334155;
         }
         .keyword-row .field input, .keyword-row .field select {
-            padding: 3px 6px;
+            padding: 2px 4px;
             border: 1px solid #d1d9e6;
-            border-radius: 4px;
-            height: 28px;
-            font-size: 13px;
+            border-radius: 3px;
+            height: 26px;
+            font-size: 12px;
             background: #fff;
         }
+        .keyword-row .field input[type="number"] {
+            width: 45px;
+        }
         .keyword-row .field input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
             margin: 0;
             border: 1px solid #d1d9e6;
         }
+        .keyword-row .field-small { flex: 0 0 auto; }
         .badge {
             background: #3b82f6;
             color: #fff;
@@ -336,6 +344,7 @@
         .log-area .log-info { color: #93c5fd; }
         .mt-10 { margin-top: 10px; }
         .flex-between { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+        .align-help { font-size: 12px; color: #64748b; margin-left: 4px; }
         @media (max-width: 768px) {
             .keyword-row { flex-direction: column; align-items: stretch; }
             .input-group { flex-direction: column; align-items: stretch; }
@@ -380,6 +389,14 @@
                 </select>
                 <span class="hint">仅对"列"模式生效</span>
             </div>
+            <!-- 对齐基准列 -->
+            <div class="input-group">
+                <label>对齐基准列</label>
+                <select id="alignBaseKey" style="flex:1;min-width:120px;border:1px solid #d1d9e6;">
+                    <option value="">无（不进行对齐）</option>
+                </select>
+                <span class="hint">选择后，多文件统计时按此列的值对齐行（仅对"列"模式生效）</span>
+            </div>
             <div class="flex-between" style="margin:10px 0 6px;">
                 <h4 style="font-size:16px;font-weight:600;">关键字定义（最多30个）</h4>
                 <div>
@@ -402,7 +419,7 @@
             <button class="btn btn-danger" onclick="clearFiles()">清除所有</button>
         </div>
         <div id="fileList" class="mt-10" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
-        <div style="margin-top:6px;font-size:13px;color:#64748b;">💡 也可拖拽文件到此区域上传</div>
+        <div style="margin-top:6px;font-size:13px;color:#64748b;">💡 也可拖拽文件夹到此区域上传（自动识别文件夹名）</div>
     </div>
 
     <!-- 执行统计 -->
@@ -454,12 +471,11 @@
     // ============================================================
     let schemes = [];
     let currentSchemeId = null;
-    let uploadedFiles = []; // { name, data: ArrayBuffer }
+    let uploadedFiles = [];
     let statisticsResults = null;
     let independentLayout = 'horizontal';
     let keywordsExpanded = false;
 
-    // 颜色映射（前端展示用）
     const COLOR_MAP = {
         10: { name: '红色', meaning: 'failed', css: '#FF0000' },
         35: { name: '浅蓝色', meaning: 'signal missing', css: '#99CCFF' },
@@ -506,9 +522,6 @@
         return COLOR_MEANING[colorName] || colorName;
     }
 
-    // ============================================================
-    // 日志
-    // ============================================================
     function log(message, type = 'info') {
         const area = document.getElementById('logArea');
         const entry = document.createElement('div');
@@ -585,6 +598,7 @@
             id: id,
             name: name,
             baseKey: '',
+            alignBaseKey: '',
             keywords: []
         };
         schemes.push(scheme);
@@ -605,6 +619,8 @@
         renderKeywords(scheme);
         updateKeywordCount(scheme);
         document.getElementById('schemeSelector').value = id;
+        updateAlignBaseSelect(scheme);
+        document.getElementById('alignBaseKey').value = scheme.alignBaseKey || '';
     }
 
     function syncKeywordsFromDOM() {
@@ -630,6 +646,8 @@
             const excludeValues = row.querySelector('.kw-exclude-values').value.split(',').map(s => s.trim()).filter(s => s);
             const collectColor = row.querySelector('.kw-collect-color').checked;
             const addColorCol = row.querySelector('.kw-add-color').checked;
+            const fontSize = parseInt(row.querySelector('.kw-font-size').value) || 14;
+            const columnWidth = parseInt(row.querySelector('.kw-column-width').value) || 120;
             if (sheet && text) {
                 keywords.push({
                     sheet: sheet,
@@ -644,7 +662,9 @@
                     excludeEmpty: excludeEmpty,
                     excludeValues: excludeValues,
                     collectColor: collectColor,
-                    addColorCol: addColorCol
+                    addColorCol: addColorCol,
+                    fontSize: fontSize,
+                    columnWidth: columnWidth
                 });
             }
         });
@@ -660,11 +680,14 @@
         if (!name) return alert('方案名称不能为空');
         scheme.name = name;
         scheme.baseKey = document.getElementById('baseKeySelect').value;
+        scheme.alignBaseKey = document.getElementById('alignBaseKey').value;
         if (scheme.keywords.length === 0) return alert('请至少添加一个有效关键字');
         if (scheme.keywords.length > 30) return alert('关键字数量不能超过30个');
         saveSchemes();
         updateBaseKeySelect(scheme);
+        updateAlignBaseSelect(scheme);
         document.getElementById('baseKeySelect').value = scheme.baseKey;
+        document.getElementById('alignBaseKey').value = scheme.alignBaseKey || '';
         document.getElementById('schemeName').value = scheme.name;
         log('方案 "' + scheme.name + '" 已保存', 'success');
         alert('方案已保存');
@@ -716,6 +739,22 @@
         });
     }
 
+    function updateAlignBaseSelect(scheme) {
+        const alignSel = document.getElementById('alignBaseKey');
+        alignSel.innerHTML = '<option value="">无（不进行对齐）</option>';
+        scheme.keywords.forEach((kw, idx) => {
+            if (kw.collectType === 'column') {
+                const opt = document.createElement('option');
+                opt.value = idx;
+                let label = kw.keywordText || ('关键字'+(idx+1));
+                if (kw.valuePosition === 'left') label += ' ←' + kw.offset;
+                else if (kw.valuePosition === 'right') label += ' →' + kw.offset;
+                opt.textContent = label;
+                alignSel.appendChild(opt);
+            }
+        });
+    }
+
     function renderKeywords(scheme) {
         const container = document.getElementById('keywordsContainer');
         container.innerHTML = '';
@@ -724,7 +763,9 @@
         });
         updateKeywordCount(scheme);
         updateBaseKeySelect(scheme);
+        updateAlignBaseSelect(scheme);
         document.getElementById('baseKeySelect').value = scheme.baseKey !== undefined ? scheme.baseKey : '';
+        document.getElementById('alignBaseKey').value = scheme.alignBaseKey !== undefined ? scheme.alignBaseKey : '';
         if (!keywordsExpanded) {
             document.getElementById('keywordsContainer').style.maxHeight = '0';
             document.getElementById('toggleKeywordsBtn').textContent = '展开';
@@ -765,7 +806,9 @@
             excludeEmpty: false,
             excludeValues: [],
             collectColor: false,
-            addColorCol: false
+            addColorCol: false,
+            fontSize: 14,
+            columnWidth: 120
         };
         scheme.keywords.push(newKw);
         renderKeywords(scheme);
@@ -825,6 +868,8 @@
             <div class="field"><label>排除值</label><input class="kw-exclude-values" type="text" value="${(kw.excludeValues||[]).join(',')}" placeholder="如 invalid" style="width:90px;"></div>
             <div class="field field-small"><label>采集颜色</label><input class="kw-collect-color" type="checkbox" ${kw.collectColor?'checked':''}></div>
             <div class="field field-small"><label>新增颜色列</label><input class="kw-add-color" type="checkbox" ${kw.addColorCol?'checked':''}></div>
+            <div class="field"><label>字体(px)</label><input class="kw-font-size" type="number" min="8" max="48" value="${kw.fontSize || 14}" style="width:50px;"></div>
+            <div class="field"><label>列宽(px)</label><input class="kw-column-width" type="number" min="50" max="600" value="${kw.columnWidth || 120}" style="width:60px;"></div>
             <button class="btn btn-danger btn-sm" onclick="removeKeyword(this)">✕</button>
         `;
         container.appendChild(row);
@@ -928,18 +973,31 @@
         } else {
             return;
         }
+
         for (let f of files) {
             if (!f.name.endsWith('.xlsx') && !f.name.endsWith('.xls')) {
                 alert(`文件 ${f.name} 不是 .xlsx 格式，跳过`);
                 log(`文件 ${f.name} 格式不支持，跳过`, 'error');
                 continue;
             }
+
             const reader = new FileReader();
             reader.onload = (e) => {
                 const data = e.target.result;
-                uploadedFiles.push({ name: f.name, data: data });
+                let folderName = '';
+                if (f.webkitRelativePath) {
+                    const pathParts = f.webkitRelativePath.split('/');
+                    if (pathParts.length > 1) {
+                        folderName = pathParts[0];
+                    }
+                }
+                uploadedFiles.push({
+                    name: f.name,
+                    data: data,
+                    folder: folderName || ''
+                });
                 renderFileList();
-                log(`文件 ${f.name} 上传成功`, 'success');
+                log(`文件 ${f.name} 上传成功${folderName ? ' (文件夹: ' + folderName + ')' : ''}`, 'success');
             };
             reader.readAsArrayBuffer(f);
         }
@@ -952,7 +1010,8 @@
         uploadedFiles.forEach((f, idx) => {
             const span = document.createElement('span');
             span.className = 'file-item';
-            span.innerHTML = `${f.name} <span class="remove" onclick="removeFile(${idx})">✕</span>`;
+            const displayName = f.folder ? `${f.folder}/${f.name}` : f.name;
+            span.innerHTML = `${displayName} <span class="remove" onclick="removeFile(${idx})">✕</span>`;
             container.appendChild(span);
         });
         document.getElementById('fileCount').textContent = `已上传 ${uploadedFiles.length} 个文件`;
@@ -992,6 +1051,23 @@
             e.preventDefault();
             e.stopPropagation();
             uploadCard.classList.remove('dragover');
+            const items = e.dataTransfer.items;
+            if (items) {
+                let hasFolder = false;
+                for (let item of items) {
+                    if (item.webkitGetAsEntry && item.webkitGetAsEntry().isDirectory) {
+                        hasFolder = true;
+                        break;
+                    }
+                }
+                if (hasFolder) {
+                    const files = e.dataTransfer.files;
+                    if (files.length) {
+                        handleFiles(files);
+                    }
+                    return;
+                }
+            }
             const files = e.dataTransfer.files;
             if (files.length) {
                 handleFiles(files);
@@ -1000,7 +1076,7 @@
     })();
 
     // ============================================================
-    // 统计执行（调用 Python 后端）
+    // 统计执行
     // ============================================================
     async function runStatistics() {
         const scheme = schemes.find(s => s.id === currentSchemeId);
@@ -1010,7 +1086,6 @@
 
         log('开始统计...', 'info');
 
-        // 构建 FormData
         const formData = new FormData();
         for (let f of uploadedFiles) {
             const blob = new Blob([f.data], { type: 'application/octet-stream' });
@@ -1032,7 +1107,6 @@
                 return;
             }
 
-            // 处理返回结果
             const results = data.results || [];
             const successResults = results.filter(r => r.success);
             const errorResults = results.filter(r => !r.success);
@@ -1043,22 +1117,26 @@
                 return;
             }
 
-            // 构建统计结果
             statisticsResults = {
                 scheme: scheme,
-                results: successResults.map(r => ({
-                    name: r.filename,
-                    data: {
-                        cellData: r.data.cell_data || [],
-                        columnData: r.data.column_data || { rows: [], keywords: [] },
-                        hasCell: r.data.has_cell || false,
-                        hasColumn: r.data.has_column || false,
-                        keywordLabels: r.data.keyword_labels || []
-                    }
-                }))
+                results: successResults.map((r, idx) => {
+                    const fileInfo = uploadedFiles[idx] || {};
+                    const displayName = fileInfo.folder ? `${fileInfo.folder}/${r.filename}` : r.filename;
+                    return {
+                        name: displayName,
+                        originalName: r.filename,
+                        folder: fileInfo.folder || '',
+                        data: {
+                            cellData: r.data.cell_data || [],
+                            columnData: r.data.column_data || { rows: [], keywords: [] },
+                            hasCell: r.data.has_cell || false,
+                            hasColumn: r.data.has_column || false,
+                            keywordLabels: r.data.keyword_labels || []
+                        }
+                    };
+                })
             };
 
-            // 显示结果
             displayResults(statisticsResults);
             document.getElementById('resultArea').style.display = 'block';
             document.getElementById('statusMsg').textContent = `统计完成，共 ${successResults.length} 个文件`;
@@ -1072,6 +1150,82 @@
             log('请求后端失败: ' + error.message, 'error');
             alert('无法连接到后端服务，请确认 Python 后端已启动 (python app.py)');
         }
+    }
+
+    // ============================================================
+    // 对齐处理
+    // ============================================================
+    function alignColumnData(results, alignKeyIdx) {
+        if (alignKeyIdx === null || alignKeyIdx === undefined || alignKeyIdx === '') {
+            return results.map(r => ({
+                ...r,
+                alignedRows: r.data.columnData.rows || []
+            }));
+        }
+
+        const alignKeyIndex = parseInt(alignKeyIdx);
+        if (isNaN(alignKeyIndex) || alignKeyIndex < 0) {
+            return results.map(r => ({
+                ...r,
+                alignedRows: r.data.columnData.rows || []
+            }));
+        }
+
+        const allValues = new Set();
+        results.forEach(res => {
+            const rows = res.data.columnData.rows || [];
+            rows.forEach(row => {
+                if (row.length > alignKeyIndex) {
+                    const val = row[alignKeyIndex].value;
+                    if (val !== null && val !== undefined && val !== '') {
+                        allValues.add(String(val));
+                    }
+                }
+            });
+        });
+
+        const sortedValues = Array.from(allValues).sort((a, b) => {
+            const aNum = parseFloat(a);
+            const bNum = parseFloat(b);
+            if (!isNaN(aNum) && !isNaN(bNum)) {
+                return aNum - bNum;
+            }
+            return a.localeCompare(b);
+        });
+
+        return results.map(res => {
+            const rows = res.data.columnData.rows || [];
+            const keywordCount = res.data.columnData.keywords ? res.data.columnData.keywords.length : 0;
+
+            const valueMap = {};
+            rows.forEach(row => {
+                if (row.length > alignKeyIndex) {
+                    const val = row[alignKeyIndex].value;
+                    if (val !== null && val !== undefined && val !== '') {
+                        valueMap[String(val)] = row;
+                    }
+                }
+            });
+
+            const alignedRows = [];
+            sortedValues.forEach(val => {
+                if (valueMap[val]) {
+                    alignedRows.push(valueMap[val]);
+                } else {
+                    const emptyRow = [];
+                    for (let i = 0; i < keywordCount; i++) {
+                        emptyRow.push({ value: null, color_indexed: null, color_name: null, color_meaning: null });
+                    }
+                    alignedRows.push(emptyRow);
+                }
+            });
+
+            return {
+                ...res,
+                alignedRows: alignedRows,
+                alignValues: sortedValues
+            };
+        });
     }
 
     // ============================================================
@@ -1102,16 +1256,27 @@
             return;
         }
 
+        const scheme = stats.scheme;
+        const alignKeyIdx = scheme.alignBaseKey;
+        const hasAlign = alignKeyIdx !== null && alignKeyIdx !== undefined && alignKeyIdx !== '';
+
+        let processedResults = stats.results;
+        if (hasAlign) {
+            const aligned = alignColumnData(stats.results, alignKeyIdx);
+            processedResults = aligned;
+        }
+
         if (independentLayout === 'horizontal') {
             const scrollDiv = document.createElement('div');
             scrollDiv.className = 'horizontal-scroll';
-            stats.results.forEach((res, idx) => {
+            processedResults.forEach((res, idx) => {
                 const card = document.createElement('div');
                 card.className = 'file-card';
+                const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
                 const title = document.createElement('h4');
-                title.textContent = `📄 ${res.name}`;
+                title.textContent = `📄 ${displayName}`;
                 card.appendChild(title);
-                const content = buildFileContent(res.data);
+                const content = buildFileContent(res.data, res.alignedRows, hasAlign);
                 card.appendChild(content);
                 scrollDiv.appendChild(card);
             });
@@ -1122,10 +1287,11 @@
             const contentsDiv = document.createElement('div');
             contentsDiv.className = 'file-tab-contents';
 
-            stats.results.forEach((res, idx) => {
+            processedResults.forEach((res, idx) => {
+                const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
                 const tabBtn = document.createElement('button');
                 tabBtn.className = 'tab-btn' + (idx === 0 ? ' active' : '');
-                tabBtn.textContent = res.name;
+                tabBtn.textContent = displayName;
                 tabBtn.dataset.index = idx;
                 tabBtn.onclick = function() {
                     document.querySelectorAll('.file-tabs .tab-btn').forEach(b => b.classList.remove('active'));
@@ -1139,9 +1305,9 @@
                 contentDiv.className = 'file-tab-content' + (idx === 0 ? ' active' : '');
                 contentDiv.id = 'file-tab-' + idx;
                 const title = document.createElement('h4');
-                title.textContent = `📄 ${res.name}`;
+                title.textContent = `📄 ${displayName}`;
                 contentDiv.appendChild(title);
-                const content = buildFileContent(res.data);
+                const content = buildFileContent(res.data, res.alignedRows, hasAlign);
                 contentDiv.appendChild(content);
                 contentsDiv.appendChild(contentDiv);
             });
@@ -1150,7 +1316,7 @@
         }
     }
 
-    function buildFileContent(data) {
+    function buildFileContent(data, alignedRows, hasAlign) {
         const frag = document.createElement('div');
         if (data.hasCell) {
             const statCard = document.createElement('div');
@@ -1171,11 +1337,12 @@
             statCard.className = 'stat-card';
             const title = document.createElement('div');
             title.className = 'stat-title';
-            title.textContent = '列采集项';
+            title.textContent = '列采集项' + (hasAlign ? ' (已对齐)' : '');
             statCard.appendChild(title);
             const tableWrap = document.createElement('div');
             tableWrap.className = 'table-wrap';
-            const table = buildColumnResultTable(data.columnData);
+            const rows = hasAlign ? alignedRows : data.columnData.rows;
+            const table = buildColumnResultTableWithStyle(data.columnData, rows);
             tableWrap.appendChild(table);
             statCard.appendChild(tableWrap);
             frag.appendChild(statCard);
@@ -1193,19 +1360,34 @@
             return;
         }
 
+        const scheme = stats.scheme;
+        const alignKeyIdx = scheme.alignBaseKey;
+        const hasAlign = alignKeyIdx !== null && alignKeyIdx !== undefined && alignKeyIdx !== '';
+
+        let processedResults = fileResults;
+        let alignValues = [];
+        if (hasAlign) {
+            const aligned = alignColumnData(fileResults, alignKeyIdx);
+            processedResults = aligned;
+            if (aligned.length > 0 && aligned[0].alignValues) {
+                alignValues = aligned[0].alignValues;
+            }
+        }
+
         const legendDiv = document.createElement('div');
         legendDiv.className = 'flex-wrap';
         legendDiv.style.marginBottom = '10px';
-        const colors = ['#e6f3e6', '#fff9e6', '#f0ede6', '#f0e6f0', '#e6f0f0', '#f0e6e6'];
-        fileResults.forEach((res, idx) => {
+        const legendColors = ['#e6f3e6', '#fff9e6', '#f0ede6', '#f0e6f0', '#e6f0f0', '#f0e6e6'];
+        processedResults.forEach((res, idx) => {
+            const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
             const item = document.createElement('span');
             item.className = 'legend-item';
-            item.innerHTML = `<span class="legend-color" style="background-color:${colors[idx % colors.length]};"></span> ${res.name}`;
+            item.innerHTML = `<span class="legend-color" style="background-color:${legendColors[idx % legendColors.length]};"></span> ${displayName}`;
             legendDiv.appendChild(item);
         });
         container.appendChild(legendDiv);
 
-        const hasAnyCell = fileResults.some(r => r.data.hasCell);
+        const hasAnyCell = processedResults.some(r => r.data.hasCell);
         if (hasAnyCell) {
             const statCard = document.createElement('div');
             statCard.className = 'stat-card';
@@ -1215,30 +1397,30 @@
             statCard.appendChild(title);
             const tableWrap = document.createElement('div');
             tableWrap.className = 'table-wrap';
-            const table = buildMergedCellTableMulti(fileResults);
+            const table = buildMergedCellTableMulti(processedResults);
             tableWrap.appendChild(table);
             statCard.appendChild(tableWrap);
             container.appendChild(statCard);
         }
 
-        const hasAnyColumn = fileResults.some(r => r.data.hasColumn);
+        const hasAnyColumn = processedResults.some(r => r.data.hasColumn);
         if (hasAnyColumn) {
             const statCard = document.createElement('div');
             statCard.className = 'stat-card';
             const title = document.createElement('div');
             title.className = 'stat-title';
-            title.textContent = '列采集项对比';
+            title.textContent = '列采集项对比' + (hasAlign ? ' (已对齐)' : '');
             statCard.appendChild(title);
             const tableWrap = document.createElement('div');
             tableWrap.className = 'table-wrap';
-            const table = buildMergedColumnTableMulti(fileResults);
+            const table = buildMergedColumnTableMulti(processedResults, alignValues, hasAlign);
             tableWrap.appendChild(table);
             statCard.appendChild(tableWrap);
             container.appendChild(statCard);
         }
     }
 
-    // ----- 表格构建函数 -----
+    // ----- 表格构建 -----
     function buildCellResultTable(cellData) {
         const table = document.createElement('table');
         const thead = document.createElement('thead');
@@ -1256,9 +1438,12 @@
             else if (d.keyword.valuePosition === 'right') label += ' →' + d.keyword.offset;
             const tdLabel = document.createElement('td');
             tdLabel.textContent = label;
+            const fontSize = d.keyword.fontSize || 14;
+            tdLabel.style.fontSize = fontSize + 'px';
             tr.appendChild(tdLabel);
             const tdVal = document.createElement('td');
             tdVal.textContent = d.value !== null && d.value !== undefined ? d.value : '';
+            tdVal.style.fontSize = fontSize + 'px';
             if (d.value === null || d.value === undefined || d.value === '') tdVal.className = 'empty-value';
             if (d.color_name && d.color_name !== 'blank') {
                 tdVal.style.backgroundColor = getColorCss(d.color_name);
@@ -1268,6 +1453,7 @@
                 const tdColor = document.createElement('td');
                 const meaning = d.color_meaning || 'blank';
                 tdColor.textContent = meaning;
+                tdColor.style.fontSize = fontSize + 'px';
                 const colorName = d.color_name || 'blank';
                 const colorClass = 'color-' + (colorName === 'blank' ? 'blank' : colorName.toLowerCase());
                 tdColor.className = colorClass;
@@ -1279,41 +1465,61 @@
         return table;
     }
 
-    function buildColumnResultTable(columnData) {
+    function buildColumnResultTableWithStyle(columnData, rows) {
         const table = document.createElement('table');
         const thead = document.createElement('thead');
         const trHead = document.createElement('tr');
-        columnData.keywords.forEach(kw => {
+
+        const defaultFontSize = 14;
+        const defaultColumnWidth = 120;
+
+        columnData.keywords.forEach((kw, idx) => {
+            const fontSize = kw.fontSize || defaultFontSize;
+            const columnWidth = kw.columnWidth || defaultColumnWidth;
             let label = kw.keywordText || '';
             if (kw.valuePosition === 'left') label += ' ←' + kw.offset;
             else if (kw.valuePosition === 'right') label += ' →' + kw.offset;
             const th = document.createElement('th');
             th.textContent = label;
+            th.style.fontSize = fontSize + 'px';
+            th.style.minWidth = columnWidth + 'px';
             trHead.appendChild(th);
             if (kw.addColorCol) {
                 const thColor = document.createElement('th');
                 thColor.textContent = '结果';
+                thColor.style.fontSize = fontSize + 'px';
+                thColor.style.minWidth = (columnWidth * 0.6) + 'px';
                 trHead.appendChild(thColor);
             }
         });
         thead.appendChild(trHead);
         table.appendChild(thead);
+
         const tbody = document.createElement('tbody');
-        columnData.rows.forEach(row => {
+        const rowsData = rows || columnData.rows || [];
+        rowsData.forEach(row => {
             const tr = document.createElement('tr');
             row.forEach((cell, idx) => {
+                const kw = columnData.keywords[idx];
+                const fontSize = kw ? (kw.fontSize || 14) : 14;
+                const columnWidth = kw ? (kw.columnWidth || 120) : 120;
+
                 const td = document.createElement('td');
                 td.textContent = cell.value !== null && cell.value !== undefined ? cell.value : '';
+                td.style.fontSize = fontSize + 'px';
+                td.style.minWidth = columnWidth + 'px';
                 if (cell.value === null || cell.value === undefined || cell.value === '') td.className = 'empty-value';
-                const kw = columnData.keywords[idx];
-                if (kw.collectColor && cell.color_name && cell.color_name !== 'blank') {
+                if (kw && kw.collectColor && cell.color_name && cell.color_name !== 'blank') {
                     td.style.backgroundColor = getColorCss(cell.color_name);
                 }
                 tr.appendChild(td);
-                if (kw.addColorCol) {
+
+                if (kw && kw.addColorCol) {
                     const tdColor = document.createElement('td');
                     const meaning = cell.color_meaning || 'blank';
                     tdColor.textContent = meaning;
+                    tdColor.style.fontSize = fontSize + 'px';
+                    tdColor.style.minWidth = (columnWidth * 0.6) + 'px';
                     const colorName = cell.color_name || 'blank';
                     const colorClass = 'color-' + (colorName === 'blank' ? 'blank' : colorName.toLowerCase());
                     tdColor.className = colorClass;
@@ -1345,20 +1551,25 @@
         fileResults.forEach((res, fi) => {
             const cellData = res.data.cellData;
             if (cellData.length === 0) return;
+            const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
             cellData.forEach(d => {
                 const tr = document.createElement('tr');
                 tr.style.backgroundColor = bgColors[fi % bgColors.length];
+                const fontSize = d.keyword.fontSize || 14;
                 const tdFile = document.createElement('td');
-                tdFile.textContent = res.name;
+                tdFile.textContent = displayName;
+                tdFile.style.fontSize = fontSize + 'px';
                 tr.appendChild(tdFile);
                 let label = d.keyword.keywordText || '';
                 if (d.keyword.valuePosition === 'left') label += ' ←' + d.keyword.offset;
                 else if (d.keyword.valuePosition === 'right') label += ' →' + d.keyword.offset;
                 const tdLabel = document.createElement('td');
                 tdLabel.textContent = label;
+                tdLabel.style.fontSize = fontSize + 'px';
                 tr.appendChild(tdLabel);
                 const tdVal = document.createElement('td');
                 tdVal.textContent = d.value !== null && d.value !== undefined ? d.value : '';
+                tdVal.style.fontSize = fontSize + 'px';
                 if (d.value === null || d.value === undefined || d.value === '') tdVal.className = 'empty-value';
                 if (d.color_name && d.color_name !== 'blank') {
                     tdVal.style.backgroundColor = getColorCss(d.color_name);
@@ -1368,6 +1579,7 @@
                     const tdColor = document.createElement('td');
                     const meaning = d.color_meaning || 'blank';
                     tdColor.textContent = meaning;
+                    tdColor.style.fontSize = fontSize + 'px';
                     const colorName = d.color_name || 'blank';
                     const colorClass = 'color-' + (colorName === 'blank' ? 'blank' : colorName.toLowerCase());
                     tdColor.className = colorClass;
@@ -1380,51 +1592,39 @@
         return table;
     }
 
-    function buildMergedColumnTableMulti(fileResults) {
-        const validFiles = fileResults.filter((res, idx) => res.data.hasColumn);
-        if (validFiles.length === 0) {
-            const p = document.createElement('p');
-            p.textContent = '没有文件包含列数据';
-            return p;
-        }
-
-        const firstKw = validFiles[0].data.columnData.keywords;
-        const allSame = validFiles.every(r => {
-            const kw = r.data.columnData.keywords;
-            return kw.length === firstKw.length && kw.every((k, i) => k.keywordText === firstKw[i].keywordText);
-        });
-        if (!allSame) {
-            const p = document.createElement('p');
-            p.textContent = '各文件列模式关键字不一致，无法合并对比';
-            return p;
-        }
-
-        const fileRows = validFiles.map((res, fi) => {
-            const rows = res.data.columnData.rows;
-            return rows.map(row => {
-                const keyParts = row.map(cell => String(cell.value !== null && cell.value !== undefined ? cell.value : ''));
-                const key = keyParts.join('|||');
-                return { key, row, fileIndex: fi };
-            });
-        });
-
-        const allKeys = new Set();
-        fileRows.forEach(rows => rows.forEach(r => allKeys.add(r.key)));
-        const sortedKeys = Array.from(allKeys).sort();
-
+    function buildMergedColumnTableMulti(fileResults, alignValues, hasAlign) {
         const table = document.createElement('table');
         const thead = document.createElement('thead');
         const trHead = document.createElement('tr');
-        trHead.innerHTML = '<th>来源文件</th>';
-        const hasColor = firstKw.some(kw => kw.collectColor);
-        firstKw.forEach(kw => {
-            let label = kw.keywordText || '';
-            if (kw.valuePosition === 'left') label += ' ←' + kw.offset;
-            else if (kw.valuePosition === 'right') label += ' →' + kw.offset;
-            trHead.innerHTML += `<th>${label}</th>`;
-            if (kw.addColorCol) {
-                trHead.innerHTML += `<th>结果</th>`;
-            }
+
+        const defaultFontSize = 14;
+        const defaultColumnWidth = 120;
+
+        const rowLabel = (hasAlign && alignValues && alignValues.length > 0) ? '对齐值' : '行号';
+        trHead.innerHTML = `<th>${rowLabel}</th>`;
+
+        fileResults.forEach((res, fi) => {
+            const kw = res.data.columnData.keywords || [];
+            const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+            kw.forEach((k, idx) => {
+                const fontSize = k.fontSize || defaultFontSize;
+                const columnWidth = k.columnWidth || defaultColumnWidth;
+                let label = k.keywordText || '';
+                if (k.valuePosition === 'left') label += ' ←' + k.offset;
+                else if (k.valuePosition === 'right') label += ' →' + k.offset;
+                const th = document.createElement('th');
+                th.textContent = `${displayName}\n${label}`;
+                th.style.fontSize = fontSize + 'px';
+                th.style.minWidth = columnWidth + 'px';
+                trHead.appendChild(th);
+                if (k.addColorCol) {
+                    const thColor = document.createElement('th');
+                    thColor.textContent = '结果';
+                    thColor.style.fontSize = fontSize + 'px';
+                    thColor.style.minWidth = (columnWidth * 0.6) + 'px';
+                    trHead.appendChild(thColor);
+                }
+            });
         });
         thead.appendChild(trHead);
         table.appendChild(thead);
@@ -1432,45 +1632,59 @@
         const tbody = document.createElement('tbody');
         const bgColors = ['#e6f3e6', '#fff9e6', '#f0ede6', '#f0e6f0', '#e6f0f0', '#f0e6e6'];
 
-        sortedKeys.forEach(key => {
-            const rowsWithKey = [];
-            validFiles.forEach((res, fi) => {
-                const rows = fileRows[fi];
-                const found = rows.find(r => r.key === key);
-                if (found) {
-                    rowsWithKey.push({ fileIndex: fi, row: found.row });
-                }
-            });
-            rowsWithKey.sort((a, b) => a.fileIndex - b.fileIndex);
-            rowsWithKey.forEach(({ fileIndex, row }) => {
-                const tr = document.createElement('tr');
-                tr.style.backgroundColor = bgColors[fileIndex % bgColors.length];
-                const tdFile = document.createElement('td');
-                tdFile.textContent = validFiles[fileIndex].name;
-                tr.appendChild(tdFile);
+        let maxRows = 0;
+        fileResults.forEach(res => {
+            const rows = (hasAlign && res.alignedRows) ? res.alignedRows : res.data.columnData.rows;
+            if (rows && rows.length > maxRows) maxRows = rows.length;
+        });
+
+        for (let rowIdx = 0; rowIdx < maxRows; rowIdx++) {
+            const tr = document.createElement('tr');
+            const tdRowLabel = document.createElement('td');
+            if (hasAlign && alignValues && alignValues.length > 0 && alignValues[rowIdx] !== undefined) {
+                tdRowLabel.textContent = alignValues[rowIdx];
+            } else {
+                tdRowLabel.textContent = rowIdx + 1;
+            }
+            tdRowLabel.style.fontWeight = 'bold';
+            tdRowLabel.style.backgroundColor = '#f1f5f9';
+            tdRowLabel.style.minWidth = '60px';
+            tr.appendChild(tdRowLabel);
+
+            fileResults.forEach((res, fi) => {
+                const rows = (hasAlign && res.alignedRows) ? res.alignedRows : res.data.columnData.rows;
+                const kw = res.data.columnData.keywords || [];
+                const row = (rows && rows[rowIdx]) ? rows[rowIdx] : [];
+
                 row.forEach((cell, idx) => {
-                    const kw = firstKw[idx];
+                    const k = kw[idx] || {};
+                    const fontSize = k.fontSize || defaultFontSize;
+                    const columnWidth = k.columnWidth || defaultColumnWidth;
                     const td = document.createElement('td');
-                    td.textContent = cell.value !== null && cell.value !== undefined ? cell.value : '';
-                    if (cell.value === null || cell.value === undefined || cell.value === '') td.className = 'empty-value';
-                    if (kw.collectColor && cell.color_name && cell.color_name !== 'blank') {
+                    td.textContent = cell && cell.value !== null && cell.value !== undefined ? cell.value : '';
+                    td.style.fontSize = fontSize + 'px';
+                    td.style.minWidth = columnWidth + 'px';
+                    if (!cell || cell.value === null || cell.value === undefined || cell.value === '') td.className = 'empty-value';
+                    if (k.collectColor && cell && cell.color_name && cell.color_name !== 'blank') {
                         td.style.backgroundColor = getColorCss(cell.color_name);
                     }
                     tr.appendChild(td);
-                    if (kw.addColorCol) {
+
+                    if (k.addColorCol) {
                         const tdColor = document.createElement('td');
-                        const meaning = cell.color_meaning || 'blank';
+                        const meaning = (cell && cell.color_meaning) || 'blank';
                         tdColor.textContent = meaning;
-                        const colorName = cell.color_name || 'blank';
+                        tdColor.style.fontSize = fontSize + 'px';
+                        tdColor.style.minWidth = (columnWidth * 0.6) + 'px';
+                        const colorName = (cell && cell.color_name) || 'blank';
                         const colorClass = 'color-' + (colorName === 'blank' ? 'blank' : colorName.toLowerCase());
                         tdColor.className = colorClass;
                         tr.appendChild(tdColor);
                     }
                 });
-                tbody.appendChild(tr);
             });
-        });
-
+            tbody.appendChild(tr);
+        }
         table.appendChild(tbody);
         return table;
     }
@@ -1483,12 +1697,13 @@
         document.getElementById(tabId).classList.add('active');
     }
 
-    // ----- 导出 Excel（使用 ExcelJS）-----
+    // ----- 导出 Excel -----
     async function exportIndependentExcel() {
         if (!statisticsResults) return alert('请先执行统计');
         const wb = new ExcelJS.Workbook();
         statisticsResults.results.forEach((res, fi) => {
-            const ws = wb.addWorksheet(res.name || ('文件'+(fi+1)));
+            const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+            const ws = wb.addWorksheet(displayName.substring(0, 31));
             let rowIdx = 1;
             if (res.data.hasCell) {
                 ws.addRow(['单元格采集项']);
@@ -1509,6 +1724,7 @@
                         row.push(meaning);
                     }
                     const rowObj = ws.addRow(row);
+                    rowObj.height = 20;
                     if (d.color_name && d.color_name !== 'blank') {
                         const cell = rowObj.getCell(2);
                         const argb = getColorArgb(d.color_name);
@@ -1523,19 +1739,27 @@
                 const colData = res.data.columnData;
                 const headers = [];
                 const colorColIndices = [];
+                const colWidths = [];
                 colData.keywords.forEach((kw, idx) => {
                     let label = kw.keywordText || '';
                     if (kw.valuePosition === 'left') label += ' ←' + kw.offset;
                     else if (kw.valuePosition === 'right') label += ' →' + kw.offset;
                     headers.push(label);
+                    colWidths.push(kw.columnWidth || 120);
                     if (kw.addColorCol) {
                         headers.push('结果');
                         colorColIndices.push(idx * 2 + 1);
+                        colWidths.push((kw.columnWidth || 120) * 0.6);
                     }
                 });
                 const headerRow = ws.addRow(headers);
                 headerRow.font = { bold: true };
-                colData.rows.forEach(row => {
+                colWidths.forEach((w, idx) => {
+                    ws.getColumn(idx + 1).width = w / 7;
+                });
+
+                const rowsToExport = res.alignedRows || colData.rows || [];
+                rowsToExport.forEach(row => {
                     const values = [];
                     row.forEach((cell, idx) => {
                         values.push(cell.value !== null && cell.value !== undefined ? cell.value : '');
@@ -1545,6 +1769,7 @@
                         }
                     });
                     const rowObj = ws.addRow(values);
+                    rowObj.height = 20;
                     row.forEach((cell, idx) => {
                         const kw = colData.keywords[idx];
                         if (kw.collectColor && cell.color_name && cell.color_name !== 'blank') {
@@ -1563,7 +1788,7 @@
                     });
                 });
             }
-            ws.columns.forEach(col => col.width = 15);
+            ws.columns.forEach(col => col.width = Math.max(col.width || 15, 15));
         });
         const buf = await wb.xlsx.writeBuffer();
         saveAs(new Blob([buf], { type: 'application/octet-stream' }), '独立统计结果.xlsx');
@@ -1575,103 +1800,164 @@
         if (statisticsResults.results.length < 2) return alert('需要至少两个文件才能导出合并结果');
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('合并统计');
-        let rowIdx = 1;
 
         const fileResults = statisticsResults.results;
-        const validFiles = fileResults.filter(r => r.data.hasColumn);
+        const scheme = statisticsResults.scheme;
+        const alignKeyIdx = scheme.alignBaseKey;
+        const hasAlign = alignKeyIdx !== null && alignKeyIdx !== undefined && alignKeyIdx !== '';
+
+        let processedResults = fileResults;
+        let alignValues = [];
+        if (hasAlign) {
+            const aligned = alignColumnData(fileResults, alignKeyIdx);
+            processedResults = aligned;
+            if (aligned.length > 0 && aligned[0].alignValues) {
+                alignValues = aligned[0].alignValues;
+            }
+        }
+
+        const validFiles = processedResults.filter(r => r.data.hasColumn);
         if (validFiles.length < 2) {
             alert('至少需要两个有列数据的文件才能导出合并结果');
             return;
         }
 
-        ws.addRow(['列采集项合并']);
-        const firstKw = validFiles[0].data.columnData.keywords;
-        const allSame = validFiles.every(r => {
-            const kw = r.data.columnData.keywords;
-            return kw.length === firstKw.length && kw.every((k, i) => k.keywordText === firstKw[i].keywordText);
-        });
-        if (!allSame) {
-            alert('各文件列模式关键字不一致，无法导出合并');
-            return;
-        }
+        ws.addRow(['列采集项合并' + (hasAlign ? ' (已对齐)' : '')]);
 
-        const headers = ['来源文件'];
-        firstKw.forEach(kw => {
-            let label = kw.keywordText || '';
-            if (kw.valuePosition === 'left') label += ' ←' + kw.offset;
-            else if (kw.valuePosition === 'right') label += ' →' + kw.offset;
-            headers.push(label);
-            if (kw.addColorCol) {
-                headers.push('结果');
-            }
-        });
-        const headerRow = ws.addRow(headers);
-        headerRow.font = { bold: true };
+        const headers = ['行号/对齐值'];
+        const colorColIndices = [];
+        const colWidths = [60];
 
-        const fileRows = validFiles.map((res, fi) => {
-            const rows = res.data.columnData.rows;
-            return rows.map(row => {
-                const keyParts = row.map(cell => String(cell.value !== null && cell.value !== undefined ? cell.value : ''));
-                const key = keyParts.join('|||');
-                return { key, row, fileIndex: fi };
-            });
-        });
-
-        const allKeys = new Set();
-        fileRows.forEach(rows => rows.forEach(r => allKeys.add(r.key)));
-        const sortedKeys = Array.from(allKeys).sort();
-        const bgColors = ['e6f3e6', 'fff9e6', 'f0ede6', 'f0e6f0', 'e6f0f0', 'f0e6e6'];
-
-        sortedKeys.forEach(key => {
-            const rowsWithKey = [];
-            validFiles.forEach((res, fi) => {
-                const rows = fileRows[fi];
-                const found = rows.find(r => r.key === key);
-                if (found) {
-                    rowsWithKey.push({ fileIndex: fi, row: found.row });
+        validFiles.forEach((res, fi) => {
+            const kw = res.data.columnData.keywords || [];
+            const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+            kw.forEach((k, idx) => {
+                let label = k.keywordText || '';
+                if (k.valuePosition === 'left') label += ' ←' + k.offset;
+                else if (k.valuePosition === 'right') label += ' →' + k.offset;
+                headers.push(`${displayName}\n${label}`);
+                colWidths.push(k.columnWidth || 120);
+                if (k.addColorCol) {
+                    headers.push('结果');
+                    colorColIndices.push(headers.length - 1);
+                    colWidths.push((k.columnWidth || 120) * 0.6);
                 }
             });
-            rowsWithKey.sort((a, b) => a.fileIndex - b.fileIndex);
-            rowsWithKey.forEach(({ fileIndex, row }) => {
-                const values = [validFiles[fileIndex].name];
+        });
+
+        const headerRow = ws.addRow(headers);
+        headerRow.font = { bold: true };
+        colWidths.forEach((w, idx) => {
+            ws.getColumn(idx + 1).width = w / 7;
+        });
+
+        let maxRows = 0;
+        validFiles.forEach(res => {
+            const rows = (hasAlign && res.alignedRows) ? res.alignedRows : res.data.columnData.rows;
+            if (rows && rows.length > maxRows) maxRows = rows.length;
+        });
+
+        const bgColors = ['e6f3e6', 'fff9e6', 'f0ede6', 'f0e6f0', 'e6f0f0', 'f0e6e6'];
+
+        for (let rowIdx = 0; rowIdx < maxRows; rowIdx++) {
+            const values = [];
+            if (hasAlign && alignValues && alignValues.length > 0 && alignValues[rowIdx] !== undefined) {
+                values.push(alignValues[rowIdx]);
+            } else {
+                values.push(rowIdx + 1);
+            }
+
+            validFiles.forEach((res, fi) => {
+                const rows = (hasAlign && res.alignedRows) ? res.alignedRows : res.data.columnData.rows;
+                const kw = res.data.columnData.keywords || [];
+                const row = (rows && rows[rowIdx]) ? rows[rowIdx] : [];
+
                 row.forEach((cell, idx) => {
-                    values.push(cell.value !== null && cell.value !== undefined ? cell.value : '');
-                    if (firstKw[idx].addColorCol) {
-                        const meaning = cell.color_meaning || 'blank';
+                    values.push(cell && cell.value !== null && cell.value !== undefined ? cell.value : '');
+                    if (kw[idx] && kw[idx].addColorCol) {
+                        const meaning = (cell && cell.color_meaning) || 'blank';
                         values.push(meaning);
                     }
                 });
-                const rowObj = ws.addRow(values);
-                rowObj.eachCell((cell) => {
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + bgColors[fileIndex % bgColors.length] } };
-                });
-                row.forEach((cell, idx) => {
-                    const kw = firstKw[idx];
-                    if (kw.collectColor && cell.color_name && cell.color_name !== 'blank') {
-                        const cellExcel = rowObj.getCell(idx + 2);
-                        const argb = getColorArgb(cell.color_name);
-                        if (argb) cellExcel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } };
-                    }
-                });
-                firstKw.forEach((kw, idx) => {
-                    if (kw.addColorCol) {
-                        const colIndex = idx * 2 + 2;
-                        const cell = rowObj.getCell(colIndex + 1);
-                        const colorName = values[colIndex];
-                        const argb = getColorArgb(colorName);
-                        if (argb) {
-                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } };
-                        }
+            });
+
+            const rowObj = ws.addRow(values);
+            rowObj.height = 20;
+
+            let colOffset = 1;
+            validFiles.forEach((res, fi) => {
+                const kw = res.data.columnData.keywords || [];
+                const fileColor = 'FF' + bgColors[fi % bgColors.length];
+                kw.forEach((k, idx) => {
+                    const cell = rowObj.getCell(colOffset + 1);
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fileColor } };
+                    colOffset++;
+                    if (k.addColorCol) {
+                        const cellColor = rowObj.getCell(colOffset + 1);
+                        cellColor.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fileColor } };
+                        colOffset++;
                     }
                 });
             });
-        });
 
-        ws.columns.forEach(col => col.width = 15);
+            let valOffset = 1;
+            validFiles.forEach((res, fi) => {
+                const kw = res.data.columnData.keywords || [];
+                const rows = (hasAlign && res.alignedRows) ? res.alignedRows : res.data.columnData.rows;
+                const row = (rows && rows[rowIdx]) ? rows[rowIdx] : [];
+
+                row.forEach((cell, idx) => {
+                    valOffset++;
+                    if (kw[idx] && kw[idx].collectColor && cell && cell.color_name && cell.color_name !== 'blank') {
+                        const cellExcel = rowObj.getCell(valOffset);
+                        const argb = getColorArgb(cell.color_name);
+                        if (argb) cellExcel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } };
+                    }
+                    if (kw[idx] && kw[idx].addColorCol) {
+                        valOffset++;
+                    }
+                });
+            });
+        }
+
+        ws.columns.forEach(col => col.width = Math.max(col.width || 15, 15));
         const buf = await wb.xlsx.writeBuffer();
         saveAs(new Blob([buf], { type: 'application/octet-stream' }), '合并统计结果.xlsx');
         log('合并统计 Excel 导出成功', 'success');
     }
+
+    // ============================================================
+    // 后端健康监测
+    // ============================================================
+    let backendAlive = true;
+
+    async function checkBackendHealth() {
+        try {
+            const response = await fetch('http://127.0.0.1:5000/api/health', {
+                method: 'GET',
+                signal: AbortSignal.timeout(3000)
+            });
+            if (!response.ok) {
+                throw new Error('后端响应异常');
+            }
+            if (!backendAlive) {
+                backendAlive = true;
+                console.log('🟢 后端已恢复连接');
+            }
+        } catch (error) {
+            if (backendAlive) {
+                backendAlive = false;
+                console.warn('🔴 后端服务已断开');
+                const statusMsg = document.getElementById('statusMsg');
+                if (statusMsg) {
+                    statusMsg.textContent = '⚠️ 后端服务已断开，请重启服务后刷新页面';
+                    statusMsg.style.color = '#ef4444';
+                }
+            }
+        }
+    }
+
+    setInterval(checkBackendHealth, 3000);
 
     // ----- 初始化 -----
     loadSchemes();
