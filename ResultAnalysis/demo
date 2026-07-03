@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel 颜色读取 Demo</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f1f5f9;
+            padding: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 700px;
+            width: 100%;
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e2e8f0;
+        }
+        h1 {
+            font-size: 24px;
+            color: #0f172a;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .badge {
+            background: #3b82f6;
+            color: #fff;
+            font-size: 12px;
+            padding: 2px 12px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        .upload-area {
+            border: 2px dashed #cbd5e1;
+            border-radius: 8px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 16px;
+        }
+        .upload-area:hover {
+            border-color: #3b82f6;
+            background: #f8fafc;
+        }
+        .upload-area.dragover {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+        .upload-area input[type="file"] {
+            display: none;
+        }
+        .upload-area .icon {
+            font-size: 48px;
+            display: block;
+            margin-bottom: 8px;
+        }
+        .upload-area .text {
+            color: #64748b;
+            font-size: 15px;
+        }
+        .upload-area .text strong {
+            color: #0f172a;
+        }
+        .settings {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+            background: #f8fafc;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        .settings label {
+            font-weight: 500;
+            font-size: 14px;
+            color: #334155;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .settings input {
+            padding: 4px 8px;
+            border: 1px solid #d1d9e6;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 100px;
+        }
+        .btn {
+            padding: 10px 24px;
+            background: #3b82f6;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.15s;
+            width: 100%;
+        }
+        .btn:hover { background: #2563eb; }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .btn-success {
+            background: #22c55e;
+        }
+        .btn-success:hover { background: #16a34a; }
+        .result-area {
+            margin-top: 16px;
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            display: none;
+        }
+        .result-area .error { color: #fca5a5; }
+        .result-area .success { color: #86efac; }
+        .result-area .info { color: #93c5fd; }
+        .result-area .warn { color: #fcd34d; }
+        .result-area .bold { font-weight: bold; color: #fff; }
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 12px;
+            font-size: 14px;
+            color: #64748b;
+        }
+        .status-bar .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e2e8f0;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .file-name {
+            color: #0f172a;
+            font-weight: 500;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .color-swatch {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 1px solid #64748b;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>
+        📊 Excel 颜色读取
+        <span class="badge">Python 后端</span>
+    </h1>
+
+    <!-- 上传区域 -->
+    <div class="upload-area" id="uploadArea">
+        <span class="icon">📁</span>
+        <div class="text">
+            拖拽或 <strong>点击选择</strong> Excel 文件（.xlsx）
+        </div>
+        <input type="file" id="fileInput" accept=".xlsx,.xls" />
+    </div>
+
+    <!-- 设置 -->
+    <div class="settings">
+        <label>工作表：
+            <input type="text" id="sheetName" value="IPN" />
+        </label>
+        <label>单元格：
+            <input type="text" id="cellAddress" value="A24" />
+        </label>
+    </div>
+
+    <!-- 按钮 -->
+    <button class="btn" id="analyzeBtn" onclick="analyze()">🔍 开始分析</button>
+
+    <!-- 状态 -->
+    <div class="status-bar">
+        <div class="status" id="statusDisplay">
+            <span>⏳ 等待上传</span>
+        </div>
+        <span class="file-name" id="fileName">未选择文件</span>
+    </div>
+
+    <!-- 结果 -->
+    <div class="result-area" id="resultArea"></div>
+</div>
+
+<script>
+    // ============================================================
+    // DOM 元素
+    // ============================================================
+    const fileInput = document.getElementById('fileInput');
+    const uploadArea = document.getElementById('uploadArea');
+    const sheetNameInput = document.getElementById('sheetName');
+    const cellAddressInput = document.getElementById('cellAddress');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const resultArea = document.getElementById('resultArea');
+    const statusDisplay = document.getElementById('statusDisplay');
+    const fileName = document.getElementById('fileName');
+
+    let selectedFile = null;
+
+    // ============================================================
+    // 文件选择
+    // ============================================================
+    uploadArea.addEventListener('click', () => fileInput.click());
+
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        if (e.dataTransfer.files.length) {
+            handleFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length) {
+            handleFile(fileInput.files[0]);
+        }
+    });
+
+    function handleFile(file) {
+        selectedFile = file;
+        fileName.textContent = file.name;
+        statusDisplay.innerHTML = `<span>✅ 已选择文件</span>`;
+        analyzeBtn.disabled = false;
+        // 自动触发分析
+        setTimeout(analyze, 300);
+    }
+
+    // ============================================================
+    // 颜色映射（前端展示用）
+    // ============================================================
+    const COLOR_MAP = {
+        10: { name: '红色', meaning: 'failed', css: '#FF0000' },
+        35: { name: '浅蓝色', meaning: 'signal missing', css: '#99CCFF' },
+        52: { name: '橙色', meaning: 'trigger not occurred', css: '#FF9900' },
+        13: { name: '黄色', meaning: 'warning', css: '#FFFF00' },
+        11: { name: '绿色', meaning: 'passed', css: '#00FF00' },
+        9:  { name: 'blank', meaning: 'blank', css: '#f1f5f9' }
+    };
+
+    // ============================================================
+    // 核心分析函数
+    // ============================================================
+    async function analyze() {
+        if (!selectedFile) {
+            alert('请先选择 Excel 文件');
+            return;
+        }
+
+        const sheetName = sheetNameInput.value.trim() || 'IPN';
+        const cellAddress = cellAddressInput.value.trim().toUpperCase() || 'A24';
+
+        // UI 状态
+        analyzeBtn.disabled = true;
+        analyzeBtn.textContent = '⏳ 处理中...';
+        statusDisplay.innerHTML = `<span class="spinner"></span> 正在分析...`;
+        resultArea.style.display = 'block';
+        resultArea.innerHTML = '⏳ 正在向 Python 后端发送请求...';
+
+        try {
+            // 构建 FormData
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('sheet_name', sheetName);
+            formData.append('cell_address', cellAddress);
+
+            // 发送请求到 Python 后端
+            const response = await fetch('http://127.0.0.1:5000/api/read_excel', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            // 显示结果
+            displayResult(data, sheetName, cellAddress);
+
+        } catch (error) {
+            resultArea.innerHTML = `
+                <div class="error">❌ 请求失败</div>
+                <div class="error">错误信息: ${error.message}</div>
+                <div class="warn">请确认 Python 后端已启动: python app.py</div>
+                <div class="info">后端地址: http://127.0.0.1:5000</div>
+            `;
+            statusDisplay.innerHTML = `❌ 连接失败`;
+        } finally {
+            analyzeBtn.disabled = false;
+            analyzeBtn.textContent = '🔍 开始分析';
+        }
+    }
+
+    // ============================================================
+    // 显示结果
+    // ============================================================
+    function displayResult(data, sheetName, cellAddress) {
+        let html = '';
+
+        if (!data.success) {
+            html = `<div class="error">❌ 分析失败: ${data.error || '未知错误'}</div>`;
+            if (data.available_sheets) {
+                html += `<div class="info">📋 可用工作表: ${data.available_sheets.join(', ')}</div>`;
+            }
+            if (data.trace) {
+                html += `<div class="warn">堆栈信息:\n${data.trace}</div>`;
+            }
+            resultArea.innerHTML = html;
+            statusDisplay.innerHTML = '❌ 分析失败';
+            return;
+        }
+
+        // 成功结果
+        const colorInfo = data.color_info;
+        const indexed = data.color_indexed;
+        const mapped = COLOR_MAP[indexed];
+
+        html = `<div class="success">✅ 分析成功</div>`;
+        html += `<div class="info">📄 工作表: ${data.sheet_name}</div>`;
+        html += `<div class="info">📍 单元格: ${data.cell_address}</div>`;
+        html += `<div class="info">📝 值: ${data.cell_value !== null ? data.cell_value : '(空)'}</div>`;
+        html += `<div class="info">📊 color_indexed: ${indexed !== null ? indexed : '无'}</div>`;
+        if (data.color_rgb) {
+            html += `<div class="info">🎨 color_rgb: ${data.color_rgb}</div>`;
+        }
+
+        if (mapped) {
+            const colorCss = mapped.css || '#ffffff';
+            html += `<div class="success">🎨 颜色: <span class="color-swatch" style="background-color:${colorCss};"></span> ${mapped.name} (${mapped.meaning})</div>`;
+        } else if (indexed !== null) {
+            html += `<div class="warn">⚠️ 未知索引: ${indexed}</div>`;
+        } else {
+            html += `<div class="warn">ℹ️ 无填充颜色</div>`;
+        }
+
+        // 显示所有工作表（调试信息）
+        if (data.all_sheets) {
+            html += `<div class="info">📋 所有工作表: ${data.all_sheets.join(', ')}</div>`;
+        }
+
+        resultArea.innerHTML = html;
+        statusDisplay.innerHTML = `✅ 分析完成`;
+    }
+
+    // ============================================================
+    // 初始化
+    // ============================================================
+    // 检查后端是否可用
+    async function checkBackend() {
+        try {
+            const response = await fetch('http://127.0.0.1:5000/api/health');
+            if (response.ok) {
+                statusDisplay.innerHTML = `🟢 后端已连接`;
+                return true;
+            }
+        } catch (e) {
+            statusDisplay.innerHTML = `🔴 后端未启动`;
+        }
+        return false;
+    }
+
+    // 启动时检查
+    checkBackend();
+
+    // 自动分析开关（已在上传时触发）
+    console.log('📊 Excel 颜色读取工具已加载');
+    console.log('📡 后端地址: http://127.0.0.1:5000');
+</script>
+</body>
+</html>
