@@ -1,4 +1,4 @@
-# app.py - 修复 JSON 序列化问题
+# app.py - 完全修复 JSON 序列化问题
 # 运行方式: python app.py
 # 依赖安装: pip install openpyxl flask flask-cors
 
@@ -11,7 +11,6 @@ import traceback
 app = Flask(__name__)
 CORS(app)
 
-# 颜色映射表（与前端一致）
 COLOR_MAP = {
     10: {'name': '红色', 'meaning': 'failed'},
     35: {'name': '浅蓝色', 'meaning': 'signal missing'},
@@ -32,7 +31,6 @@ def read_excel():
         sheet_name = request.form.get('sheet_name', 'IPN')
         cell_address = request.form.get('cell_address', 'A24').upper()
 
-        # 加载文件
         file_bytes = file.read()
         wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
 
@@ -46,10 +44,9 @@ def read_excel():
         sheet = wb[sheet_name]
         cell = sheet[cell_address]
 
-        # 获取单元格值
         cell_value = cell.value
 
-        # --- 读取颜色信息 ---
+        # --- 读取颜色信息（全部转为 Python 原生类型） ---
         color_indexed = None
         color_rgb = None
         color_theme = None
@@ -58,19 +55,26 @@ def read_excel():
         fill = cell.fill
         if fill and hasattr(fill, 'fgColor') and fill.fgColor:
             fg = fill.fgColor
+            # indexed
             if hasattr(fg, 'indexed'):
                 idx = fg.indexed
                 if idx is not None and idx != -1:
-                    color_indexed = int(idx)
+                    color_indexed = int(idx)  # 转为 int
+            # rgb
             if hasattr(fg, 'rgb'):
-                # 将 RGB 对象转为字符串
                 rgb_val = fg.rgb
                 if rgb_val is not None:
-                    color_rgb = str(rgb_val)
+                    color_rgb = str(rgb_val)  # 转为 str
+            # theme
             if hasattr(fg, 'theme'):
-                color_theme = fg.theme
+                theme_val = fg.theme
+                if theme_val is not None:
+                    color_theme = int(theme_val)  # 转为 int
+            # tint
             if hasattr(fg, 'tint'):
-                color_tint = fg.tint
+                tint_val = fg.tint
+                if tint_val is not None:
+                    color_tint = float(tint_val)  # 转为 float
 
         # 如果 fgColor 没有颜色，尝试 bgColor
         if color_indexed is None and fill and hasattr(fill, 'bgColor') and fill.bgColor:
@@ -87,9 +91,6 @@ def read_excel():
         # 映射颜色
         color_info = COLOR_MAP.get(color_indexed, None)
 
-        # 获取所有工作表名称
-        all_sheets = wb.sheetnames
-
         return jsonify({
             'success': True,
             'sheet_name': sheet_name,
@@ -100,7 +101,7 @@ def read_excel():
             'color_theme': color_theme,
             'color_tint': color_tint,
             'color_info': color_info,
-            'all_sheets': all_sheets,
+            'all_sheets': wb.sheetnames,
             'fill_available': fill is not None,
             'has_fgColor': fill and hasattr(fill, 'fgColor') and fill.fgColor is not None,
             'has_bgColor': fill and hasattr(fill, 'bgColor') and fill.bgColor is not None,
@@ -116,13 +117,10 @@ def read_excel():
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'ok', 'service': 'Excel 颜色读取服务'})
+    return jsonify({'status': 'ok'})
 
 
 if __name__ == '__main__':
-    print('🚀 启动 Excel 颜色读取服务...')
-    print('📡 访问地址: http://127.0.0.1:5000')
-    print('📋 健康检查: http://127.0.0.1:5000/api/health')
-    print('📤 上传接口: http://127.0.0.1:5000/api/read_excel')
-    print('按 Ctrl+C 停止服务')
+    print('🚀 启动服务...')
+    print('📡 http://127.0.0.1:5000')
     app.run(debug=False, host='127.0.0.1', port=5000)
