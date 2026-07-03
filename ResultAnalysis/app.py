@@ -1,4 +1,4 @@
-# app.py - Excel 颜色读取后端
+# app.py - 增强版 Excel 颜色读取后端
 # 运行方式: python app.py
 # 依赖安装: pip install openpyxl flask flask-cors
 
@@ -9,7 +9,7 @@ import io
 import traceback
 
 app = Flask(__name__)
-CORS(app)  # 允许前端跨域访问
+CORS(app)
 
 # 颜色映射表（与前端一致）
 COLOR_MAP = {
@@ -21,25 +21,24 @@ COLOR_MAP = {
     9:  {'name': 'blank', 'meaning': 'blank'}
 }
 
+# 补充：将 -1 或 None 映射为空白
+# openpyxl 在无颜色时可能返回 -1
+
 
 @app.route('/api/read_excel', methods=['POST'])
 def read_excel():
-    """接收 Excel 文件，读取指定单元格的颜色信息"""
     try:
-        # 获取上传的文件
         file = request.files.get('file')
         if not file:
             return jsonify({'success': False, 'error': '未上传文件'}), 400
 
-        # 获取参数
         sheet_name = request.form.get('sheet_name', 'IPN')
         cell_address = request.form.get('cell_address', 'A24').upper()
 
-        # 用 openpyxl 加载文件
+        # 加载文件
         file_bytes = file.read()
         wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
 
-        # 检查工作表是否存在
         if sheet_name not in wb.sheetnames:
             return jsonify({
                 'success': False,
@@ -48,33 +47,47 @@ def read_excel():
             })
 
         sheet = wb[sheet_name]
-
-        # 检查单元格是否存在
-        if cell_address not in sheet:
-            return jsonify({
-                'success': False,
-                'error': f'单元格 "{cell_address}" 不存在'
-            })
-
         cell = sheet[cell_address]
+
+        # 获取单元格值
         cell_value = cell.value
 
-        # 读取颜色索引
-        color_index = None
+        # --- 读取颜色信息 ---
+        color_indexed = None
+        color_rgb = None
+        color_theme = None
+        color_tint = None
+
         fill = cell.fill
         if fill and hasattr(fill, 'fgColor') and fill.fgColor:
-            color_index = fill.fgColor.indexed
+            fg = fill.fgColor
+            # indexed 可能是 None, -1, 或实际索引
+            if hasattr(fg, 'indexed'):
+                idx = fg.indexed
+                # openpyxl 中 -1 或 None 表示无颜色
+                if idx is not None and idx != -1:
+                    color_indexed = int(idx)
+            if hasattr(fg, 'rgb'):
+                color_rgb = fg.rgb
+            if hasattr(fg, 'theme'):
+                color_theme = fg.theme
+            if hasattr(fg, 'tint'):
+                color_tint = fg.tint
 
-        # 如果 indexed 为空，尝试读取 rgb
-        rgb_value = None
-        if fill and hasattr(fill, 'fgColor') and fill.fgColor:
-            if hasattr(fill.fgColor, 'rgb'):
-                rgb_value = fill.fgColor.rgb
+        # 如果 fgColor 没有颜色，尝试 bgColor
+        if color_indexed is None and fill and hasattr(fill, 'bgColor') and fill.bgColor:
+            bg = fill.bgColor
+            if hasattr(bg, 'indexed'):
+                idx = bg.indexed
+                if idx is not None and idx != -1:
+                    color_indexed = int(idx)
+            if hasattr(bg, 'rgb') and not color_rgb:
+                color_rgb = bg.rgb
 
         # 映射颜色
-        color_info = COLOR_MAP.get(color_index, None) if color_index is not None else None
+        color_info = COLOR_MAP.get(color_indexed, None)
 
-        # 获取所有工作表名称（用于调试）
+        # 获取所有工作表名称
         all_sheets = wb.sheetnames
 
         return jsonify({
@@ -82,24 +95,32 @@ def read_excel():
             'sheet_name': sheet_name,
             'cell_address': cell_address,
             'cell_value': str(cell_value) if cell_value is not None else None,
-            'color_indexed': color_index,
-            'color_rgb': rgb_value,
+            'color_indexed': color_indexed,
+            'color_rgb': color_rgb,
+            'color_theme': color_theme,
+            'color_tint': color_tint,
             'color_info': color_info,
-            'all_sheets': all_sheets
+            'all_sheets': all_sheets,
+            'fill_available': fill is not None,
+            'has_fgColor': fill and hasattr(fill, 'fgColor') and fill.fgColor is not None,
+            'has_bgColor': fill and hasattr(fill, 'bgColor') and fill.bgColor is not None,
+            'debug': {
+                'fill_type': str(type(fill)) if fill else None,
+                'fgColor_type': str(type(fill.fgColor)) if fill and hasattr(fill, 'fgColor') and fill.fgColor else None,
+                'bgColor_type': str(type(fill.bgColor)) if fill and hasattr(fill, 'bgColor') and fill.bgColor else None,
+            }
         })
 
     except Exception as e:
-        error_trace = traceback.format_exc()
         return jsonify({
             'success': False,
             'error': str(e),
-            'trace': error_trace
+            'trace': traceback.format_exc()
         }), 500
 
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    """健康检查接口"""
     return jsonify({'status': 'ok', 'service': 'Excel 颜色读取服务'})
 
 
