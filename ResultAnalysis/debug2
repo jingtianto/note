@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Open XML 颜色验证工具</title>
+    <title>Open XML 完整属性读取</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -15,7 +15,7 @@
         .btn:hover { background: #2563eb; }
         .btn-success { background: #22c55e; }
         .btn-success:hover { background: #16a34a; }
-        .log-area { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; max-height: 600px; overflow-y: auto; font-size: 13px; white-space: pre-wrap; margin-top: 16px; font-family: 'Consolas', monospace; }
+        .log-area { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; max-height: 700px; overflow-y: auto; font-size: 13px; white-space: pre-wrap; margin-top: 16px; font-family: 'Consolas', monospace; }
         .log-error { color: #fca5a5; }
         .log-success { color: #86efac; }
         .log-info { color: #93c5fd; }
@@ -23,20 +23,23 @@
         .log-bold { font-weight: bold; color: #ffffff; }
         input[type="file"] { padding: 6px; border: 1px solid #d1d9e6; border-radius: 4px; }
         input[type="text"] { padding: 6px 10px; border: 1px solid #d1d9e6; border-radius: 4px; width: 120px; }
-        .color-swatch { display: inline-block; width: 16px; height: 16px; border: 1px solid #64748b; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
+        .expand-btn { cursor: pointer; color: #93c5fd; text-decoration: underline; }
+        .collapsed { display: none; }
+        .section { margin: 4px 0; padding: 4px 8px; background: #0f172a; border-radius: 4px; border-left: 3px solid #475569; }
+        .section-title { font-weight: bold; color: #93c5fd; margin-bottom: 4px; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>📄 Open XML 颜色验证工具</h1>
-    <p>直接从 Excel 文件的 XML 中读取颜色索引，完全绕过 ExcelJS。</p>
+    <h1>📄 Open XML 完整属性读取</h1>
+    <p>读取指定单元格的所有属性（样式、填充、边框、字体等），不依赖 ExcelJS。</p>
     <div class="flex" style="margin-bottom: 12px;">
         <input type="file" id="fileInput" accept=".xlsx,.xls" />
         <label>工作表名称：</label>
         <input type="text" id="sheetName" value="IPN" style="width: 120px;" />
         <label>单元格地址：</label>
         <input type="text" id="cellAddress" value="A24" style="width: 100px;" />
-        <button class="btn" onclick="runOpenXMLTest()">🔍 读取颜色</button>
+        <button class="btn" onclick="runFullRead()">🔍 读取所有属性</button>
         <button class="btn btn-success" onclick="clearLog()">清空日志</button>
     </div>
     <div id="logArea" class="log-area">等待操作...</div>
@@ -73,15 +76,20 @@
         area.scrollTop = area.scrollHeight;
     }
 
+    function logObject(obj, title = '') {
+        if (title) log(title, 'info');
+        log(JSON.stringify(obj, null, 2), 'info');
+    }
+
     function clearLog() {
         document.getElementById('logArea').innerHTML = '';
         log('日志已清空', 'info');
     }
 
     // ============================================================
-    // 核心：从 XML 中提取颜色索引
+    // 从 XML 中提取单元格属性
     // ============================================================
-    function extractColorIndexFromXML(xmlString, cellAddress) {
+    function extractCellProperties(xmlString, cellAddress) {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
 
@@ -101,77 +109,196 @@
             return { success: false, message: '未找到单元格 ' + cellAddress };
         }
 
-        // 查找样式引用
-        const sAttr = targetCell.getAttribute('s');
-        if (sAttr === null || sAttr === undefined) {
-            return { success: true, indexed: null, message: '单元格无样式引用 (s 属性为空)' };
+        // 提取所有属性
+        const properties = {
+            cellAddress: cellAddress,
+            attributes: {},
+            children: [],
+            styleIndex: null,
+            value: null,
+            valueType: null,
+            formula: null
+        };
+
+        // 读取所有属性
+        for (let attr of targetCell.attributes) {
+            properties.attributes[attr.name] = attr.value;
+            if (attr.name === 's') {
+                properties.styleIndex = parseInt(attr.value);
+            }
         }
 
-        const styleIndex = parseInt(sAttr);
-        return { success: true, styleIndex: styleIndex, message: '找到样式索引: ' + styleIndex };
+        // 读取子元素
+        for (let child of targetCell.children) {
+            const tagName = child.tagName;
+            if (tagName === 'v') {
+                properties.value = child.textContent;
+                properties.valueType = 'value';
+            } else if (tagName === 'f') {
+                properties.formula = child.textContent;
+            } else {
+                properties.children.push({
+                    tag: tagName,
+                    text: child.textContent,
+                    attributes: child.attributes
+                });
+            }
+        }
+
+        return { success: true, cell: targetCell, properties: properties };
     }
 
     // ============================================================
-    // 从 styles.xml 中提取颜色索引
+    // 从 styles.xml 读取完整样式
     // ============================================================
-    function extractColorFromStyles(xmlString, styleIndex) {
+    function extractFullStyle(xmlString, styleIndex) {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
 
+        const result = {
+            styleIndex: styleIndex,
+            xf: null,
+            fillId: null,
+            fill: null,
+            borderId: null,
+            border: null,
+            fontId: null,
+            font: null,
+            numberFormatId: null,
+            fgColor: null,
+            bgColor: null,
+            indexed: null,
+            rgb: null,
+            theme: null,
+            tint: null
+        };
+
         // 查找样式
-        const cells = xmlDoc.querySelectorAll('xf');
-        if (styleIndex >= cells.length) {
-            return { success: false, message: '样式索引 ' + styleIndex + ' 超出范围 (共 ' + cells.length + ' 个样式)' };
+        const xfs = xmlDoc.querySelectorAll('xf');
+        if (styleIndex >= xfs.length) {
+            result.error = '样式索引 ' + styleIndex + ' 超出范围 (共 ' + xfs.length + ' 个样式)';
+            return result;
         }
 
-        const xf = cells[styleIndex];
-        if (!xf) {
-            return { success: false, message: '样式 ' + styleIndex + ' 不存在' };
-        }
+        const xf = xfs[styleIndex];
+        result.xf = xf;
 
-        // 检查是否有填充
-        const fillIdAttr = xf.getAttribute('fillId');
-        if (fillIdAttr === null || fillIdAttr === undefined) {
-            return { success: true, indexed: null, message: '样式无填充 (fillId 为空)' };
+        // 提取属性
+        for (let attr of xf.attributes) {
+            if (attr.name === 'fillId') result.fillId = parseInt(attr.value);
+            if (attr.name === 'borderId') result.borderId = parseInt(attr.value);
+            if (attr.name === 'fontId') result.fontId = parseInt(attr.value);
+            if (attr.name === 'numFmtId') result.numberFormatId = parseInt(attr.value);
         }
-
-        const fillId = parseInt(fillIdAttr);
 
         // 查找填充
-        const fills = xmlDoc.querySelectorAll('fill');
-        if (fillId >= fills.length) {
-            return { success: false, message: '填充索引 ' + fillId + ' 超出范围 (共 ' + fills.length + ' 个填充)' };
-        }
+        if (result.fillId !== null) {
+            const fills = xmlDoc.querySelectorAll('fill');
+            if (result.fillId < fills.length) {
+                const fill = fills[result.fillId];
+                result.fill = fill;
 
-        const fill = fills[fillId];
-        if (!fill) {
-            return { success: false, message: '填充 ' + fillId + ' 不存在' };
-        }
+                // 提取 fgColor
+                const fgColor = fill.querySelector('fgColor');
+                if (fgColor) {
+                    result.fgColor = fgColor;
+                    const indexed = fgColor.getAttribute('indexed');
+                    if (indexed !== null) result.indexed = parseInt(indexed);
+                    const rgb = fgColor.getAttribute('rgb');
+                    if (rgb) result.rgb = rgb;
+                    const theme = fgColor.getAttribute('theme');
+                    if (theme) result.theme = parseInt(theme);
+                    const tint = fgColor.getAttribute('tint');
+                    if (tint) result.tint = parseFloat(tint);
+                }
 
-        // 查找 fgColor
-        const fgColor = fill.querySelector('fgColor');
-        if (!fgColor) {
-            return { success: true, indexed: null, message: '填充无 fgColor' };
-        }
-
-        const indexed = fgColor.getAttribute('indexed');
-        if (indexed === null || indexed === undefined) {
-            // 检查是否有 rgb
-            const rgb = fgColor.getAttribute('rgb');
-            if (rgb) {
-                return { success: true, indexed: null, rgb: rgb, message: '找到 rgb: ' + rgb + ' (非索引颜色)' };
+                const bgColor = fill.querySelector('bgColor');
+                if (bgColor) {
+                    result.bgColor = bgColor;
+                }
             }
-            return { success: true, indexed: null, message: 'fgColor 无 indexed 属性' };
         }
 
-        const indexedValue = parseInt(indexed);
-        return { success: true, indexed: indexedValue, message: '找到 fgColor.indexed = ' + indexedValue };
+        // 查找边框
+        if (result.borderId !== null) {
+            const borders = xmlDoc.querySelectorAll('border');
+            if (result.borderId < borders.length) {
+                result.border = borders[result.borderId];
+            }
+        }
+
+        // 查找字体
+        if (result.fontId !== null) {
+            const fonts = xmlDoc.querySelectorAll('font');
+            if (result.fontId < fonts.length) {
+                result.font = fonts[result.fontId];
+            }
+        }
+
+        return result;
+    }
+
+    // ============================================================
+    // 获取 sheet 路径
+    // ============================================================
+    async function getSheetPath(zip, sheetName) {
+        const workbookXml = zip.file('xl/workbook.xml');
+        if (!workbookXml) return null;
+
+        const content = await workbookXml.async('string');
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, 'text/xml');
+
+        const sheets = doc.querySelectorAll('sheet');
+        for (let sheet of sheets) {
+            const name = sheet.getAttribute('name');
+            if (name === sheetName) {
+                const rId = sheet.getAttribute('r:id');
+                if (rId) {
+                    // 尝试从 rels 查找
+                    const relsFile = zip.file('xl/workbook.xml.rels');
+                    if (relsFile) {
+                        const relsContent = await relsFile.async('string');
+                        const relsDoc = parser.parseFromString(relsContent, 'text/xml');
+                        const rels = relsDoc.querySelectorAll('Relationship');
+                        for (let rel of rels) {
+                            const id = rel.getAttribute('Id');
+                            if (id === rId) {
+                                let target = rel.getAttribute('Target');
+                                if (target && target.startsWith('worksheets/')) {
+                                    return 'xl/' + target;
+                                }
+                            }
+                        }
+                    }
+                    // 默认路径
+                    const sheetIndex = Array.from(sheets).indexOf(sheet) + 1;
+                    return 'xl/worksheets/sheet' + sheetIndex + '.xml';
+                }
+            }
+        }
+        return null;
+    }
+
+    // ============================================================
+    // 获取所有工作表列表
+    // ============================================================
+    async function getSheetList(zip) {
+        const workbookXml = zip.file('xl/workbook.xml');
+        if (!workbookXml) return [];
+
+        const content = await workbookXml.async('string');
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, 'text/xml');
+
+        const sheets = doc.querySelectorAll('sheet');
+        return Array.from(sheets).map(s => s.getAttribute('name'));
     }
 
     // ============================================================
     // 主函数
     // ============================================================
-    async function runOpenXMLTest() {
+    async function runFullRead() {
         const fileInput = document.getElementById('fileInput');
         const file = fileInput.files[0];
         if (!file) {
@@ -190,6 +317,7 @@
         log('📁 文件: ' + file.name, 'info');
         log('📄 工作表: ' + sheetName, 'info');
         log('📍 单元格: ' + cellAddress, 'info');
+        log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
 
         try {
             const arrayBuffer = await file.arrayBuffer();
@@ -202,148 +330,185 @@
             });
             log('📋 ZIP 包含 ' + fileList.length + ' 个文件', 'info');
 
-            // ========== 第一步：定位工作表 ==========
+            // ========== 获取工作表列表 ==========
+            const sheets = await getSheetList(zip);
+            log('📋 所有工作表: ' + sheets.join(', '), 'info');
+
+            // ========== 定位工作表 ==========
             log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
             log('【第一步】定位工作表', 'bold');
 
-            // 读取 workbook.xml 获取 sheet 映射
-            const workbookXml = zip.file('xl/workbook.xml');
-            if (!workbookXml) {
-                log('❌ 未找到 xl/workbook.xml', 'error');
-                return;
-            }
-
-            const workbookContent = await workbookXml.async('string');
-            const parser = new DOMParser();
-            const workbookDoc = parser.parseFromString(workbookContent, 'text/xml');
-
-            // 查找所有 sheet
-            const sheets = workbookDoc.querySelectorAll('sheet');
-            let sheetId = null;
-            let sheetPath = null;
-
-            for (let sheet of sheets) {
-                const name = sheet.getAttribute('name');
-                if (name === sheetName) {
-                    const rId = sheet.getAttribute('r:id');
-                    if (rId) {
-                        // 从 workbook.xml.rels 查找对应的文件路径
-                        // 直接构造路径：xl/worksheets/sheetX.xml
-                        // 但更精确的是通过 rels 查找
-                        sheetId = rId;
-                        // 尝试从 rels 查找
-                        const relsFile = zip.file('xl/workbook.xml.rels');
-                        if (relsFile) {
-                            const relsContent = await relsFile.async('string');
-                            const relsDoc = parser.parseFromString(relsContent, 'text/xml');
-                            const rels = relsDoc.querySelectorAll('Relationship');
-                            for (let rel of rels) {
-                                const id = rel.getAttribute('Id');
-                                if (id === rId) {
-                                    let target = rel.getAttribute('Target');
-                                    if (target && target.startsWith('worksheets/')) {
-                                        sheetPath = 'xl/' + target;
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                        // 如果没找到 rels，使用默认命名
-                        if (!sheetPath) {
-                            const sheetIndex = Array.from(sheets).indexOf(sheet) + 1;
-                            sheetPath = 'xl/worksheets/sheet' + sheetIndex + '.xml';
-                        }
-                        break;
-                    }
-                }
-            }
-
+            const sheetPath = await getSheetPath(zip, sheetName);
             if (!sheetPath) {
                 log('❌ 未找到工作表 "' + sheetName + '"', 'error');
-                log('📋 可用工作表: ' + Array.from(sheets).map(s => s.getAttribute('name')).join(', '), 'info');
                 return;
             }
+            log('✅ 工作表路径: ' + sheetPath, 'success');
 
-            log('✅ 找到工作表: ' + sheetPath, 'success');
-
-            // ========== 第二步：读取单元格样式索引 ==========
+            // ========== 读取单元格属性 ==========
             log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-            log('【第二步】读取单元格样式索引', 'bold');
+            log('【第二步】读取单元格属性', 'bold');
 
             const sheetFile = zip.file(sheetPath);
             if (!sheetFile) {
-                log('❌ 未找到工作表文件: ' + sheetPath, 'error');
+                log('❌ 未找到工作表文件', 'error');
                 return;
             }
 
             const sheetContent = await sheetFile.async('string');
-            const cellResult = extractColorIndexFromXML(sheetContent, cellAddress);
+            const cellResult = extractCellProperties(sheetContent, cellAddress);
 
             if (!cellResult.success) {
                 log('❌ ' + cellResult.message, 'error');
                 return;
             }
 
-            log('✅ ' + cellResult.message, 'success');
+            log('✅ 找到单元格', 'success');
 
-            if (cellResult.styleIndex === undefined || cellResult.styleIndex === null) {
-                log('⚠️ 单元格无样式，可能无颜色填充', 'warn');
-                return;
+            // 输出单元格所有属性
+            log('📋 单元格属性:', 'info');
+            const props = cellResult.properties;
+            logObject(props.attributes, '  属性 (Attributes):');
+            if (props.styleIndex !== null) {
+                log('  样式索引 (s): ' + props.styleIndex, 'info');
+            }
+            if (props.value !== null) {
+                log('  值 (v): ' + props.value, 'info');
+            }
+            if (props.formula) {
+                log('  公式 (f): ' + props.formula, 'info');
+            }
+            if (props.children.length > 0) {
+                log('  子元素:', 'info');
+                props.children.forEach(c => {
+                    log('    - ' + c.tag + ': ' + c.text, 'info');
+                });
             }
 
-            // ========== 第三步：从 styles.xml 读取颜色 ==========
-            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-            log('【第三步】从 styles.xml 读取颜色', 'bold');
+            // ========== 读取完整样式 ==========
+            if (props.styleIndex !== null) {
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+                log('【第三步】读取完整样式', 'bold');
 
-            const stylesFile = zip.file('xl/styles.xml');
-            if (!stylesFile) {
-                log('❌ 未找到 xl/styles.xml', 'error');
-                return;
-            }
-
-            const stylesContent = await stylesFile.async('string');
-            const colorResult = extractColorFromStyles(stylesContent, cellResult.styleIndex);
-
-            if (!colorResult.success) {
-                log('❌ ' + colorResult.message, 'error');
-                return;
-            }
-
-            log('✅ ' + colorResult.message, 'success');
-
-            // ========== 第四步：显示结果 ==========
-            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-            log('【第四步】显示结果', 'bold');
-
-            let indexed = colorResult.indexed;
-            let colorName = '未识别';
-            let meaning = '';
-            let colorCss = '#ffffff';
-
-            if (indexed !== undefined && indexed !== null) {
-                const mapped = COLOR_MAP[indexed];
-                if (mapped) {
-                    colorName = mapped.name;
-                    meaning = mapped.meaning;
-                    colorCss = COLOR_CSS[colorName] || '#ffffff';
-                    log('🎨 fgColor.indexed = ' + indexed + ' → ' + colorName + ' (' + meaning + ')', 'success');
-                } else {
-                    colorName = '未知索引 (' + indexed + ')';
-                    log('⚠️ fgColor.indexed = ' + indexed + ' (未映射)', 'warn');
+                const stylesFile = zip.file('xl/styles.xml');
+                if (!stylesFile) {
+                    log('❌ 未找到 xl/styles.xml', 'error');
+                    return;
                 }
+
+                const stylesContent = await stylesFile.async('string');
+                const styleResult = extractFullStyle(stylesContent, props.styleIndex);
+
+                if (styleResult.error) {
+                    log('❌ ' + styleResult.error, 'error');
+                    return;
+                }
+
+                log('✅ 样式索引: ' + props.styleIndex, 'success');
+
+                // 输出填充信息
+                if (styleResult.fill) {
+                    log('📋 填充 (fill):', 'info');
+                    log('  填充 ID: ' + styleResult.fillId, 'info');
+
+                    if (styleResult.fgColor) {
+                        log('  前景色 (fgColor):', 'info');
+                        const fg = styleResult.fgColor;
+                        for (let attr of fg.attributes) {
+                            log('    ' + attr.name + ' = ' + attr.value, 'info');
+                        }
+                        if (styleResult.indexed !== null) {
+                            log('    indexed = ' + styleResult.indexed, 'info');
+                            const mapped = COLOR_MAP[styleResult.indexed];
+                            if (mapped) {
+                                log('    → ' + mapped.name + ' (' + mapped.meaning + ')', 'success');
+                            } else {
+                                log('    → 未知索引', 'warn');
+                            }
+                        }
+                        if (styleResult.rgb) {
+                            log('    rgb = ' + styleResult.rgb, 'info');
+                        }
+                        if (styleResult.theme !== null) {
+                            log('    theme = ' + styleResult.theme, 'info');
+                        }
+                        if (styleResult.tint !== null) {
+                            log('    tint = ' + styleResult.tint, 'info');
+                        }
+                    }
+
+                    if (styleResult.bgColor) {
+                        log('  背景色 (bgColor):', 'info');
+                        for (let attr of styleResult.bgColor.attributes) {
+                            log('    ' + attr.name + ' = ' + attr.value, 'info');
+                        }
+                    }
+                } else {
+                    log('ℹ️ 无填充信息', 'info');
+                }
+
+                // 输出边框信息
+                if (styleResult.border) {
+                    log('📋 边框 (border):', 'info');
+                    log('  边框 ID: ' + styleResult.borderId, 'info');
+                    // 提取边框属性
+                    for (let child of styleResult.border.children) {
+                        const tag = child.tagName;
+                        if (tag.startsWith('border')) continue;
+                        log('    ' + tag + ':', 'info');
+                        for (let attr of child.attributes) {
+                            log('      ' + attr.name + ' = ' + attr.value, 'info');
+                        }
+                    }
+                }
+
+                // 输出字体信息
+                if (styleResult.font) {
+                    log('📋 字体 (font):', 'info');
+                    log('  字体 ID: ' + styleResult.fontId, 'info');
+                    for (let child of styleResult.font.children) {
+                        log('    ' + child.tagName + ':', 'info');
+                        for (let attr of child.attributes) {
+                            log('      ' + attr.name + ' = ' + attr.value, 'info');
+                        }
+                        if (child.textContent) {
+                            log('      内容: ' + child.textContent.trim(), 'info');
+                        }
+                    }
+                }
+
+                // 输出数字格式
+                if (styleResult.numberFormatId !== null) {
+                    log('📋 数字格式 ID: ' + styleResult.numberFormatId, 'info');
+                }
+
             } else {
-                if (colorResult.rgb) {
-                    log('🔍 使用 RGB: ' + colorResult.rgb + ' (非索引颜色，无法映射)', 'warn');
+                log('ℹ️ 单元格无样式引用 (s 属性为空)', 'info');
+            }
+
+            // ========== 显示颜色结果 ==========
+            if (styleResult && styleResult.indexed !== null) {
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+                log('【结果】颜色识别', 'bold');
+                const mapped = COLOR_MAP[styleResult.indexed];
+                if (mapped) {
+                    log('🎨 fgColor.indexed = ' + styleResult.indexed + ' → ' + mapped.name + ' (' + mapped.meaning + ')', 'success');
                 } else {
-                    log('ℹ️ 单元格无填充颜色', 'info');
+                    log('⚠️ fgColor.indexed = ' + styleResult.indexed + ' (未映射)', 'warn');
                 }
-                colorName = 'blank';
-                meaning = 'blank';
-                colorCss = '#f1f5f9';
             }
 
             log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-            log('✅ 验证完成', 'success');
+            log('✅ 读取完成', 'success');
+
+            // ========== 打印原始 XML 片段（调试用） ==========
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            log('【调试】单元格原始 XML', 'bold');
+            if (cellResult.cell) {
+                const serializer = new XMLSerializer();
+                const xmlString = serializer.serializeToString(cellResult.cell);
+                log(xmlString, 'info');
+            }
 
         } catch (e) {
             log('❌ 处理失败: ' + e.message, 'error');
@@ -352,7 +517,7 @@
     }
 
     // 初始提示
-    log('请上传 Excel 文件，输入工作表名和单元格地址，点击 "读取颜色"', 'info');
+    log('请上传 Excel 文件，输入工作表名和单元格地址，点击 "读取所有属性"', 'info');
 </script>
 </body>
 </html>
