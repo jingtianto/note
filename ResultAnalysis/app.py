@@ -1,4 +1,4 @@
-# app.py - 增强版后端（含详细日志）
+# app.py - 修复 openpyxl 行遍历问题
 # 运行方式: python app.py
 # 依赖: pip install openpyxl flask flask-cors
 
@@ -8,7 +8,7 @@ import openpyxl
 import io
 import json
 import traceback
-import sys
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -25,8 +25,6 @@ COLOR_MAP = {
 
 
 def log(msg):
-    """输出带时间戳的日志"""
-    from datetime import datetime
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
@@ -111,8 +109,6 @@ def analyze():
             return jsonify({'success': False, 'error': '未上传文件'}), 400
 
         scheme_json = request.form.get('scheme')
-        log(f"方案 JSON 长度: {len(scheme_json) if scheme_json else 0}")
-        
         if not scheme_json:
             return jsonify({'success': False, 'error': '未提供方案'}), 400
 
@@ -134,25 +130,25 @@ def analyze():
                     'data': result.get('data', {}),
                     'error': result.get('error', None)
                 })
-                log(f"  处理结果: {'成功' if result.get('success') else '失败'}")
-                if result.get('error'):
-                    log(f"  错误: {result.get('error')}")
+                if result.get('success'):
+                    log(f"  处理成功")
+                else:
+                    log(f"  处理失败: {result.get('error')}")
             except Exception as e:
                 log(f"  异常: {str(e)}")
-                log(f"  堆栈: {traceback.format_exc()}")
                 results.append({
                     'filename': file.filename,
                     'success': False,
                     'error': str(e)
                 })
 
-        log(f"处理完成，成功 {len([r for r in results if r.get('success')])} 个文件")
+        success_count = len([r for r in results if r.get('success')])
+        log(f"处理完成，成功 {success_count} 个文件")
         log("=" * 50)
         return jsonify({'success': True, 'results': results})
 
     except Exception as e:
         log(f"全局异常: {str(e)}")
-        log(f"堆栈: {traceback.format_exc()}")
         return jsonify({
             'success': False,
             'error': str(e),
@@ -168,7 +164,6 @@ def process_workbook(workbook, scheme):
     else:
         base_key_idx = -1
 
-    # 获取每个关键字的列和行
     kw_infos = []
     for idx, kw in enumerate(keywords):
         sheet_name = kw.get('sheet', '')
@@ -239,9 +234,12 @@ def process_workbook(workbook, scheme):
         all_row_numbers = set()
         for info in col_infos:
             sheet = info['sheet']
-            for row_idx in range(1, sheet.max_row + 1):
-                row = sheet[row_idx]
-                if row.hidden:
+            # 使用 iter_rows() 遍历所有行，检查是否隐藏
+            for row in sheet.iter_rows():
+                row_idx = row[0].row
+                # 检查行是否隐藏
+                row_obj = sheet.row_dimensions[row_idx]
+                if row_obj.hidden:
                     continue
                 if row_idx == info['row_num']:
                     continue
@@ -301,7 +299,7 @@ def health():
 
 if __name__ == '__main__':
     print('=' * 50)
-    print('🚀 启动 Excel 分析服务 (增强调试版)...')
+    print('🚀 启动 Excel 分析服务 (修复版)...')
     print('📡 http://127.0.0.1:5000')
     print('=' * 50)
     app.run(debug=False, host='127.0.0.1', port=5000)
