@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Excel 统计分析工具</title>
+    <!-- 只保留 ExcelJS 用于导出 -->
     <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <style>
-        /* 完整样式已在前面的回复中提供，此处省略以节省篇幅 */
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
@@ -18,11 +18,46 @@
             line-height: 1.5;
         }
         .container { max-width: 1600px; margin: 0 auto; }
-        h1 { font-size: 28px; font-weight: 700; color: #0f172a; border-bottom: 3px solid #475569; padding-bottom: 6px; margin-bottom: 16px; letter-spacing: 0.3px; }
-        .card { background: #ffffff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); padding: 14px 18px; margin-bottom: 14px; border: 1px solid #94a3b8; }
-        .card-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #0f172a;
+            border-bottom: 3px solid #475569;
+            padding-bottom: 6px;
+            margin-bottom: 16px;
+            letter-spacing: 0.3px;
+        }
+        .card {
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            padding: 14px 18px;
+            margin-bottom: 14px;
+            border: 1px solid #94a3b8;
+        }
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
         .flex-wrap { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-        .btn { padding: 6px 14px; border: 1px solid #d1d9e6; border-radius: 4px; background: #3b82f6; color: #fff; cursor: pointer; font-size: 14px; font-weight: 500; transition: 0.15s; white-space: nowrap; }
+        .btn {
+            padding: 6px 14px;
+            border: 1px solid #d1d9e6;
+            border-radius: 4px;
+            background: #3b82f6;
+            color: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: 0.15s;
+            white-space: nowrap;
+        }
         .btn:hover { background: #2563eb; }
         .btn-success { background: #22c55e; }
         .btn-success:hover { background: #16a34a; }
@@ -30,48 +65,244 @@
         .btn-danger:hover { background: #dc2626; }
         .btn-warning { background: #f59e0b; }
         .btn-warning:hover { background: #d97706; }
-        .btn-outline { background: transparent; border: 1px solid #d1d9e6; color: #1e293b; }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #d1d9e6;
+            color: #1e293b;
+        }
         .btn-outline:hover { background: #f1f5f9; }
-        .btn-outline.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+        .btn-outline.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: #fff;
+        }
         .btn-sm { padding: 4px 10px; font-size: 13px; }
-        .input-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
-        .input-group label { font-weight: 500; min-width: 70px; font-size: 14px; }
-        .input-group input, .input-group select { padding: 4px 8px; border: 1px solid #d1d9e6; border-radius: 4px; font-size: 14px; background: #fff; flex: 0 1 auto; min-width: 60px; height: 32px; }
-        .input-group input[type="number"] { width: 60px; min-width: 50px; }
-        .keyword-row { background: #f8fafc; border: 1px solid #d1d9e6; border-radius: 4px; padding: 6px 10px; margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
-        .keyword-row .field { display: flex; align-items: center; gap: 3px; flex: 0 1 auto; }
-        .keyword-row .field label { font-size: 12px; font-weight: 500; min-width: 30px; color: #334155; }
-        .keyword-row .field input, .keyword-row .field select { padding: 2px 4px; border: 1px solid #d1d9e6; border-radius: 3px; height: 26px; font-size: 12px; background: #fff; }
-        .keyword-row .field input[type="number"] { width: 45px; }
-        .keyword-row .field input[type="checkbox"] { width: 14px; height: 14px; margin: 0; border: 1px solid #d1d9e6; }
+        .input-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin: 6px 0;
+        }
+        .input-group label {
+            font-weight: 500;
+            min-width: 70px;
+            font-size: 14px;
+        }
+        .input-group input, .input-group select {
+            padding: 4px 8px;
+            border: 1px solid #d1d9e6;
+            border-radius: 4px;
+            font-size: 14px;
+            background: #fff;
+            flex: 0 1 auto;
+            min-width: 60px;
+            height: 32px;
+        }
+        .input-group input[type="number"] {
+            width: 60px;
+            min-width: 50px;
+        }
+        .keyword-row {
+            background: #f8fafc;
+            border: 1px solid #d1d9e6;
+            border-radius: 4px;
+            padding: 6px 10px;
+            margin-bottom: 6px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 8px;
+            align-items: center;
+        }
+        .keyword-row .field {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            flex: 0 1 auto;
+        }
+        .keyword-row .field label {
+            font-size: 12px;
+            font-weight: 500;
+            min-width: 30px;
+            color: #334155;
+        }
+        .keyword-row .field input, .keyword-row .field select {
+            padding: 2px 4px;
+            border: 1px solid #d1d9e6;
+            border-radius: 3px;
+            height: 26px;
+            font-size: 12px;
+            background: #fff;
+        }
+        .keyword-row .field input[type="number"] {
+            width: 45px;
+        }
+        .keyword-row .field input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            margin: 0;
+            border: 1px solid #d1d9e6;
+        }
         .keyword-row .field-small { flex: 0 0 auto; }
-        .badge { background: #3b82f6; color: #fff; border-radius: 4px; padding: 0 10px; font-size: 12px; font-weight: 600; line-height: 22px; display: inline-block; border: 1px solid #d1d9e6; }
-        .keywords-collapsible { transition: max-height 0.3s ease; overflow: hidden; max-height: 0; }
-        .keywords-collapsible.expanded { max-height: 2000px; }
-        .tab-bar { display: flex; gap: 0; border-bottom: 2px solid #475569; margin: 12px 0 16px; }
-        .tab-bar .tab { padding: 8px 20px; cursor: pointer; border: 1px solid #d1d9e6; border-bottom: none; border-radius: 4px 4px 0 0; background: #f1f5f9; margin-right: 4px; font-weight: 600; font-size: 15px; }
-        .tab-bar .tab.active { background: #fff; border-bottom: 2px solid #fff; margin-bottom: -2px; color: #0f172a; }
+        .badge {
+            background: #3b82f6;
+            color: #fff;
+            border-radius: 4px;
+            padding: 0 10px;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 22px;
+            display: inline-block;
+            border: 1px solid #d1d9e6;
+        }
+        .keywords-collapsible {
+            transition: max-height 0.3s ease;
+            overflow: hidden;
+            max-height: 0;
+        }
+        .keywords-collapsible.expanded {
+            max-height: 2000px;
+        }
+        .tab-bar {
+            display: flex;
+            gap: 0;
+            border-bottom: 2px solid #475569;
+            margin: 12px 0 16px;
+        }
+        .tab-bar .tab {
+            padding: 8px 20px;
+            cursor: pointer;
+            border: 1px solid #d1d9e6;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            background: #f1f5f9;
+            margin-right: 4px;
+            font-weight: 600;
+            font-size: 15px;
+        }
+        .tab-bar .tab.active {
+            background: #fff;
+            border-bottom: 2px solid #fff;
+            margin-bottom: -2px;
+            color: #0f172a;
+        }
         .tab-content { display: none; padding: 12px 0; }
         .tab-content.active { display: block; }
-        table { width: auto; border-collapse: collapse; font-size: 14px; margin: 0; }
-        th, td { border: 1px solid #e2e8f0; padding: 4px 10px; text-align: left; white-space: nowrap; }
-        th { background: #f1f5f9; color: #1e293b; font-weight: 600; }
+        table {
+            width: auto;
+            border-collapse: collapse;
+            font-size: 14px;
+            margin: 0;
+        }
+        th, td {
+            border: 1px solid #e2e8f0;
+            padding: 4px 10px;
+            text-align: left;
+            white-space: nowrap;
+        }
+        th {
+            background: #f1f5f9;
+            color: #1e293b;
+            font-weight: 600;
+        }
         tbody tr:nth-child(even) { background: #fafcff; }
-        .table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; display: inline-block; max-width: 100%; margin-top: 4px; background: #fff; }
-        .stat-card { border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px 12px; margin-bottom: 10px; background: #fafcff; }
+        .table-wrap {
+            overflow-x: auto;
+            border: 1px solid #e2e8f0;
+            display: inline-block;
+            max-width: 100%;
+            margin-top: 4px;
+            background: #fff;
+        }
+        .stat-card {
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+            background: #fafcff;
+        }
         .stat-card:last-child { margin-bottom: 0; }
-        .stat-card .stat-title { font-size: 15px; font-weight: 600; color: #1e293b; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #cbd5e1; }
-        .horizontal-scroll { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 14px; padding-bottom: 8px; align-items: flex-start; }
-        .file-card { flex: 0 0 auto; min-width: 280px; max-width: 95%; border: 1px solid #94a3b8; border-radius: 4px; padding: 10px 12px; background: #ffffff; }
-        .file-card h4 { font-size: 16px; font-weight: 600; margin: 0 0 8px 0; color: #0f172a; padding-bottom: 4px; border-bottom: 1px solid #cbd5e1; }
-        .file-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; border-bottom: 2px solid #475569; }
-        .file-tabs .tab-btn { padding: 4px 14px; background: #f1f5f9; border: 1px solid #d1d9e6; border-bottom: none; border-radius: 4px 4px 0 0; cursor: pointer; font-size: 14px; font-weight: 500; }
-        .file-tabs .tab-btn.active { background: #fff; border-bottom: 2px solid #fff; margin-bottom: -2px; color: #0f172a; }
+        .stat-card .stat-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #cbd5e1;
+        }
+        .horizontal-scroll {
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            gap: 14px;
+            padding-bottom: 8px;
+            align-items: flex-start;
+        }
+        .file-card {
+            flex: 0 0 auto;
+            min-width: 280px;
+            max-width: 95%;
+            border: 1px solid #94a3b8;
+            border-radius: 4px;
+            padding: 10px 12px;
+            background: #ffffff;
+        }
+        .file-card h4 {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+            color: #0f172a;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #cbd5e1;
+        }
+        .file-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #475569;
+        }
+        .file-tabs .tab-btn {
+            padding: 4px 14px;
+            background: #f1f5f9;
+            border: 1px solid #d1d9e6;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .file-tabs .tab-btn.active {
+            background: #fff;
+            border-bottom: 2px solid #fff;
+            margin-bottom: -2px;
+            color: #0f172a;
+        }
         .file-tab-content { display: none; }
         .file-tab-content.active { display: block; }
-        .file-item { background: #f1f5f9; padding: 2px 12px; border-radius: 4px; margin: 2px 4px 2px 0; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #d1d9e6; }
+        .file-item {
+            background: #f1f5f9;
+            padding: 2px 12px;
+            border-radius: 4px;
+            margin: 2px 4px 2px 0;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid #d1d9e6;
+        }
         .file-item .remove { cursor: pointer; color: #ef4444; font-weight: bold; }
-        .scheme-item { background: #f1f5f9; border-radius: 4px; padding: 2px 12px; margin: 2px 4px 2px 0; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; border: 1px solid #d1d9e6; }
+        .scheme-item {
+            background: #f1f5f9;
+            border-radius: 4px;
+            padding: 2px 12px;
+            margin: 2px 4px 2px 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            border: 1px solid #d1d9e6;
+        }
         .scheme-item .del { cursor: pointer; color: #ef4444; font-weight: bold; }
         .empty-value { color: #94a3b8; font-style: italic; }
         .color-green { background: #d4edda; color: #155724; }
@@ -82,9 +313,32 @@
         .color-other { background: #e2e8f0; color: #334155; }
         .legend-item { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; font-size: 14px; }
         .legend-color { display: inline-block; width: 20px; height: 20px; border: 1px solid #d1d9e6; border-radius: 4px; }
-        .range-inputs { display: flex; gap: 4px; align-items: center; font-size: 13px; }
-        .range-inputs input { width: 60px; padding: 2px 4px; border: 1px solid #d1d9e6; border-radius: 4px; height: 26px; font-size: 13px; }
-        .log-area { background: #1e293b; color: #e2e8f0; padding: 8px 12px; border-radius: 4px; max-height: 150px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 13px; margin-top: 10px; border: 1px solid #475569; }
+        .range-inputs {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            font-size: 13px;
+        }
+        .range-inputs input {
+            width: 60px;
+            padding: 2px 4px;
+            border: 1px solid #d1d9e6;
+            border-radius: 4px;
+            height: 26px;
+            font-size: 13px;
+        }
+        .log-area {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 8px 12px;
+            border-radius: 4px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            margin-top: 10px;
+            border: 1px solid #475569;
+        }
         .log-area .log-error { color: #fca5a5; }
         .log-area .log-success { color: #86efac; }
         .log-area .log-info { color: #93c5fd; }
@@ -135,12 +389,13 @@
                 </select>
                 <span class="hint">仅对"列"模式生效</span>
             </div>
+            <!-- 对齐基准列（仅影响独立展示） -->
             <div class="input-group">
                 <label>对齐基准列</label>
                 <select id="alignBaseKey" style="flex:1;min-width:120px;border:1px solid #d1d9e6;">
                     <option value="">无（不进行对齐）</option>
                 </select>
-                <span class="hint">选择后，多文件统计时按此列的值对齐行（仅对"列"模式生效）</span>
+                <span class="hint">选择后，独立展示按此列的值对齐行（仅对"列"模式生效，不影响合并展示）</span>
             </div>
             <div class="flex-between" style="margin:10px 0 6px;">
                 <h4 style="font-size:16px;font-weight:600;">关键字定义（最多30个）</h4>
@@ -898,10 +1153,9 @@
     }
 
     // ============================================================
-    // 对齐处理
+    // 对齐处理（仅用于独立展示）
     // ============================================================
     function alignColumnData(results, alignKeyIdx) {
-        // 修复：完整空值判断
         if (alignKeyIdx === null || alignKeyIdx === undefined || alignKeyIdx === '') {
             return results.map(r => ({
                 ...r,
@@ -994,6 +1248,7 @@
         document.getElementById('resultArea').style.display = 'block';
     }
 
+    // ----- 独立展示（使用对齐）-----
     function renderIndependentResults(stats) {
         const container = document.getElementById('independentResults');
         container.innerHTML = '';
@@ -1004,7 +1259,6 @@
 
         const scheme = stats.scheme;
         const alignKeyIdx = scheme.alignBaseKey;
-        // 修复：完整空值判断
         const hasAlign = alignKeyIdx !== null && alignKeyIdx !== undefined && alignKeyIdx !== '';
 
         let processedResults = stats.results;
@@ -1074,7 +1328,7 @@
             statCard.appendChild(title);
             const tableWrap = document.createElement('div');
             tableWrap.className = 'table-wrap';
-            const table = buildCellResultTable(data.cellData);
+            const table = buildCellResultTable(data.cellData || []);
             tableWrap.appendChild(table);
             statCard.appendChild(tableWrap);
             frag.appendChild(statCard);
@@ -1088,8 +1342,9 @@
             statCard.appendChild(title);
             const tableWrap = document.createElement('div');
             tableWrap.className = 'table-wrap';
-            const rows = hasAlign ? alignedRows : data.columnData.rows;
-            const table = buildColumnResultTableWithStyle(data.columnData, rows);
+            const columnData = data.columnData || { rows: [], keywords: [] };
+            const rows = hasAlign ? alignedRows : (columnData.rows || []);
+            const table = buildColumnResultTableWithStyle(columnData, rows);
             tableWrap.appendChild(table);
             statCard.appendChild(tableWrap);
             frag.appendChild(statCard);
@@ -1097,7 +1352,7 @@
         return frag;
     }
 
-    // ----- 合并展示 -----
+    // ----- 合并展示（不使用对齐，完全保持原版本逻辑）-----
     function renderMergedResults(stats) {
         const container = document.getElementById('mergedResults');
         container.innerHTML = '';
@@ -1107,26 +1362,12 @@
             return;
         }
 
-        const scheme = stats.scheme;
-        const alignKeyIdx = scheme.alignBaseKey;
-        // 修复：完整空值判断
-        const hasAlign = alignKeyIdx !== null && alignKeyIdx !== undefined && alignKeyIdx !== '';
-
-        let processedResults = fileResults;
-        let alignValues = [];
-        if (hasAlign) {
-            const aligned = alignColumnData(fileResults, alignKeyIdx);
-            processedResults = aligned;
-            if (aligned.length > 0 && aligned[0].alignValues) {
-                alignValues = aligned[0].alignValues;
-            }
-        }
-
+        // 图例
         const legendDiv = document.createElement('div');
         legendDiv.className = 'flex-wrap';
         legendDiv.style.marginBottom = '10px';
         const legendColors = ['#e6f3e6', '#fff9e6', '#f0ede6', '#f0e6f0', '#e6f0f0', '#f0e6e6'];
-        processedResults.forEach((res, idx) => {
+        fileResults.forEach((res, idx) => {
             const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
             const item = document.createElement('span');
             item.className = 'legend-item';
@@ -1135,7 +1376,8 @@
         });
         container.appendChild(legendDiv);
 
-        const hasAnyCell = processedResults.some(r => r.data.hasCell);
+        // 单元格采集项对比
+        const hasAnyCell = fileResults.some(r => r.data.hasCell);
         if (hasAnyCell) {
             const statCard = document.createElement('div');
             statCard.className = 'stat-card';
@@ -1145,30 +1387,31 @@
             statCard.appendChild(title);
             const tableWrap = document.createElement('div');
             tableWrap.className = 'table-wrap';
-            const table = buildMergedCellTableMulti(processedResults);
+            const table = buildMergedCellTableMulti(fileResults);
             tableWrap.appendChild(table);
             statCard.appendChild(tableWrap);
             container.appendChild(statCard);
         }
 
-        const hasAnyColumn = processedResults.some(r => r.data.hasColumn);
+        // 列采集项对比（原版，不对齐）
+        const hasAnyColumn = fileResults.some(r => r.data.hasColumn);
         if (hasAnyColumn) {
             const statCard = document.createElement('div');
             statCard.className = 'stat-card';
             const title = document.createElement('div');
             title.className = 'stat-title';
-            title.textContent = '列采集项对比' + (hasAlign ? ' (已对齐)' : '');
+            title.textContent = '列采集项对比';
             statCard.appendChild(title);
             const tableWrap = document.createElement('div');
             tableWrap.className = 'table-wrap';
-            const table = buildMergedColumnTableMulti(processedResults, alignValues, hasAlign);
+            const table = buildMergedColumnTableMulti(fileResults);
             tableWrap.appendChild(table);
             statCard.appendChild(tableWrap);
             container.appendChild(statCard);
         }
     }
 
-    // ----- 表格构建 -----
+    // ----- 表格构建函数 -----
     function buildCellResultTable(cellData) {
         const table = document.createElement('table');
         const thead = document.createElement('thead');
@@ -1220,8 +1463,9 @@
 
         const defaultFontSize = 14;
         const defaultColumnWidth = 120;
+        const kwList = columnData.keywords || [];
 
-        columnData.keywords.forEach((kw, idx) => {
+        kwList.forEach((kw, idx) => {
             const fontSize = kw.fontSize || defaultFontSize;
             const columnWidth = kw.columnWidth || defaultColumnWidth;
             let label = kw.keywordText || '';
@@ -1244,25 +1488,25 @@
         table.appendChild(thead);
 
         const tbody = document.createElement('tbody');
-        const rowsData = rows || columnData.rows || [];
+        const rowsData = rows || [];
         rowsData.forEach(row => {
             const tr = document.createElement('tr');
             row.forEach((cell, idx) => {
-                const kw = columnData.keywords[idx];
-                const fontSize = kw ? (kw.fontSize || 14) : 14;
-                const columnWidth = kw ? (kw.columnWidth || 120) : 120;
+                const kw = kwList[idx] || {};
+                const fontSize = kw.fontSize || defaultFontSize;
+                const columnWidth = kw.columnWidth || defaultColumnWidth;
 
                 const td = document.createElement('td');
                 td.textContent = cell.value !== null && cell.value !== undefined ? cell.value : '';
                 td.style.fontSize = fontSize + 'px';
                 td.style.minWidth = columnWidth + 'px';
                 if (cell.value === null || cell.value === undefined || cell.value === '') td.className = 'empty-value';
-                if (kw && kw.collectColor && cell.color_name && cell.color_name !== 'blank') {
+                if (kw.collectColor && cell.color_name && cell.color_name !== 'blank') {
                     td.style.backgroundColor = getColorCss(cell.color_name);
                 }
                 tr.appendChild(td);
 
-                if (kw && kw.addColorCol) {
+                if (kw.addColorCol) {
                     const tdColor = document.createElement('td');
                     const meaning = cell.color_meaning || 'blank';
                     tdColor.textContent = meaning;
@@ -1280,12 +1524,13 @@
         return table;
     }
 
+    // ----- 合并单元格表格（原版）-----
     function buildMergedCellTableMulti(fileResults) {
         const table = document.createElement('table');
         const thead = document.createElement('thead');
         const trHead = document.createElement('tr');
         let hasColor = false;
-        const allCellData = fileResults.map(r => r.data.cellData);
+        const allCellData = fileResults.map(r => r.data.cellData || []);
         allCellData.forEach(arr => {
             if (arr.some(d => d.color_indexed !== null)) hasColor = true;
         });
@@ -1297,7 +1542,7 @@
         const tbody = document.createElement('tbody');
         const bgColors = ['#e6f3e6', '#fff9e6', '#f0ede6', '#f0e6f0', '#e6f0f0', '#f0e6e6'];
         fileResults.forEach((res, fi) => {
-            const cellData = res.data.cellData;
+            const cellData = res.data.cellData || [];
             if (cellData.length === 0) return;
             const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
             cellData.forEach(d => {
@@ -1340,7 +1585,8 @@
         return table;
     }
 
-    function buildMergedColumnTableMulti(fileResults, alignValues, hasAlign) {
+    // ----- 合并列表格（原版，不对齐）-----
+    function buildMergedColumnTableMulti(fileResults) {
         const table = document.createElement('table');
         const thead = document.createElement('thead');
         const trHead = document.createElement('tr');
@@ -1348,12 +1594,12 @@
         const defaultFontSize = 14;
         const defaultColumnWidth = 120;
 
-        // 修复：增加 alignValues.length > 0 判断
-        const rowLabel = (hasAlign && alignValues && alignValues.length > 0) ? '对齐值' : '行号';
-        trHead.innerHTML = `<th>${rowLabel}</th>`;
+        // 行号列
+        trHead.innerHTML = `<th>行号</th>`;
 
         fileResults.forEach((res, fi) => {
-            const kw = res.data.columnData.keywords || [];
+            const columnData = res.data.columnData || { keywords: [] };
+            const kw = columnData.keywords || [];
             const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
             kw.forEach((k, idx) => {
                 const fontSize = k.fontSize || defaultFontSize;
@@ -1381,28 +1627,27 @@
         const tbody = document.createElement('tbody');
         const bgColors = ['#e6f3e6', '#fff9e6', '#f0ede6', '#f0e6f0', '#e6f0f0', '#f0e6e6'];
 
+        // 确定最大行数
         let maxRows = 0;
         fileResults.forEach(res => {
-            const rows = (hasAlign && res.alignedRows) ? res.alignedRows : res.data.columnData.rows;
+            const columnData = res.data.columnData || { rows: [] };
+            const rows = columnData.rows || [];
             if (rows && rows.length > maxRows) maxRows = rows.length;
         });
 
         for (let rowIdx = 0; rowIdx < maxRows; rowIdx++) {
             const tr = document.createElement('tr');
             const tdRowLabel = document.createElement('td');
-            if (hasAlign && alignValues && alignValues.length > 0 && alignValues[rowIdx] !== undefined) {
-                tdRowLabel.textContent = alignValues[rowIdx];
-            } else {
-                tdRowLabel.textContent = rowIdx + 1;
-            }
+            tdRowLabel.textContent = rowIdx + 1;
             tdRowLabel.style.fontWeight = 'bold';
             tdRowLabel.style.backgroundColor = '#f1f5f9';
             tdRowLabel.style.minWidth = '60px';
             tr.appendChild(tdRowLabel);
 
             fileResults.forEach((res, fi) => {
-                const rows = (hasAlign && res.alignedRows) ? res.alignedRows : res.data.columnData.rows;
-                const kw = res.data.columnData.keywords || [];
+                const columnData = res.data.columnData || { rows: [], keywords: [] };
+                const rows = columnData.rows || [];
+                const kw = columnData.keywords || [];
                 const row = (rows && rows[rowIdx]) ? rows[rowIdx] : [];
 
                 row.forEach((cell, idx) => {
@@ -1446,22 +1691,26 @@
         document.getElementById(tabId).classList.add('active');
     }
 
-    // ----- 导出 Excel -----
+    // ----- 导出 Excel（修复导出功能）-----
     async function exportIndependentExcel() {
         if (!statisticsResults) return alert('请先执行统计');
         const wb = new ExcelJS.Workbook();
-        statisticsResults.results.forEach((res, fi) => {
+        for (let res of statisticsResults.results) {
             const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
             const ws = wb.addWorksheet(displayName.substring(0, 31));
             let rowIdx = 1;
-            if (res.data.hasCell) {
+            
+            const cellData = res.data.cellData || [];
+            const columnData = res.data.columnData || { rows: [], keywords: [] };
+            
+            if (cellData.length > 0) {
                 ws.addRow(['单元格采集项']);
                 const headers = ['关键字', '值'];
-                const hasColor = res.data.cellData.some(d => d.color_indexed !== null);
+                const hasColor = cellData.some(d => d.color_indexed !== null && d.color_indexed !== undefined);
                 if (hasColor) headers.push('结果');
                 const headerRow = ws.addRow(headers);
                 headerRow.font = { bold: true };
-                res.data.cellData.forEach(d => {
+                cellData.forEach(d => {
                     const row = [];
                     let label = d.keyword.keywordText || '';
                     if (d.keyword.valuePosition === 'left') label += ' ←' + d.keyword.offset;
@@ -1482,14 +1731,13 @@
                 });
                 rowIdx = ws.rowCount + 2;
             }
-            if (res.data.hasColumn) {
+            if ((columnData.rows || []).length > 0) {
                 if (rowIdx > 1) ws.addRow([]);
                 ws.addRow(['列采集项']);
-                const colData = res.data.columnData;
                 const headers = [];
                 const colorColIndices = [];
                 const colWidths = [];
-                colData.keywords.forEach((kw, idx) => {
+                (columnData.keywords || []).forEach((kw, idx) => {
                     let label = kw.keywordText || '';
                     if (kw.valuePosition === 'left') label += ' ←' + kw.offset;
                     else if (kw.valuePosition === 'right') label += ' →' + kw.offset;
@@ -1507,12 +1755,12 @@
                     ws.getColumn(idx + 1).width = w / 7;
                 });
 
-                const rowsToExport = res.alignedRows || colData.rows || [];
+                const rowsToExport = res.alignedRows || columnData.rows || [];
                 rowsToExport.forEach(row => {
                     const values = [];
                     row.forEach((cell, idx) => {
                         values.push(cell.value !== null && cell.value !== undefined ? cell.value : '');
-                        if (colData.keywords[idx].addColorCol) {
+                        if ((columnData.keywords || [])[idx] && (columnData.keywords || [])[idx].addColorCol) {
                             const meaning = cell.color_meaning || 'blank';
                             values.push(meaning);
                         }
@@ -1520,8 +1768,8 @@
                     const rowObj = ws.addRow(values);
                     rowObj.height = 20;
                     row.forEach((cell, idx) => {
-                        const kw = colData.keywords[idx];
-                        if (kw.collectColor && cell.color_name && cell.color_name !== 'blank') {
+                        const kw = (columnData.keywords || [])[idx];
+                        if (kw && kw.collectColor && cell.color_name && cell.color_name !== 'blank') {
                             const cellExcel = rowObj.getCell(idx + 1);
                             const argb = getColorArgb(cell.color_name);
                             if (argb) cellExcel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } };
@@ -1538,7 +1786,7 @@
                 });
             }
             ws.columns.forEach(col => col.width = Math.max(col.width || 15, 15));
-        });
+        }
         const buf = await wb.xlsx.writeBuffer();
         saveAs(new Blob([buf], { type: 'application/octet-stream' }), '独立统计结果.xlsx');
         log('独立统计 Excel 导出成功', 'success');
@@ -1551,35 +1799,21 @@
         const ws = wb.addWorksheet('合并统计');
 
         const fileResults = statisticsResults.results;
-        const scheme = statisticsResults.scheme;
-        const alignKeyIdx = scheme.alignBaseKey;
-        // 修复：完整空值判断
-        const hasAlign = alignKeyIdx !== null && alignKeyIdx !== undefined && alignKeyIdx !== '';
-
-        let processedResults = fileResults;
-        let alignValues = [];
-        if (hasAlign) {
-            const aligned = alignColumnData(fileResults, alignKeyIdx);
-            processedResults = aligned;
-            if (aligned.length > 0 && aligned[0].alignValues) {
-                alignValues = aligned[0].alignValues;
-            }
-        }
-
-        const validFiles = processedResults.filter(r => r.data.hasColumn);
+        const validFiles = fileResults.filter(r => r.data && r.data.hasColumn);
         if (validFiles.length < 2) {
             alert('至少需要两个有列数据的文件才能导出合并结果');
             return;
         }
 
-        ws.addRow(['列采集项合并' + (hasAlign ? ' (已对齐)' : '')]);
+        ws.addRow(['列采集项合并']);
 
-        const headers = ['行号/对齐值'];
+        const headers = ['行号'];
         const colorColIndices = [];
         const colWidths = [60];
 
         validFiles.forEach((res, fi) => {
-            const kw = res.data.columnData.keywords || [];
+            const columnData = res.data.columnData || { keywords: [] };
+            const kw = columnData.keywords || [];
             const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
             kw.forEach((k, idx) => {
                 let label = k.keywordText || '';
@@ -1603,23 +1837,20 @@
 
         let maxRows = 0;
         validFiles.forEach(res => {
-            const rows = (hasAlign && res.alignedRows) ? res.alignedRows : res.data.columnData.rows;
+            const columnData = res.data.columnData || { rows: [] };
+            const rows = columnData.rows || [];
             if (rows && rows.length > maxRows) maxRows = rows.length;
         });
 
         const bgColors = ['e6f3e6', 'fff9e6', 'f0ede6', 'f0e6f0', 'e6f0f0', 'f0e6e6'];
 
         for (let rowIdx = 0; rowIdx < maxRows; rowIdx++) {
-            const values = [];
-            if (hasAlign && alignValues && alignValues.length > 0 && alignValues[rowIdx] !== undefined) {
-                values.push(alignValues[rowIdx]);
-            } else {
-                values.push(rowIdx + 1);
-            }
+            const values = [rowIdx + 1];
 
             validFiles.forEach((res, fi) => {
-                const rows = (hasAlign && res.alignedRows) ? res.alignedRows : res.data.columnData.rows;
-                const kw = res.data.columnData.keywords || [];
+                const columnData = res.data.columnData || { rows: [], keywords: [] };
+                const rows = columnData.rows || [];
+                const kw = columnData.keywords || [];
                 const row = (rows && rows[rowIdx]) ? rows[rowIdx] : [];
 
                 row.forEach((cell, idx) => {
@@ -1636,7 +1867,8 @@
 
             let colOffset = 1;
             validFiles.forEach((res, fi) => {
-                const kw = res.data.columnData.keywords || [];
+                const columnData = res.data.columnData || { keywords: [] };
+                const kw = columnData.keywords || [];
                 const fileColor = 'FF' + bgColors[fi % bgColors.length];
                 kw.forEach((k, idx) => {
                     const cell = rowObj.getCell(colOffset + 1);
@@ -1652,8 +1884,9 @@
 
             let valOffset = 1;
             validFiles.forEach((res, fi) => {
-                const kw = res.data.columnData.keywords || [];
-                const rows = (hasAlign && res.alignedRows) ? res.alignedRows : res.data.columnData.rows;
+                const columnData = res.data.columnData || { rows: [], keywords: [] };
+                const rows = columnData.rows || [];
+                const kw = columnData.keywords || [];
                 const row = (rows && rows[rowIdx]) ? rows[rowIdx] : [];
 
                 row.forEach((cell, idx) => {
