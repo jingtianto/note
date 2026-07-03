@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Excel 颜色读取 Demo</title>
     <style>
+        /* 样式保持不变，与之前相同 */
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Segoe UI', sans-serif;
@@ -71,9 +72,6 @@
             color: #64748b;
             font-size: 15px;
         }
-        .upload-area .text strong {
-            color: #0f172a;
-        }
         .settings {
             display: flex;
             gap: 12px;
@@ -116,10 +114,6 @@
             opacity: 0.6;
             cursor: not-allowed;
         }
-        .btn-success {
-            background: #22c55e;
-        }
-        .btn-success:hover { background: #16a34a; }
         .result-area {
             margin-top: 16px;
             background: #1e293b;
@@ -128,7 +122,7 @@
             border-radius: 8px;
             font-family: 'Consolas', monospace;
             font-size: 13px;
-            max-height: 400px;
+            max-height: 500px;
             overflow-y: auto;
             white-space: pre-wrap;
             word-wrap: break-word;
@@ -179,6 +173,8 @@
             vertical-align: middle;
             margin-right: 6px;
         }
+        .status-green { color: #22c55e; }
+        .status-red { color: #ef4444; }
     </style>
 </head>
 <body>
@@ -189,7 +185,6 @@
         <span class="badge">Python 后端</span>
     </h1>
 
-    <!-- 上传区域 -->
     <div class="upload-area" id="uploadArea">
         <span class="icon">📁</span>
         <div class="text">
@@ -198,7 +193,6 @@
         <input type="file" id="fileInput" accept=".xlsx,.xls" />
     </div>
 
-    <!-- 设置 -->
     <div class="settings">
         <label>工作表：
             <input type="text" id="sheetName" value="IPN" />
@@ -208,10 +202,8 @@
         </label>
     </div>
 
-    <!-- 按钮 -->
     <button class="btn" id="analyzeBtn" onclick="analyze()">🔍 开始分析</button>
 
-    <!-- 状态 -->
     <div class="status-bar">
         <div class="status" id="statusDisplay">
             <span>⏳ 等待上传</span>
@@ -219,7 +211,6 @@
         <span class="file-name" id="fileName">未选择文件</span>
     </div>
 
-    <!-- 结果 -->
     <div class="result-area" id="resultArea"></div>
 </div>
 
@@ -237,6 +228,18 @@
     const fileName = document.getElementById('fileName');
 
     let selectedFile = null;
+
+    // ============================================================
+    // 颜色映射（前端展示用）
+    // ============================================================
+    const COLOR_MAP = {
+        10: { name: '红色', meaning: 'failed', css: '#FF0000' },
+        35: { name: '浅蓝色', meaning: 'signal missing', css: '#99CCFF' },
+        52: { name: '橙色', meaning: 'trigger not occurred', css: '#FF9900' },
+        13: { name: '黄色', meaning: 'warning', css: '#FFFF00' },
+        11: { name: '绿色', meaning: 'passed', css: '#00FF00' },
+        9:  { name: 'blank', meaning: 'blank', css: '#f1f5f9' }
+    };
 
     // ============================================================
     // 文件选择
@@ -269,23 +272,11 @@
     function handleFile(file) {
         selectedFile = file;
         fileName.textContent = file.name;
-        statusDisplay.innerHTML = `<span>✅ 已选择文件</span>`;
+        statusDisplay.innerHTML = `<span class="status-green">✅ 已选择文件</span>`;
         analyzeBtn.disabled = false;
         // 自动触发分析
         setTimeout(analyze, 300);
     }
-
-    // ============================================================
-    // 颜色映射（前端展示用）
-    // ============================================================
-    const COLOR_MAP = {
-        10: { name: '红色', meaning: 'failed', css: '#FF0000' },
-        35: { name: '浅蓝色', meaning: 'signal missing', css: '#99CCFF' },
-        52: { name: '橙色', meaning: 'trigger not occurred', css: '#FF9900' },
-        13: { name: '黄色', meaning: 'warning', css: '#FFFF00' },
-        11: { name: '绿色', meaning: 'passed', css: '#00FF00' },
-        9:  { name: 'blank', meaning: 'blank', css: '#f1f5f9' }
-    };
 
     // ============================================================
     // 核心分析函数
@@ -299,7 +290,6 @@
         const sheetName = sheetNameInput.value.trim() || 'IPN';
         const cellAddress = cellAddressInput.value.trim().toUpperCase() || 'A24';
 
-        // UI 状态
         analyzeBtn.disabled = true;
         analyzeBtn.textContent = '⏳ 处理中...';
         statusDisplay.innerHTML = `<span class="spinner"></span> 正在分析...`;
@@ -307,21 +297,17 @@
         resultArea.innerHTML = '⏳ 正在向 Python 后端发送请求...';
 
         try {
-            // 构建 FormData
             const formData = new FormData();
             formData.append('file', selectedFile);
             formData.append('sheet_name', sheetName);
             formData.append('cell_address', cellAddress);
 
-            // 发送请求到 Python 后端
             const response = await fetch('http://127.0.0.1:5000/api/read_excel', {
                 method: 'POST',
                 body: formData
             });
 
             const data = await response.json();
-
-            // 显示结果
             displayResult(data, sheetName, cellAddress);
 
         } catch (error) {
@@ -331,7 +317,7 @@
                 <div class="warn">请确认 Python 后端已启动: python app.py</div>
                 <div class="info">后端地址: http://127.0.0.1:5000</div>
             `;
-            statusDisplay.innerHTML = `❌ 连接失败`;
+            statusDisplay.innerHTML = `<span class="status-red">❌ 连接失败</span>`;
         } finally {
             analyzeBtn.disabled = false;
             analyzeBtn.textContent = '🔍 开始分析';
@@ -353,7 +339,7 @@
                 html += `<div class="warn">堆栈信息:\n${data.trace}</div>`;
             }
             resultArea.innerHTML = html;
-            statusDisplay.innerHTML = '❌ 分析失败';
+            statusDisplay.innerHTML = `<span class="status-red">❌ 分析失败</span>`;
             return;
         }
 
@@ -366,50 +352,56 @@
         html += `<div class="info">📄 工作表: ${data.sheet_name}</div>`;
         html += `<div class="info">📍 单元格: ${data.cell_address}</div>`;
         html += `<div class="info">📝 值: ${data.cell_value !== null ? data.cell_value : '(空)'}</div>`;
-        html += `<div class="info">📊 color_indexed: ${indexed !== null ? indexed : '无'}</div>`;
+        html += `<div class="info">📊 color_indexed: ${indexed !== null && indexed !== undefined ? indexed : '无'}</div>`;
         if (data.color_rgb) {
             html += `<div class="info">🎨 color_rgb: ${data.color_rgb}</div>`;
         }
+        if (data.color_theme !== undefined && data.color_theme !== null) {
+            html += `<div class="info">🎨 color_theme: ${data.color_theme}</div>`;
+        }
+        if (data.color_tint !== undefined && data.color_tint !== null) {
+            html += `<div class="info">🎨 color_tint: ${data.color_tint}</div>`;
+        }
+
+        // 调试信息
+        html += `<div class="info">📋 fill_available: ${data.fill_available}</div>`;
+        html += `<div class="info">📋 has_fgColor: ${data.has_fgColor}</div>`;
+        html += `<div class="info">📋 has_bgColor: ${data.has_bgColor}</div>`;
 
         if (mapped) {
             const colorCss = mapped.css || '#ffffff';
             html += `<div class="success">🎨 颜色: <span class="color-swatch" style="background-color:${colorCss};"></span> ${mapped.name} (${mapped.meaning})</div>`;
-        } else if (indexed !== null) {
+        } else if (indexed !== null && indexed !== undefined) {
             html += `<div class="warn">⚠️ 未知索引: ${indexed}</div>`;
         } else {
             html += `<div class="warn">ℹ️ 无填充颜色</div>`;
         }
 
-        // 显示所有工作表（调试信息）
         if (data.all_sheets) {
             html += `<div class="info">📋 所有工作表: ${data.all_sheets.join(', ')}</div>`;
         }
 
         resultArea.innerHTML = html;
-        statusDisplay.innerHTML = `✅ 分析完成`;
+        statusDisplay.innerHTML = `<span class="status-green">✅ 分析完成</span>`;
     }
 
     // ============================================================
     // 初始化
     // ============================================================
-    // 检查后端是否可用
     async function checkBackend() {
         try {
             const response = await fetch('http://127.0.0.1:5000/api/health');
             if (response.ok) {
-                statusDisplay.innerHTML = `🟢 后端已连接`;
+                statusDisplay.innerHTML = `<span class="status-green">🟢 后端已连接</span>`;
                 return true;
             }
         } catch (e) {
-            statusDisplay.innerHTML = `🔴 后端未启动`;
+            statusDisplay.innerHTML = `<span class="status-red">🔴 后端未启动</span>`;
         }
         return false;
     }
 
-    // 启动时检查
     checkBackend();
-
-    // 自动分析开关（已在上传时触发）
     console.log('📊 Excel 颜色读取工具已加载');
     console.log('📡 后端地址: http://127.0.0.1:5000');
 </script>
