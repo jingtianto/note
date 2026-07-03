@@ -1,4 +1,4 @@
-# app.py - 完整版后端
+# app.py - 增强版后端（含详细日志）
 # 运行方式: python app.py
 # 依赖: pip install openpyxl flask flask-cors
 
@@ -8,11 +8,12 @@ import openpyxl
 import io
 import json
 import traceback
+import sys
 
 app = Flask(__name__)
 CORS(app)
 
-# 颜色映射表（fgColor.indexed → 颜色含义）
+# 颜色映射表
 COLOR_MAP = {
     10: {'name': '红色', 'meaning': 'failed'},
     35: {'name': '浅蓝色', 'meaning': 'signal missing'},
@@ -23,8 +24,13 @@ COLOR_MAP = {
 }
 
 
+def log(msg):
+    """输出带时间戳的日志"""
+    from datetime import datetime
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
 def safe_int(value):
-    """安全地将 openpyxl 对象转为 Python int"""
     if value is None:
         return None
     if hasattr(value, 'value'):
@@ -42,7 +48,6 @@ def safe_int(value):
 
 
 def get_cell_color(cell):
-    """获取单元格颜色索引"""
     color_indexed = None
     fill = cell.fill
     if fill is not None:
@@ -62,7 +67,6 @@ def get_cell_color(cell):
 
 
 def get_cell_value(cell):
-    """获取单元格值"""
     val = cell.value
     if val is None:
         return None
@@ -74,7 +78,6 @@ def get_cell_value(cell):
 
 
 def find_keyword_column(sheet, keyword_text, search_range=None):
-    """在指定范围内查找关键字所在的列和行"""
     min_row = 1
     max_row = sheet.max_row
 
@@ -97,23 +100,33 @@ def find_keyword_column(sheet, keyword_text, search_range=None):
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze():
-    """接收文件列表和方案，返回所有文件的统计结果"""
+    log("=" * 50)
+    log("收到分析请求")
+    
     try:
         files = request.files.getlist('files')
+        log(f"接收文件数: {len(files)}")
+        
         if not files:
             return jsonify({'success': False, 'error': '未上传文件'}), 400
 
         scheme_json = request.form.get('scheme')
+        log(f"方案 JSON 长度: {len(scheme_json) if scheme_json else 0}")
+        
         if not scheme_json:
             return jsonify({'success': False, 'error': '未提供方案'}), 400
 
         scheme = json.loads(scheme_json)
+        log(f"方案关键字数: {len(scheme.get('keywords', []))}")
 
         results = []
         for file in files:
+            log(f"处理文件: {file.filename}")
             try:
                 file_bytes = file.read()
+                log(f"  文件大小: {len(file_bytes)} 字节")
                 wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+                log(f"  工作表: {wb.sheetnames}")
                 result = process_workbook(wb, scheme)
                 results.append({
                     'filename': file.filename,
@@ -121,16 +134,25 @@ def analyze():
                     'data': result.get('data', {}),
                     'error': result.get('error', None)
                 })
+                log(f"  处理结果: {'成功' if result.get('success') else '失败'}")
+                if result.get('error'):
+                    log(f"  错误: {result.get('error')}")
             except Exception as e:
+                log(f"  异常: {str(e)}")
+                log(f"  堆栈: {traceback.format_exc()}")
                 results.append({
                     'filename': file.filename,
                     'success': False,
                     'error': str(e)
                 })
 
+        log(f"处理完成，成功 {len([r for r in results if r.get('success')])} 个文件")
+        log("=" * 50)
         return jsonify({'success': True, 'results': results})
 
     except Exception as e:
+        log(f"全局异常: {str(e)}")
+        log(f"堆栈: {traceback.format_exc()}")
         return jsonify({
             'success': False,
             'error': str(e),
@@ -139,7 +161,6 @@ def analyze():
 
 
 def process_workbook(workbook, scheme):
-    """处理单个工作簿"""
     keywords = scheme.get('keywords', [])
     base_key_idx = scheme.get('baseKey')
     if base_key_idx is not None and base_key_idx != '':
@@ -182,7 +203,7 @@ def process_workbook(workbook, scheme):
             'index': idx
         })
 
-    # ---- cell 模式 ----
+    # cell 模式
     cell_data = []
     for info in kw_infos:
         if info['kw'].get('collectType') != 'cell':
@@ -210,7 +231,7 @@ def process_workbook(workbook, scheme):
                 'color_meaning': color_info['meaning'] if color_info else None
             })
 
-    # ---- column 模式 ----
+    # column 模式
     col_infos = [info for info in kw_infos if info['kw'].get('collectType') == 'column']
     column_data = {'rows': [], 'keywords': [info['kw'] for info in col_infos]}
 
@@ -279,7 +300,8 @@ def health():
 
 
 if __name__ == '__main__':
-    print('🚀 启动 Excel 分析服务...')
+    print('=' * 50)
+    print('🚀 启动 Excel 分析服务 (增强调试版)...')
     print('📡 http://127.0.0.1:5000')
-    print('按 Ctrl+C 停止服务')
+    print('=' * 50)
     app.run(debug=False, host='127.0.0.1', port=5000)
