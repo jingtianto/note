@@ -1,4 +1,4 @@
-# app.py - 增强版 Excel 颜色读取后端
+# app.py - 修复 JSON 序列化问题
 # 运行方式: python app.py
 # 依赖安装: pip install openpyxl flask flask-cors
 
@@ -20,9 +20,6 @@ COLOR_MAP = {
     11: {'name': '绿色', 'meaning': 'passed'},
     9:  {'name': 'blank', 'meaning': 'blank'}
 }
-
-# 补充：将 -1 或 None 映射为空白
-# openpyxl 在无颜色时可能返回 -1
 
 
 @app.route('/api/read_excel', methods=['POST'])
@@ -61,14 +58,15 @@ def read_excel():
         fill = cell.fill
         if fill and hasattr(fill, 'fgColor') and fill.fgColor:
             fg = fill.fgColor
-            # indexed 可能是 None, -1, 或实际索引
             if hasattr(fg, 'indexed'):
                 idx = fg.indexed
-                # openpyxl 中 -1 或 None 表示无颜色
                 if idx is not None and idx != -1:
                     color_indexed = int(idx)
             if hasattr(fg, 'rgb'):
-                color_rgb = fg.rgb
+                # 将 RGB 对象转为字符串
+                rgb_val = fg.rgb
+                if rgb_val is not None:
+                    color_rgb = str(rgb_val)
             if hasattr(fg, 'theme'):
                 color_theme = fg.theme
             if hasattr(fg, 'tint'):
@@ -82,7 +80,9 @@ def read_excel():
                 if idx is not None and idx != -1:
                     color_indexed = int(idx)
             if hasattr(bg, 'rgb') and not color_rgb:
-                color_rgb = bg.rgb
+                rgb_val = bg.rgb
+                if rgb_val is not None:
+                    color_rgb = str(rgb_val)
 
         # 映射颜色
         color_info = COLOR_MAP.get(color_indexed, None)
@@ -104,11 +104,6 @@ def read_excel():
             'fill_available': fill is not None,
             'has_fgColor': fill and hasattr(fill, 'fgColor') and fill.fgColor is not None,
             'has_bgColor': fill and hasattr(fill, 'bgColor') and fill.bgColor is not None,
-            'debug': {
-                'fill_type': str(type(fill)) if fill else None,
-                'fgColor_type': str(type(fill.fgColor)) if fill and hasattr(fill, 'fgColor') and fill.fgColor else None,
-                'bgColor_type': str(type(fill.bgColor)) if fill and hasattr(fill, 'bgColor') and fill.bgColor else None,
-            }
         })
 
     except Exception as e:
