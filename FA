@@ -5,19 +5,19 @@ import re
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, 
                              QHeaderView, QComboBox, QCheckBox, QFileDialog, QMessageBox,
-                             QLabel, QFrame)
+                             QLabel)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QDragEnterEvent, QDropEvent
 import openpyxl
 
-# ================= 配置与常量 =================
+# ================= 配置 =================
 CONFIG_FILE = "fa_config.json"
 SHEET_NAME = "IPN"
-TARGET_COL_KEYWORD = "FA"
+TARGET_COL_NAME = "Kategorie"
+TARGET_CELL_KEYWORD = "FA"
 
 class ExcelWorker(QThread):
-    """后台线程处理读取Excel和后续刷新，防止界面卡死"""
-    data_loaded = pyqtSignal(list, str) # 发送数据列表和文件路径
+    data_loaded = pyqtSignal(list, str)
     
     def __init__(self, file_path, parent=None):
         super().__init__(parent)
@@ -34,47 +34,45 @@ class ExcelWorker(QThread):
             config = self.load_config()
             data_rows = []
             
-            # 遍历寻找目标列
-            target_col_idx = None
-            header_row = 1
-            for row in ws.iter_rows(min_row=1, max_row=1, values_only=True):
-                for idx, cell_val in enumerate(row):
-                    if cell_val == TARGET_COL_KEYWORD:
-                        target_col_idx = idx + 1 # openpyxl 是 1-based
-                        break
-                break
+            # 1. 找到 Kategorie 列的索引 (1-based)
+            kategorie_col_idx = None
+            for col_idx, cell in enumerate(next(ws.iter_rows(min_row=1, max_row=1)), start=1):
+                if cell.value == TARGET_COL_NAME:
+                    kategorie_col_idx = col_idx
+                    break
 
-            if target_col_idx is None:
-                self.data_loaded.emit([], "错误：未找到列名为 'FA' 的列！")
+            if kategorie_col_idx is None:
+                self.data_loaded.emit([], f"错误：未找到列名为 '{TARGET_COL_NAME}' 的列！")
                 return
 
-            # 开始解析数据
-            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-                target_cell_val = row[target_col_idx-1] if target_col_idx-1 < len(row) else None
+            # 2. 遍历该列，检索内容完全等于 "FA" 的单元格
+            col_cells = ws[f"{openpyxl.utils.get_column_letter(kategorie_col_idx)}"]
+            for row_idx, cell in enumerate(col_cells, start=1):
+                if row_idx == 1: continue # 跳过表头
                 
-                if not target_cell_val:
-                    continue
-                
-                target_str = str(target_cell_val)
-                # 正则匹配所有 FA="xxx"
-                matches = re.findall(r'FA="([^"]*)"', target_str)
-                
-                if matches:
-                    # 左单元格 (假设 FA 左边紧邻着一列)
-                    left_val = row[target_col_idx-2] if target_col_idx-2 >= 0 else ""
-                    # 将提取出的第一个 FA 值用于反向显示
-                    current_fa_val = matches[0].strip()
-                    # 从配置中反向查找名称
-                    current_name = config.get(current_fa_val, "未定义")
+                if cell.value == TARGET_CELL_KEYWORD:
+                    # 获取左右单元格数据 (注意边界)
+                    left_cell = ws.cell(row=row_idx, column=kategorie_col_idx - 1).value if kategorie_col_idx > 1 else ""
+                    right_cell = ws.cell(row=row_idx, column=kategorie_col_idx + 1).value
                     
-                    data_rows.append({
-                        'row_idx': row_idx,
-                        'left_val': left_val,
-                        'raw_content': target_str, # 原始内容
-                        'current_fa_val': current_fa_val,
-                        'current_name': current_name,
-                        'matches_count': len(matches)
-                    })
+                    # 转换右侧单元格内容为字符串，并解析 FA="xxx"
+                    right_str = str(right_cell) if right_cell else ""
+                    matches = re.findall(r'FA="([^"]*)"', right_str)
+                    
+                    if matches:
+                        current_fa_val = matches[0].strip()
+                        # 反向查找名称
+                        current_name = config.get(current_fa_val, "未定义")
+                        
+                        data_rows.append({
+                            'row_idx': row_idx,
+                            'left_val': left_cell,
+                            'middle_val': TARGET_CELL_KEYWORD, # 中间就是 FA
+                            'right_raw': right_str,  # 原始右侧内容
+                            'current_fa_val': current_fa_val,
+                            'current_name': current_name,
+                            'matches_count': len(matches)
+                        })
 
             self.data_loaded.emit(data_rows, self.file_path)
         except Exception as e:
@@ -93,15 +91,15 @@ class FAReplacerApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.current_file_path = None
-        self.data_store = [] # 存储解析出的数据
+        self.data_store = []
         self.config_data = {}
         self.initUI()
         self.load_config_from_json()
 
     def initUI(self):
-        self.setWindowTitle("FA 批量替换工具")
-        self.setGeometry(100, 100, 900, 600)
-        self.setAcceptDrops(True) # 开启窗口拖拽
+        self.setWindowTitle("FA 批量替换工具 (精准版)")
+        self.setGeometry(100, 100, 1000, 600)
+        self.setAcceptDrops(True)
 
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
@@ -122,18 +120,18 @@ class FAReplacerApp(QMainWindow):
         toolbar.addStretch()
         layout.addLayout(toolbar)
 
-        # 2. 状态提示区（拖拽说明）
-        self.status_label = QLabel("拖拽 Excel 文件到窗口任意位置加载 或 点击'加载 Excel'")
-        self.status_label.setStyleSheet("color: #666; padding: 5px; border: 1px dashed #aaa;")
+        self.status_label = QLabel("拖拽 Excel 文件到窗口任意位置加载 (需包含 'IPN' Sheet页和 'Kategorie' 列)")
+        self.status_label.setStyleSheet("color: #666; padding: 5px; border: 1px dashed #aaa; background: #f9f9f9;")
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
 
-        # 3. 数据表格
+        # 2. 数据表格 (左 | 中(FA) | 右内容 | 反向识别名 | 下拉框 | 行号)
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["勾选", "左侧数据", "当前内容(FA=...)", "当前识别名", "替换下拉(新FA)", "待修改行"])
+        self.table.setColumnCount(7)
+        self.table.setHorizontalHeaderLabels(["勾选", "左单元格", "中间(FA)", "右单元格(原内容)", "当前识别名", "替换下拉", "待修改行"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.setColumnHidden(6, True) # 隐藏行号列
         layout.addWidget(self.table)
 
     def load_config_from_json(self):
@@ -142,13 +140,12 @@ class FAReplacerApp(QMainWindow):
                 with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                     self.config_data = json.load(f)
             except Exception as e:
-                QMessageBox.warning(self, "配置警告", f"加载 {CONFIG_FILE} 失败，将使用空配置。\n错误: {e}")
+                QMessageBox.warning(self, "配置警告", f"加载 {CONFIG_FILE} 失败。错误: {e}")
                 self.config_data = {}
         else:
             QMessageBox.information(self, "提示", f"未找到配置文件 {CONFIG_FILE}，请创建并填入键值对。\n例如: {{ \"AUDI\": \"奥迪\" }}")
             self.config_data = {}
 
-    # ================= 拖拽逻辑 =================
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
@@ -162,7 +159,6 @@ class FAReplacerApp(QMainWindow):
             else:
                 self.status_label.setText("⚠️ 请拖入 .xlsx 或 .xls 格式的 Excel 文件")
 
-    # ================= 核心加载与渲染逻辑 =================
     def load_excel(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "选择 Excel 文件", "", "Excel Files (*.xlsx *.xls)")
         if file_path:
@@ -171,10 +167,9 @@ class FAReplacerApp(QMainWindow):
     def process_file(self, file_path):
         self.status_label.setText(f"正在读取: {os.path.basename(file_path)} ...")
         self.current_file_path = file_path
-        self.table.setRowCount(0) # 清空表格
+        self.table.setRowCount(0)
         self.data_store = []
         
-        # 启动线程读取数据
         self.worker = ExcelWorker(file_path)
         self.worker.data_loaded.connect(self.on_data_loaded)
         self.worker.start()
@@ -187,17 +182,16 @@ class FAReplacerApp(QMainWindow):
         
         self.data_store = data_rows
         self.render_table(data_rows)
-        self.status_label.setText(f"✅ 加载成功！共找到 {len(data_rows)} 组包含 FA 的数据。")
+        self.status_label.setText(f"✅ 加载成功！在 'Kategorie' 列找到 {len(data_rows)} 个 'FA' 配置。")
 
     def render_table(self, data_rows):
         self.table.setRowCount(len(data_rows))
-        config_keys = list(self.config_data.keys())
         config_names = list(self.config_data.values())
 
         for row_idx, item in enumerate(data_rows):
             # 1. 复选框
             chk = QCheckBox()
-            chk.setChecked(True) # 默认全选
+            chk.setChecked(True)
             chk_widget = QWidget()
             chk_layout = QHBoxLayout(chk_widget)
             chk_layout.addWidget(chk)
@@ -205,19 +199,14 @@ class FAReplacerApp(QMainWindow):
             chk_layout.setContentsMargins(0,0,0,0)
             self.table.setCellWidget(row_idx, 0, chk_widget)
 
-            # 2. 左侧数据
-            self.table.setItem(row_idx, 1, QTableWidgetItem(str(item['left_val'])))
-            
-            # 3. 当前内容 (用于展示完整的单元格内容)
-            self.table.setItem(row_idx, 2, QTableWidgetItem(item['raw_content']))
-            
-            # 4. 当前识别名 (反向显示)
-            self.table.setItem(row_idx, 3, QTableWidgetItem(item['current_name']))
-            
-            # 5. 下拉框
+            self.table.setItem(row_idx, 1, QTableWidgetItem(str(item['left_val']))) # 左单元格
+            self.table.setItem(row_idx, 2, QTableWidgetItem(str(item['middle_val']))) # 中间FA
+            self.table.setItem(row_idx, 3, QTableWidgetItem(item['right_raw'])) # 右单元格原始内容
+            self.table.setItem(row_idx, 4, QTableWidgetItem(item['current_name'])) # 反向识别名
+
+            # 下拉框
             combo = QComboBox()
-            combo.addItems(config_names) # 只显示名字
-            # 如果当前名称存在于下拉框里，自动选中
+            combo.addItems(config_names)
             if item['current_name'] in config_names:
                 combo.setCurrentText(item['current_name'])
             combo_widget = QWidget()
@@ -225,14 +214,11 @@ class FAReplacerApp(QMainWindow):
             combo_layout.addWidget(combo)
             combo_layout.setAlignment(Qt.AlignCenter)
             combo_layout.setContentsMargins(0,0,0,0)
-            self.table.setCellWidget(row_idx, 4, combo_widget)
+            self.table.setCellWidget(row_idx, 5, combo_widget)
 
-            # 6. 实际Excel行号 (隐藏数据)
-            self.table.setItem(row_idx, 5, QTableWidgetItem(str(item['row_idx'])))
-            # 隐藏第6列
-            self.table.setColumnHidden(5, True)
+            # 6. 实际Excel行号 (隐藏)
+            self.table.setItem(row_idx, 6, QTableWidgetItem(str(item['row_idx'])))
 
-    # ================= 刷新与替换逻辑 =================
     def refresh_data(self):
         if self.current_file_path:
             self.process_file(self.current_file_path)
@@ -244,26 +230,21 @@ class FAReplacerApp(QMainWindow):
             QMessageBox.warning(self, "提示", "请先加载并解析 Excel 数据！")
             return
 
-        # 1. 收集需要修改的行数据
         updates = []
         rows_to_update = self.table.rowCount()
         
         for i in range(rows_to_update):
-            # 获取复选框状态
             chk_widget = self.table.cellWidget(i, 0)
             if chk_widget:
                 chk = chk_widget.findChild(QCheckBox)
                 if not chk or not chk.isChecked():
                     continue
             
-            # 获取下拉框选中的文字
-            combo_widget = self.table.cellWidget(i, 4)
-            if not combo_widget:
-                continue
+            combo_widget = self.table.cellWidget(i, 5)
+            if not combo_widget: continue
             combo = combo_widget.findChild(QComboBox)
             selected_name = combo.currentText()
             
-            # 查 JSON 获取映射的 FA 值
             new_fa_val = None
             for k, v in self.config_data.items():
                 if v == selected_name:
@@ -271,12 +252,11 @@ class FAReplacerApp(QMainWindow):
                     break
             
             if new_fa_val is None:
-                QMessageBox.warning(self, "错误", f"第 {i+1} 行下拉选中的 '{selected_name}' 在配置中找不到对应的 FA 值！")
+                QMessageBox.warning(self, "错误", f"第 {i+1} 行选中 '{selected_name}' 找不到对应 FA 值！")
                 return
 
-            # 获取原始内容和行号
-            row_idx = int(self.table.item(i, 5).text())
-            raw_content = self.table.item(i, 2).text()
+            row_idx = int(self.table.item(i, 6).text())
+            raw_content = self.table.item(i, 3).text()
             
             updates.append({
                 'row_idx': row_idx,
@@ -288,32 +268,31 @@ class FAReplacerApp(QMainWindow):
             QMessageBox.information(self, "提示", "未勾选任何需要修改的行！")
             return
 
-        # 2. 执行修改 (Regex全局替换)
         try:
             wb = openpyxl.load_workbook(self.current_file_path)
             ws = wb[SHEET_NAME]
             
-            # 需要再次确定 FA 列的索引
-            target_col_idx = None
+            kategorie_col_idx = None
             for idx, cell in enumerate(next(ws.iter_rows(min_row=1, max_row=1)), start=1):
-                if cell.value == TARGET_COL_KEYWORD:
-                    target_col_idx = idx
+                if cell.value == TARGET_COL_NAME:
+                    kategorie_col_idx = idx
                     break
             
-            if target_col_idx is None:
-                QMessageBox.critical(self, "错误", "内部错误：无法找到 FA 列！")
+            if kategorie_col_idx is None:
+                QMessageBox.critical(self, "错误", "内部错误：无法找到 Kategorie 列！")
                 return
 
-            # 批量替换
+            # 执行修改 (修改 FA 单元格右侧的那个单元格)
             for upd in updates:
-                cell = ws.cell(row=upd['row_idx'], column=target_col_idx)
+                cell = ws.cell(row=upd['row_idx'], column=kategorie_col_idx + 1)
                 old_text = upd['raw']
+                # 全局替换所有 FA="xxx"
                 new_text = re.sub(r'FA="([^"]*)"', f'FA="{upd["new_fa_val"]}"', old_text)
                 cell.value = new_text
 
             wb.save(self.current_file_path)
-            QMessageBox.information(self, "成功", f"成功替换了 {len(updates)} 条数据！即将刷新表格。")
-            self.refresh_data() # 修改完立刻刷新
+            QMessageBox.information(self, "成功", f"成功替换了 {len(updates)} 条数据！即将自动刷新。")
+            self.refresh_data()
 
         except Exception as e:
             QMessageBox.critical(self, "严重错误", f"写入文件时失败: {str(e)}")
