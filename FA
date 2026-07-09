@@ -61,7 +61,7 @@ class ExcelWorker(QThread):
                     if matches:
                         current_fa_val = matches[0].strip()
                         
-                        # 反向查找 JSON 对应的键名
+                        # 反向查找 JSON 对应的键名 (键值是 current_fa_val)
                         current_key = "未定义"
                         for key, val in config.items():
                             if val == current_fa_val:
@@ -81,9 +81,12 @@ class ExcelWorker(QThread):
             self.data_loaded.emit([], f"读取错误：{str(e)}")
 
     def load_config(self):
-        if os.path.exists(CONFIG_FILE):
+        # 注意：这里直接读取的是 EXCEL 线程中自己同目录的 JSON
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(script_dir, CONFIG_FILE)
+        if os.path.exists(config_path):
             try:
-                with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                with open(config_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except:
                 return {}
@@ -95,6 +98,10 @@ class FAReplacerApp(QMainWindow):
         self.current_file_path = None
         self.data_store = []
         self.config_data = {}
+        
+        # 获取当前脚本所在的绝对路径，确保能找到 JSON
+        self.script_dir = os.path.dirname(os.path.abspath(__file__))
+        
         self.initUI()
         self.load_config_from_json()
         self.update_batch_combo()
@@ -183,15 +190,17 @@ class FAReplacerApp(QMainWindow):
         layout.addWidget(self.table)
 
     def load_config_from_json(self):
-        if os.path.exists(CONFIG_FILE):
+        """修复：使用绝对路径查找同目录下的 JSON"""
+        config_path = os.path.join(self.script_dir, CONFIG_FILE)
+        if os.path.exists(config_path):
             try:
-                with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                with open(config_path, 'r', encoding='utf-8') as f:
                     self.config_data = json.load(f)
             except Exception as e:
                 QMessageBox.warning(self, "配置警告", f"加载 {CONFIG_FILE} 失败。错误: {e}")
                 self.config_data = {}
         else:
-            QMessageBox.information(self, "提示", f"未找到配置文件 {CONFIG_FILE}，请创建并填入键值对。\n例如: {{ \"AUDI_CODE\": \"AUDI_VAL\" }}")
+            QMessageBox.information(self, "提示", f"未找到配置文件 {CONFIG_FILE}，请放在本程序同目录下并填入键值对。\n例如: {{ \"AUDI_CODE\": \"AUDI_VAL\" }}")
             self.config_data = {}
 
     def update_batch_combo(self):
@@ -282,6 +291,7 @@ class FAReplacerApp(QMainWindow):
 
             self.table.setItem(row_idx, 6, QTableWidgetItem(str(item['row_idx'])))
         
+        # 根据换行内容自动调整行高
         self.table.resizeRowsToContents()
 
     # ================= 清空、全选、批量设功能 =================
