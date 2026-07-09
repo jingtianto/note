@@ -5,7 +5,7 @@ import re
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, 
                              QHeaderView, QComboBox, QCheckBox, QFileDialog, QMessageBox,
-                             QLabel, QLineEdit) # 引入 QLineEdit
+                             QLabel, QLineEdit)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QFont
 import openpyxl
@@ -60,12 +60,20 @@ class ExcelWorker(QThread):
                     
                     if matches:
                         current_fa_val = matches[0].strip()
+                        
+                        # 反向查找 JSON 对应的键名
+                        current_key = "未定义"
+                        for key, val in config.items():
+                            if val == current_fa_val:
+                                current_key = key
+                                break
+                                
                         data_rows.append({
                             'row_idx': row_idx,
-                            'left_val': left_cell,        # ID
-                            'middle_val': TARGET_CELL_KEYWORD, # 识别行
-                            'right_raw': right_str,       # FA列内容 (可能包含换行)
-                            'current_fa_val': current_fa_val  # 当前FA（键名）
+                            'left_val': left_cell,
+                            'middle_val': TARGET_CELL_KEYWORD,
+                            'right_raw': right_str,
+                            'current_key': current_key     # 对应 JSON 的键名
                         })
 
             self.data_loaded.emit(data_rows, self.file_path)
@@ -109,11 +117,9 @@ class FAReplacerApp(QMainWindow):
         self.btn_refresh = QPushButton("🔄 刷新")
         self.btn_refresh.clicked.connect(self.refresh_data)
         
-        # 全选/取消全选 按钮
         self.btn_select_all = QPushButton("✅ 全选/取消")
         self.btn_select_all.clicked.connect(self.toggle_select_all)
         
-        # 批量替换设置
         self.batch_combo = QComboBox()
         self.batch_combo.setMinimumWidth(120)
         self.btn_batch_apply = QPushButton("⬇️ 应用至所有行")
@@ -132,13 +138,12 @@ class FAReplacerApp(QMainWindow):
         toolbar.addStretch()
         layout.addLayout(toolbar)
 
-        # 2. 文件路径显示区和清除按钮 (新增功能)
+        # 2. 文件路径显示区和清除按钮
         file_bar = QHBoxLayout()
-        
         file_bar.addWidget(QLabel("文件路径:"))
         
         self.path_display = QLineEdit()
-        self.path_display.setReadOnly(True) # 只读，但允许复制路径
+        self.path_display.setReadOnly(True)
         self.path_display.setPlaceholderText("未加载 Excel 文件")
         self.path_display.setStyleSheet("QLineEdit { border: 1px solid #ccc; border-radius: 3px; background: #f5f5f5; padding: 3px; }")
         file_bar.addWidget(self.path_display)
@@ -162,6 +167,7 @@ class FAReplacerApp(QMainWindow):
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(["勾选", "ID", "识别行", "FA", "当前FA", "替换", "待修改行"])
         
+        # 开启多行显示支持
         self.table.setWordWrap(True)
 
         header = self.table.horizontalHeader()
@@ -185,7 +191,7 @@ class FAReplacerApp(QMainWindow):
                 QMessageBox.warning(self, "配置警告", f"加载 {CONFIG_FILE} 失败。错误: {e}")
                 self.config_data = {}
         else:
-            QMessageBox.information(self, "提示", f"未找到配置文件 {CONFIG_FILE}，请创建并填入键值对。\n例如: {{ \"AUDI\": \"奥迪\" }}")
+            QMessageBox.information(self, "提示", f"未找到配置文件 {CONFIG_FILE}，请创建并填入键值对。\n例如: {{ \"AUDI_CODE\": \"AUDI_VAL\" }}")
             self.config_data = {}
 
     def update_batch_combo(self):
@@ -213,9 +219,9 @@ class FAReplacerApp(QMainWindow):
             self.process_file(file_path)
 
     def process_file(self, file_path):
-        self.clear_excel() # 加载前先清空当前数据
+        self.clear_excel()
         self.current_file_path = file_path
-        self.path_display.setText(file_path) # 路径显示
+        self.path_display.setText(file_path)
         self.status_label.setText(f"正在读取: {os.path.basename(file_path)} ...")
         
         self.worker = ExcelWorker(file_path)
@@ -223,14 +229,13 @@ class FAReplacerApp(QMainWindow):
         self.worker.start()
 
     def on_data_loaded(self, data_rows, msg):
-        # 如果点击清除后数据才返回，忽略它
         if not self.current_file_path:
             return
 
         if not data_rows:
             self.status_label.setText(f"❌ {msg}")
             QMessageBox.warning(self, "提示", msg)
-            self.clear_excel() # 读取失败，自动清除错误数据
+            self.clear_excel()
             return
         
         self.data_store = data_rows
@@ -255,17 +260,19 @@ class FAReplacerApp(QMainWindow):
             self.table.setItem(row_idx, 1, QTableWidgetItem(str(item['left_val']))) 
             self.table.setItem(row_idx, 2, QTableWidgetItem(str(item['middle_val']))) 
             
+            # FA列，小号字体，支持换行
             fa_item = QTableWidgetItem(item['right_raw'])
-            fa_font = QFont("Microsoft YaHei", 8)
-            fa_item.setFont(fa_font)
+            fa_item.setFont(QFont("Microsoft YaHei", 8))
             self.table.setItem(row_idx, 3, fa_item)
             
-            self.table.setItem(row_idx, 4, QTableWidgetItem(item['current_fa_val'])) 
+            # 当前FA列，显示反向查找到的键名
+            self.table.setItem(row_idx, 4, QTableWidgetItem(item['current_key'])) 
 
+            # 替换下拉框，显示键名
             combo = QComboBox()
             combo.addItems(config_keys)
-            if item['current_fa_val'] in config_keys:
-                combo.setCurrentText(item['current_fa_val'])
+            if item['current_key'] in config_keys:
+                combo.setCurrentText(item['current_key'])
             combo_widget = QWidget()
             combo_layout = QHBoxLayout(combo_widget)
             combo_layout.addWidget(combo)
@@ -277,16 +284,14 @@ class FAReplacerApp(QMainWindow):
         
         self.table.resizeRowsToContents()
 
-    # ================= 新增：清除文件功能 =================
+    # ================= 清空、全选、批量设功能 =================
     def clear_excel(self):
-        """卸载当前文件并清空界面"""
         self.current_file_path = None
         self.data_store = []
         self.table.setRowCount(0)
         self.path_display.clear()
         self.status_label.setText("已卸载当前 Excel 文件，可重新加载或拖拽。")
 
-    # ================= 批量交互功能 =================
     def toggle_select_all(self):
         rows = self.table.rowCount()
         if rows == 0: return
@@ -343,7 +348,15 @@ class FAReplacerApp(QMainWindow):
             combo_widget = self.table.cellWidget(i, 5)
             if not combo_widget: continue
             combo = combo_widget.findChild(QComboBox)
-            new_fa_val = combo.currentText()
+            
+            # 获取下拉菜单选中的键名
+            selected_key = combo.currentText()
+            # 查找该键名对应的键值（实际需要写入Excel的FA值）
+            new_fa_val = self.config_data.get(selected_key)
+            
+            if new_fa_val is None:
+                QMessageBox.warning(self, "错误", f"第 {i+1} 行选中键名 '{selected_key}' 找不到对应的写入值！")
+                return
 
             row_idx = int(self.table.item(i, 6).text())
             raw_content = self.table.item(i, 3).text()
@@ -375,6 +388,7 @@ class FAReplacerApp(QMainWindow):
             for upd in updates:
                 cell = ws.cell(row=upd['row_idx'], column=kategorie_col_idx + 1)
                 old_text = upd['raw']
+                # 全局替换所有 FA="xxx"
                 new_text = re.sub(r'FA="([^"]*)"', f'FA="{upd["new_fa_val"]}"', old_text)
                 cell.value = new_text
 
