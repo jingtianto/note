@@ -51,27 +51,21 @@ class ExcelWorker(QThread):
                 if row_idx == 1: continue # 跳过表头
                 
                 if cell.value == TARGET_CELL_KEYWORD:
-                    # 获取左右单元格数据 (注意边界)
+                    # 获取左右单元格数据
                     left_cell = ws.cell(row=row_idx, column=kategorie_col_idx - 1).value if kategorie_col_idx > 1 else ""
                     right_cell = ws.cell(row=row_idx, column=kategorie_col_idx + 1).value
                     
-                    # 转换右侧单元格内容为字符串，并解析 FA="xxx"
                     right_str = str(right_cell) if right_cell else ""
                     matches = re.findall(r'FA="([^"]*)"', right_str)
                     
                     if matches:
                         current_fa_val = matches[0].strip()
-                        # 反向查找名称
-                        current_name = config.get(current_fa_val, "未定义")
-                        
                         data_rows.append({
                             'row_idx': row_idx,
-                            'left_val': left_cell,
-                            'middle_val': TARGET_CELL_KEYWORD, # 中间就是 FA
-                            'right_raw': right_str,  # 原始右侧内容
-                            'current_fa_val': current_fa_val,
-                            'current_name': current_name,
-                            'matches_count': len(matches)
+                            'left_val': left_cell,        # ID
+                            'middle_val': TARGET_CELL_KEYWORD, # 识别行
+                            'right_raw': right_str,       # FA列内容
+                            'current_fa_val': current_fa_val  # 当前FA（键名）
                         })
 
             self.data_loaded.emit(data_rows, self.file_path)
@@ -95,10 +89,11 @@ class FAReplacerApp(QMainWindow):
         self.config_data = {}
         self.initUI()
         self.load_config_from_json()
+        self.update_batch_combo() # 更新批量下拉框
 
     def initUI(self):
-        self.setWindowTitle("FA 批量替换工具 (精准版)")
-        self.setGeometry(100, 100, 1000, 600)
+        self.setWindowTitle("FA 键名批量替换工具")
+        self.setGeometry(100, 100, 1100, 650)
         self.setAcceptDrops(True)
 
         main_widget = QWidget()
@@ -107,15 +102,32 @@ class FAReplacerApp(QMainWindow):
 
         # 1. 顶部工具栏
         toolbar = QHBoxLayout()
+        
         self.btn_load = QPushButton("📂 加载 Excel")
         self.btn_load.clicked.connect(self.load_excel)
-        self.btn_refresh = QPushButton("🔄 重新加载(刷新)")
+        
+        self.btn_refresh = QPushButton("🔄 刷新")
         self.btn_refresh.clicked.connect(self.refresh_data)
+        
+        # 全选/取消全选 按钮
+        self.btn_select_all = QPushButton("✅ 全选/取消")
+        self.btn_select_all.clicked.connect(self.toggle_select_all)
+        
+        # 批量替换设置
+        self.batch_combo = QComboBox()
+        self.batch_combo.setMinimumWidth(120)
+        self.btn_batch_apply = QPushButton("⬇️ 应用至所有行")
+        self.btn_batch_apply.clicked.connect(self.apply_batch_to_all)
+        
         self.btn_replace = QPushButton("✍️ 执行更换")
         self.btn_replace.clicked.connect(self.execute_replacement)
         
         toolbar.addWidget(self.btn_load)
         toolbar.addWidget(self.btn_refresh)
+        toolbar.addWidget(self.btn_select_all)
+        toolbar.addWidget(QLabel("批量设:"))
+        toolbar.addWidget(self.batch_combo)
+        toolbar.addWidget(self.btn_batch_apply)
         toolbar.addWidget(self.btn_replace)
         toolbar.addStretch()
         layout.addLayout(toolbar)
@@ -125,12 +137,21 @@ class FAReplacerApp(QMainWindow):
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
 
-        # 2. 数据表格 (左 | 中(FA) | 右内容 | 反向识别名 | 下拉框 | 行号)
+        # 2. 数据表格
         self.table = QTableWidget()
         self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels(["勾选", "左单元格", "中间(FA)", "右单元格(原内容)", "当前识别名", "替换下拉", "待修改行"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.setHorizontalHeaderLabels(["勾选", "ID", "识别行", "FA", "当前FA", "替换", "待修改行"])
+        
+        # 列宽自适应策略
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        
         self.table.setColumnHidden(6, True) # 隐藏行号列
         layout.addWidget(self.table)
 
@@ -146,6 +167,12 @@ class FAReplacerApp(QMainWindow):
             QMessageBox.information(self, "提示", f"未找到配置文件 {CONFIG_FILE}，请创建并填入键值对。\n例如: {{ \"AUDI\": \"奥迪\" }}")
             self.config_data = {}
 
+    def update_batch_combo(self):
+        """更新顶部批量设置的下拉框选项 (填的是键名)"""
+        self.batch_combo.clear()
+        self.batch_combo.addItems(list(self.config_data.keys()))
+
+    # ================= 拖拽逻辑 =================
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
@@ -159,6 +186,7 @@ class FAReplacerApp(QMainWindow):
             else:
                 self.status_label.setText("⚠️ 请拖入 .xlsx 或 .xls 格式的 Excel 文件")
 
+    # ================= 核心加载与渲染逻辑 =================
     def load_excel(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "选择 Excel 文件", "", "Excel Files (*.xlsx *.xls)")
         if file_path:
@@ -186,7 +214,8 @@ class FAReplacerApp(QMainWindow):
 
     def render_table(self, data_rows):
         self.table.setRowCount(len(data_rows))
-        config_names = list(self.config_data.values())
+        # 下拉菜单只填充配置文件的 键名 (Keys)
+        config_keys = list(self.config_data.keys())
 
         for row_idx, item in enumerate(data_rows):
             # 1. 复选框
@@ -199,16 +228,21 @@ class FAReplacerApp(QMainWindow):
             chk_layout.setContentsMargins(0,0,0,0)
             self.table.setCellWidget(row_idx, 0, chk_widget)
 
-            self.table.setItem(row_idx, 1, QTableWidgetItem(str(item['left_val']))) # 左单元格
-            self.table.setItem(row_idx, 2, QTableWidgetItem(str(item['middle_val']))) # 中间FA
-            self.table.setItem(row_idx, 3, QTableWidgetItem(item['right_raw'])) # 右单元格原始内容
-            self.table.setItem(row_idx, 4, QTableWidgetItem(item['current_name'])) # 反向识别名
+            # 2. ID (左单元格)
+            self.table.setItem(row_idx, 1, QTableWidgetItem(str(item['left_val']))) 
+            # 3. 识别行 (中间FA)
+            self.table.setItem(row_idx, 2, QTableWidgetItem(str(item['middle_val']))) 
+            # 4. FA (右侧原始内容)
+            self.table.setItem(row_idx, 3, QTableWidgetItem(item['right_raw'])) 
+            # 5. 当前FA (反向识别键名，例如 "AUDI")
+            self.table.setItem(row_idx, 4, QTableWidgetItem(item['current_fa_val'])) 
 
-            # 下拉框
+            # 6. 下拉框 (替换)，下拉里全是键名
             combo = QComboBox()
-            combo.addItems(config_names)
-            if item['current_name'] in config_names:
-                combo.setCurrentText(item['current_name'])
+            combo.addItems(config_keys)
+            # 如果当前的键名在下拉列表里，自动默认选中它
+            if item['current_fa_val'] in config_keys:
+                combo.setCurrentText(item['current_fa_val'])
             combo_widget = QWidget()
             combo_layout = QHBoxLayout(combo_widget)
             combo_layout.addWidget(combo)
@@ -216,9 +250,44 @@ class FAReplacerApp(QMainWindow):
             combo_layout.setContentsMargins(0,0,0,0)
             self.table.setCellWidget(row_idx, 5, combo_widget)
 
-            # 6. 实际Excel行号 (隐藏)
+            # 7. 实际Excel行号 (隐藏)
             self.table.setItem(row_idx, 6, QTableWidgetItem(str(item['row_idx'])))
 
+    # ================= 新增批量交互功能 =================
+    def toggle_select_all(self):
+        """一键全选/取消全选"""
+        rows = self.table.rowCount()
+        if rows == 0: return
+        
+        chk_widget_first = self.table.cellWidget(0, 0)
+        first_chk = chk_widget_first.findChild(QCheckBox) if chk_widget_first else None
+        new_state = not (first_chk and first_chk.isChecked()) # 反转状态
+        
+        for i in range(rows):
+            chk_widget = self.table.cellWidget(i, 0)
+            if chk_widget:
+                chk = chk_widget.findChild(QCheckBox)
+                if chk:
+                    chk.setChecked(new_state)
+
+    def apply_batch_to_all(self):
+        """批量设置替换下拉框 (全部设为同一个键名)"""
+        rows = self.table.rowCount()
+        if rows == 0:
+            QMessageBox.information(self, "提示", "表格当前没有数据！")
+            return
+            
+        selected_key = self.batch_combo.currentText()
+        for i in range(rows):
+            combo_widget = self.table.cellWidget(i, 5)
+            if combo_widget:
+                combo = combo_widget.findChild(QComboBox)
+                if combo:
+                    index = combo.findText(selected_key)
+                    if index >= 0:
+                        combo.setCurrentIndex(index)
+
+    # ================= 刷新与替换逻辑 =================
     def refresh_data(self):
         if self.current_file_path:
             self.process_file(self.current_file_path)
@@ -234,29 +303,22 @@ class FAReplacerApp(QMainWindow):
         rows_to_update = self.table.rowCount()
         
         for i in range(rows_to_update):
+            # 检查勾选框
             chk_widget = self.table.cellWidget(i, 0)
             if chk_widget:
                 chk = chk_widget.findChild(QCheckBox)
                 if not chk or not chk.isChecked():
                     continue
             
+            # 获取替换下拉框选中的键名
             combo_widget = self.table.cellWidget(i, 5)
             if not combo_widget: continue
             combo = combo_widget.findChild(QComboBox)
-            selected_name = combo.currentText()
-            
-            new_fa_val = None
-            for k, v in self.config_data.items():
-                if v == selected_name:
-                    new_fa_val = k
-                    break
-            
-            if new_fa_val is None:
-                QMessageBox.warning(self, "错误", f"第 {i+1} 行选中 '{selected_name}' 找不到对应 FA 值！")
-                return
+            # 选中的就是键名
+            new_fa_val = combo.currentText()
 
             row_idx = int(self.table.item(i, 6).text())
-            raw_content = self.table.item(i, 3).text()
+            raw_content = self.table.item(i, 3).text() # 获取 FA 列的原内容
             
             updates.append({
                 'row_idx': row_idx,
@@ -282,7 +344,7 @@ class FAReplacerApp(QMainWindow):
                 QMessageBox.critical(self, "错误", "内部错误：无法找到 Kategorie 列！")
                 return
 
-            # 执行修改 (修改 FA 单元格右侧的那个单元格)
+            # 执行修改
             for upd in updates:
                 cell = ws.cell(row=upd['row_idx'], column=kategorie_col_idx + 1)
                 old_text = upd['raw']
@@ -291,8 +353,10 @@ class FAReplacerApp(QMainWindow):
                 cell.value = new_text
 
             wb.save(self.current_file_path)
-            QMessageBox.information(self, "成功", f"成功替换了 {len(updates)} 条数据！即将自动刷新。")
-            self.refresh_data()
+            
+            # 关键修复：保存成功后，立刻执行一次物理重新加载Excel！
+            QMessageBox.information(self, "成功", f"成功替换了 {len(updates)} 条数据！即将刷新表格。")
+            self.process_file(self.current_file_path) 
 
         except Exception as e:
             QMessageBox.critical(self, "严重错误", f"写入文件时失败: {str(e)}")
