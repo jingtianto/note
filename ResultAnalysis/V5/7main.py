@@ -1976,8 +1976,9 @@ function buildMergedColumnTableMulti(fileResults, hasAlign, alignKeyIdx, scheme)
     thToggle.style.width = maxToggleWidth + 'px';
     thToggle.style.minWidth = maxToggleWidth + 'px';
 
+    // 使用 firstKw（仅列类型关键字）的索引，与 row 单元格位置对齐
     const collectIndices = [];
-    scheme.keywords.forEach((kw, idx) => {
+    firstKw.forEach((kw, idx) => {
         if (kw.collectColor) collectIndices.push(idx);
     });
 
@@ -1990,12 +1991,14 @@ function buildMergedColumnTableMulti(fileResults, hasAlign, alignKeyIdx, scheme)
         items.forEach(item => {
             const row = item.row;
             let rowPriority = 999;
-            row.forEach(cell => {
-                const color = cell.color_name || 'blank';
-                const p = getPriority(color, priorityOrder);
-                if (p < rowPriority) rowPriority = p;
+            // 仅检查启用了 collectColor 的列来确定优先级
+            collectIndices.forEach(idx => {
+                if (row.length > idx && row[idx]) {
+                    const color = row[idx].color_name || 'blank';
+                    const p = getPriority(color, priorityOrder);
+                    if (p < rowPriority) rowPriority = p;
+                }
             });
-            if (rowPriority === 999) rowPriority = 999;
             if (rowPriority < bestPriority) {
                 bestPriority = rowPriority;
                 bestItem = item;
@@ -2107,10 +2110,6 @@ function buildMergedColumnTableMulti(fileResults, hasAlign, alignKeyIdx, scheme)
                     dotGroup.appendChild(dot);
                 });
                 dotGroup.style.visibility = 'visible';
-                log(`组 "${key}" 收起，颜色: ${fileResults.map((res, fi) => {
-                    const fname = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
-                    return fname + ':' + (fileColorMap[fname] || 'none');
-                }).join(', ')}`, 'info');
             } else {
                 dotGroup.style.visibility = 'hidden';
             }
