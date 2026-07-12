@@ -404,9 +404,9 @@ HTML_TEMPLATE = r'''<!DOCTYPE html>
         .toggle-btn.expanded { background: #e2e8f0; }
         .group-label { flex: 0 0 28px; font-size: 9px; color: #64748b; background: #f1f5f9; text-align: center; border-radius: 10px; border: 1px solid #e2e8f0; line-height: 16px; height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .dot-group { display: inline-flex; gap: 2px; align-items: center; flex: 0 0 auto; }
-        .dot { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid #334155; flex-shrink: 0; }
-        .dot-none { background: transparent; border: 1.5px solid #94a3b8; }
-        .dot-blank { background: #f1f5f9; border-color: #cbd5e1; }
+        .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #334155; flex-shrink: 0; }
+        .dot-none { background: transparent; border: 1px dashed #94a3b8; }
+        .dot-blank { background: #ffffff; border: 2px solid #475569; }
         .dot-green { background: #22c55e; }
         .dot-red { background: #ef4444; }
         .dot-blue { background: #60a5fa; }
@@ -2085,7 +2085,13 @@ function buildMergedColumnTableMulti(fileResults, hasAlign, alignKeyIdx, scheme)
 
             const label = document.createElement('span');
             label.className = 'group-label';
-            label.textContent = key;
+            // idx===0 时显示该组的行数，其余行隐藏
+            if (idx === 0) {
+                label.textContent = items.length;
+                label.title = '该组共 ' + items.length + ' 行（对齐键: ' + key + '）';
+            } else {
+                label.style.visibility = 'hidden';
+            }
             inner.appendChild(label);
 
             // 圆点组
@@ -2124,8 +2130,7 @@ function buildMergedColumnTableMulti(fileResults, hasAlign, alignKeyIdx, scheme)
             tdFile.textContent = item.filename;
             tdFile.className = fileBg;
             if (isBest) {
-                tdFile.style.fontWeight = '700';
-                tdFile.style.fontSize = '15px';
+                tdFile.style.fontWeight = '600';
             } else {
                 tdFile.style.fontWeight = 'normal';
             }
