@@ -2,6 +2,8 @@ import sys
 import os
 import re
 import bisect
+import traceback  # 新增：用于详细错误跟踪
+
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTabWidget, QFrame, QLabel, QToolBar, QAction, QFileDialog,
@@ -14,129 +16,112 @@ from PyQt5.QtGui import QDrag, QColor, QBrush, QFont, QPalette
 import openpyxl
 from openpyxl.utils import column_index_from_string
 
-# ------------------- 全局样式表 -------------------
-STYLE_SHEET = """
-/* 主窗口 */
-QMainWindow {
-    background-color: #f0f2f5;
-}
+# ------------------- 高DPI适配 -------------------
+# 启用高DPI缩放（适用于PyQt5 5.6+）
+QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
-/* 工具栏 */
+# ------------------- 全局样式表（增大字体） -------------------
+STYLE_SHEET = """
+QMainWindow { background-color: #f0f2f5; font-size: 10pt; }
 QToolBar {
     background-color: #2c3e50;
     border: none;
-    padding: 4px;
-    spacing: 8px;
+    padding: 6px;
+    spacing: 10px;
 }
 QToolBar QToolButton {
     background-color: #34495e;
     color: white;
     border: none;
     border-radius: 4px;
-    padding: 6px 14px;
+    padding: 8px 18px;
     font-weight: bold;
+    font-size: 10pt;
 }
-QToolBar QToolButton:hover {
-    background-color: #3d566e;
-}
-QToolBar QToolButton:pressed {
-    background-color: #1e2b38;
-}
-
-/* 标签页 */
-QTabWidget::pane {
-    border: none;
-    background: #f0f2f5;
-}
+QToolBar QToolButton:hover { background-color: #3d566e; }
+QToolBar QToolButton:pressed { background-color: #1e2b38; }
+QTabWidget::pane { border: none; background: #f0f2f5; }
 QTabBar::tab {
     background: #e4e7eb;
-    padding: 8px 20px;
+    padding: 10px 24px;
     margin-right: 2px;
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
     font-weight: bold;
+    font-size: 10pt;
 }
 QTabBar::tab:selected {
     background: white;
     border-bottom: 3px solid #4A90D9;
 }
-QTabBar::tab:hover {
-    background: #d5d8dd;
-}
-QTabBar::close-button {
-    image: none;  /* 使用自定义关闭符号 */
-    subcontrol-position: right;
-    subcontrol-origin: padding;
-    margin: 0 0 0 8px;
-}
-
-/* 总览卡片 */
-.OverviewWidget {
-    background: transparent;
-}
+QTabBar::tab:hover { background: #d5d8dd; }
+QTabBar::close-button { image: none; margin: 0 0 0 10px; }
 .CaseBlock {
     background: white;
     border-radius: 10px;
     border: 1px solid #d0d7de;
-    padding: 10px 15px;
-    margin-bottom: 10px;
+    padding: 12px 18px;
+    margin-bottom: 12px;
 }
 .CaseBlock:hover {
     border-color: #4A90D9;
     box-shadow: 0 2px 8px rgba(74,144,217,0.2);
 }
 .CaseBlock QLabel#title {
-    font-size: 16px;
+    font-size: 14pt;
     font-weight: bold;
     color: #2c3e50;
 }
 .CaseBlock QLabel#expand {
-    font-size: 16px;
+    font-size: 16pt;
     color: #7f8c8d;
 }
 .CaseBlock .detail-item {
-    padding: 2px 0 2px 20px;
+    padding: 4px 0 4px 24px;
     border-left: 3px solid #4A90D9;
-    margin-top: 2px;
-    font-size: 14px;
+    margin-top: 4px;
+    font-size: 11pt;
 }
-.CaseBlock .detail-item .dot {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border-radius: 3px;
-    margin-right: 8px;
-}
-
-/* 甘特图表格 */
 GanttTableWidget QTableWidget {
     background: white;
     border-radius: 8px;
     border: 1px solid #d0d7de;
     gridline-color: #e9ecef;
-    font-size: 13px;
+    font-size: 11pt;
 }
-GanttTableWidget QTableWidget::item {
-    padding: 8px 4px;
-}
-GanttTableWidget QTableWidget::item:selected {
-    background: transparent; /* 取消选中高亮 */
-}
+GanttTableWidget QTableWidget::item { padding: 10px 6px; }
+GanttTableWidget QTableWidget::item:selected { background: transparent; }
 GanttTableWidget QHeaderView::section {
     background: #f8f9fa;
-    padding: 6px;
+    padding: 8px;
     border: 1px solid #dee2e6;
     font-weight: bold;
-    font-size: 13px;
+    font-size: 11pt;
 }
 GanttTableWidget QTableWidget QTableCornerButton::section {
     background: #f8f9fa;
+}
+/* 总览按钮样式 */
+.OverviewButton {
+    background-color: #4A90D9;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 18px;
+    font-weight: bold;
+    font-size: 10pt;
+}
+.OverviewButton:hover {
+    background-color: #5a9ee6;
+}
+.OverviewButton:pressed {
+    background-color: #3a7bc9;
 }
 """
 
 # ------------------- 解析器 -------------------
 class TestCaseParser:
-    # 与之前完全相同，不再重复，保持功能稳定
     def __init__(self, file_path):
         self.file_path = file_path
         self.wb = openpyxl.load_workbook(file_path, data_only=True)
@@ -227,7 +212,6 @@ class TestCaseParser:
             cases.append(case)
         return cases
 
-    # 以下解析方法完全相同，省略以节省篇幅（实际使用时需完整复制）
     def _parse_kategorie(self, kategorie_str):
         signals = []
         for part in str(kategorie_str).split(';'):
@@ -320,8 +304,8 @@ class TestCaseParser:
         sig = {'name': name, 'value': f"{op}{value}"}
         if time_expr:
             times = self._parse_trigger_expr(time_expr)
-            sig['start'] = times['start']
-            sig['end'] = times['end']
+            sig['start'] = times.get('start')
+            sig['end'] = times.get('end')
         else:
             sig['start'] = None
             sig['end'] = None
@@ -330,6 +314,8 @@ class TestCaseParser:
     def _parse_trigger_expr(self, expr):
         result = {'start': None, 'end': None}
         expr = expr.strip()
+        if not expr:
+            return result
         if ':' in expr:
             start_expr, end_expr = expr.split(':', 1)
             result['start'] = self._resolve_trigger(start_expr)
@@ -341,6 +327,8 @@ class TestCaseParser:
 
     def _resolve_trigger(self, expr):
         expr = expr.strip()
+        if not expr:
+            return 0.0
         m = re.match(r'^(\d+(?:\.\d+)?)s$', expr)
         if m:
             return float(m.group(1))
@@ -354,32 +342,34 @@ class TestCaseParser:
                 op = parts[1]
                 num_str = parts[2].strip()
                 base = self._resolve_trigger(key)
-                num = float(re.search(r'[\d.]+', num_str).group())
-                if op == '+':
-                    return base + num
-                elif op == '-':
-                    return base - num
+                num_match = re.search(r'[\d.]+', num_str)
+                if num_match:
+                    num = float(num_match.group())
+                    if op == '+':
+                        return base + num
+                    elif op == '-':
+                        return base - num
+                else:
+                    return base
         return 0.0
 
 
-# ------------------- PyQt5 界面（美化版） -------------------
+# ------------------- PyQt5 界面 -------------------
 class CaseBlock(QFrame):
     def __init__(self, case_data, parent=None):
         super().__init__(parent)
         self.case_data = case_data
         self.is_expanded = False
         self.setObjectName("CaseBlock")
-        self.setProperty("class", "CaseBlock")  # 用于样式
         self.setFrameStyle(QFrame.NoFrame)
         self.setAcceptDrops(True)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setMinimumHeight(50)
 
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(10, 10, 10, 10)
-        self.main_layout.setSpacing(6)
+        self.main_layout.setContentsMargins(12, 12, 12, 12)
+        self.main_layout.setSpacing(8)
 
-        # 头部
         self.header_widget = QWidget()
         header_layout = QHBoxLayout(self.header_widget)
         header_layout.setContentsMargins(0, 0, 0, 0)
@@ -393,23 +383,22 @@ class CaseBlock(QFrame):
         self.header_widget.mousePressEvent = self.toggle_expand
         self.main_layout.addWidget(self.header_widget)
 
-        # 详情
         self.detail_widget = QWidget()
         self.detail_widget.setVisible(False)
         detail_layout = QVBoxLayout(self.detail_widget)
-        detail_layout.setContentsMargins(0, 4, 0, 0)
-        detail_layout.setSpacing(4)
+        detail_layout.setContentsMargins(0, 6, 0, 0)
+        detail_layout.setSpacing(6)
         color_map = {'场景': '#FF9999', '动作': '#99CCFF', '期望': '#99FF99'}
         for sig in case_data['signals']:
             item_widget = QWidget()
             item_layout = QHBoxLayout(item_widget)
-            item_layout.setContentsMargins(20, 2, 0, 2)
+            item_layout.setContentsMargins(24, 4, 0, 4)
             dot = QLabel()
-            dot.setFixedSize(12, 12)
-            dot.setStyleSheet(f"background-color: {color_map.get(sig['type'], '#ccc')}; border-radius: 3px;")
+            dot.setFixedSize(14, 14)
+            dot.setStyleSheet(f"background-color: {color_map.get(sig['type'], '#ccc')}; border-radius: 4px;")
             label = QLabel(f"{sig['type']}: {sig['name']} = {sig.get('value','')} "
                            f"({sig.get('start','?')} → {sig.get('end','?')})")
-            label.setStyleSheet("font-size: 13px; color: #2c3e50;")
+            label.setStyleSheet("font-size: 12pt; color: #2c3e50;")
             item_layout.addWidget(dot)
             item_layout.addWidget(label)
             item_layout.addStretch()
@@ -464,18 +453,39 @@ class OverviewWidget(QWidget):
         self.layout.setAlignment(Qt.AlignTop)
         self.layout.setSpacing(10)
         self.layout.setContentsMargins(10, 10, 10, 10)
+
+        # 添加全部展开/收起按钮（在总览页面顶部）
+        self.button_layout = QHBoxLayout()
+        self.button_layout.setContentsMargins(0, 0, 0, 10)
+        self.expand_all_btn = QPushButton("📂 全部展开")
+        self.expand_all_btn.setObjectName("OverviewButton")
+        self.expand_all_btn.clicked.connect(lambda: self.expand_all(True))
+        self.collapse_all_btn = QPushButton("📁 全部收起")
+        self.collapse_all_btn.setObjectName("OverviewButton")
+        self.collapse_all_btn.clicked.connect(lambda: self.expand_all(False))
+        self.button_layout.addStretch()
+        self.button_layout.addWidget(self.expand_all_btn)
+        self.button_layout.addWidget(self.collapse_all_btn)
+        self.layout.addLayout(self.button_layout)
+
+        self.cards_layout = QVBoxLayout()
+        self.cards_layout.setAlignment(Qt.AlignTop)
+        self.cards_layout.setSpacing(12)
+        self.layout.addLayout(self.cards_layout)
+
         self.rebuild_blocks()
 
     def rebuild_blocks(self):
+        # 清除旧卡片
         for block in self.blocks:
-            self.layout.removeWidget(block)
+            self.cards_layout.removeWidget(block)
             block.deleteLater()
         self.blocks.clear()
         for case in self.cases:
             block = CaseBlock(case)
             self.blocks.append(block)
-            self.layout.addWidget(block)
-        self.layout.addStretch()
+            self.cards_layout.addWidget(block)
+        self.cards_layout.addStretch()
 
     def swap_blocks(self, dragged_id, target_id):
         index_drag = None
@@ -504,10 +514,10 @@ class GanttTableWidget(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(12, 12, 12, 12)
 
         title = QLabel(f"{self.case['id']} - {self.case['name']}")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #2c3e50; margin-bottom: 8px;")
+        title.setStyleSheet("font-size: 16pt; font-weight: bold; color: #2c3e50; margin-bottom: 10px;")
         layout.addWidget(title)
 
         self.table = QTableWidget()
@@ -544,9 +554,8 @@ class GanttTableWidget(QWidget):
         self.table.setRowCount(len(signals))
         self.table.setVerticalHeaderLabels([sig['name'] for sig in signals])
 
-        # 设置行高
         for row in range(len(signals)):
-            self.table.setRowHeight(row, 35)
+            self.table.setRowHeight(row, 40)
 
         color_map = {'场景': QColor(255, 153, 153),
                      '动作': QColor(153, 204, 255),
@@ -571,9 +580,8 @@ class GanttTableWidget(QWidget):
                 item.setBackground(QBrush(bg))
                 font = item.font()
                 font.setBold(True)
-                font.setPointSize(11)
+                font.setPointSize(12)
                 item.setFont(font)
-                # 设置前景色深色
                 item.setForeground(QBrush(QColor(30, 30, 30)))
                 self.table.setItem(row, col_start, item)
 
@@ -582,9 +590,8 @@ class GanttTableWidget(QWidget):
         self.table.resizeColumnsToContents()
         self.table.resizeRowsToContents()
 
-        # 调整列宽留出边距
         for col in range(self.table.columnCount()):
-            self.table.setColumnWidth(col, self.table.columnWidth(col) + 10)
+            self.table.setColumnWidth(col, self.table.columnWidth(col) + 12)
 
     def _find_nearest_index(self, sorted_list, value):
         if not sorted_list:
@@ -609,9 +616,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("测试用例时序分析工具")
-        self.setGeometry(100, 100, 1300, 850)
-
-        # 应用样式
+        self.setGeometry(100, 100, 1400, 900)
         self.setStyleSheet(STYLE_SHEET)
 
         self.cases_data = []
@@ -634,26 +639,19 @@ class MainWindow(QMainWindow):
     def create_toolbar(self):
         toolbar = self.addToolBar("工具栏")
         toolbar.setMovable(False)
-        # 自定义按钮风格
         btn_style = """
             QToolButton {
                 background-color: #34495e;
                 color: white;
                 border: none;
                 border-radius: 4px;
-                padding: 6px 16px;
+                padding: 8px 18px;
                 font-weight: bold;
+                font-size: 10pt;
             }
-            QToolButton:hover {
-                background-color: #3d566e;
-            }
-            QToolButton:pressed {
-                background-color: #1e2b38;
-            }
+            QToolButton:hover { background-color: #3d566e; }
+            QToolButton:pressed { background-color: #1e2b38; }
         """
-        # 为了使用自定义按钮，改用 QPushButton 添加到工具栏
-        # 但工具栏默认使用 QAction，我们可以设置 QAction 的样式，但较复杂，这里用 QToolButton 也支持样式
-        # 直接使用 QAction 并应用样式表到 QToolBar
         open_action = QAction("📂 选择 Excel", self)
         open_action.triggered.connect(self.on_open_excel)
         toolbar.addAction(open_action)
@@ -668,6 +666,7 @@ class MainWindow(QMainWindow):
 
         toolbar.addSeparator()
 
+        # 工具栏保留快捷按钮（但用户主要使用总览里的）
         expand_all = QAction("📂 全部展开", self)
         expand_all.triggered.connect(lambda: self.batch_expand(True))
         collapse_all = QAction("📁 全部收起", self)
@@ -675,7 +674,6 @@ class MainWindow(QMainWindow):
         toolbar.addAction(expand_all)
         toolbar.addAction(collapse_all)
 
-        # 应用样式到工具栏的 actions（需要额外设置）
         for action in toolbar.actions():
             widget = toolbar.widgetForAction(action)
             if widget:
@@ -697,24 +695,33 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"已选择文件: {file_path}")
 
     def on_parse(self):
-        if hasattr(self, 'excel_path') and self.excel_path and os.path.exists(self.excel_path):
-            try:
+        try:
+            if hasattr(self, 'excel_path') and self.excel_path and os.path.exists(self.excel_path):
                 parser = TestCaseParser(self.excel_path)
                 self.cases_data = parser.parse_all()
                 self.statusBar().showMessage(f"解析完成，共 {len(self.cases_data)} 个 case")
-            except Exception as e:
-                QMessageBox.critical(self, "解析错误", f"解析失败: {str(e)}")
-                return
-        else:
-            self.cases_data = self.generate_mock_cases()
-            self.statusBar().showMessage("使用模拟数据（未选择 Excel 文件）")
+            else:
+                self.cases_data = self.generate_mock_cases()
+                self.statusBar().showMessage("使用模拟数据（未选择 Excel 文件）")
 
-        self.add_overview_tab()
-        while self.tab_widget.count() > 1:
-            self.tab_widget.removeTab(1)
-        for case in self.cases_data:
-            self.add_case_gantt_tab(case)
-        self.tab_widget.setCurrentIndex(0)
+            self.add_overview_tab()
+            while self.tab_widget.count() > 1:
+                self.tab_widget.removeTab(1)
+            for case in self.cases_data:
+                self.add_case_gantt_tab(case)
+            self.tab_widget.setCurrentIndex(0)
+
+        except Exception as e:
+            # 显示详细错误信息
+            error_detail = traceback.format_exc()
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("解析失败")
+            msg_box.setIcon(QMessageBox.Critical)
+            msg_box.setText(f"解析过程中发生错误：\n{str(e)}")
+            msg_box.setDetailedText(error_detail)
+            msg_box.setStandardButtons(QMessageBox.Ok)
+            msg_box.exec_()
+            self.statusBar().showMessage("解析失败，请查看详细信息")
 
     def generate_mock_cases(self):
         return [
@@ -782,7 +789,10 @@ class MainWindow(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    app.setStyle('Fusion')  # 使用Fusion风格增强跨平台一致性
+    app.setStyle('Fusion')
+    # 设置默认字体
+    font = QFont("Microsoft YaHei", 10)  #  Windows 下使用雅黑，可改为其他
+    app.setFont(font)
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
