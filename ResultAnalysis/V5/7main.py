@@ -2023,8 +2023,8 @@ function buildMergedColumnTableMulti(fileResults, hasAlign, alignKeyIdx, scheme)
         const fileColorMap = {};
         fileResults.forEach((res, fi) => {
             const filename = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
-            // 直接按索引从 items 中取
-            const foundItem = items[fi] || null;
+            // 按 fileIndex 从 items 中匹配该文件的数据
+            const foundItem = items.find(item => item.fileIndex === fi) || null;
             let bestColor = 'none';
             let hasData = false;
             let bestPriorityLocal = 999;
