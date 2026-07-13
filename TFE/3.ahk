@@ -1,46 +1,14 @@
 #SingleInstance Force
 Clipboard := ""
 
-code =
-(
-(function(){
-    const style = document.createElement('style');
-    style.textContent = `
-.ant-tooltip-inner {
-    background-color: #202630 !important;
-    opacity: 1 !important;
-    font-family: "Segoe UI", Roboto, sans-serif !important;
-    color: #ffffff !important;
-    font-weight: 400 !important;
-    font-size: 14px !important;
-    line-height: 1.55 !important;
-    padding: 10px 14px !important;
-    border-radius: 4px !important;
-    -webkit-font-smoothing: antialiased !important;
-    -moz-osx-font-smoothing: grayscale !important;
-    text-shadow: none !important;
-}
-.ant-tooltip-inner *,
-.ant-tooltip-inner .ant-card,
-.ant-tooltip-inner .ant-card-head-title,
-.ant-tooltip-inner .ant-card-body span {
-    font-family: "Segoe UI", Roboto, sans-serif !important;
-    color: #ffffff !important;
-    font-weight: 400 !important;
-    -webkit-font-smoothing: antialiased !important;
-    -moz-osx-font-smoothing: grayscale !important;
-    text-shadow: none !important;
-}
-.ant-tooltip-placement-top .ant-tooltip-arrow::before {border-top-color: #202630 !important;}
-.ant-tooltip-placement-bottom .ant-tooltip-arrow::before {border-bottom-color: #202630 !important;}
-.ant-tooltip-placement-left .ant-tooltip-arrow::before {border-left-color: #202630 !important;}
-.ant-tooltip-placement-right .ant-tooltip-arrow::before {border-right-color: #202630 !important;}
-`;
-    document.head.appendChild(style);
-    console.log("✅ 已生效：常规字重不加粗，字体锐化消除重影");
-})();
-)
+; 核心：AHK用连续拼接构造完整单行JS，规避换行+引号冲突，Console粘贴绝对可用
+code := "(function(){`n"
+code .= "    const style = document.createElement('style');`n"
+code .= "    style.textContent = \".ant-tooltip-inner {background-color: #202630 !important;opacity: 1 !important;font-family: \\\"Segoe UI\\\", Roboto, sans-serif !important;color: #ffffff !important;font-weight: 400 !important;font-size: 14px !important;line-height: 1.55 !important;padding: 10px 14px !important;border-radius: 4px !important;-webkit-font-smoothing: antialiased !important;-moz-osx-font-smoothing: grayscale !important;text-shadow: none !important;}.ant-tooltip-inner *,.ant-tooltip-inner .ant-card,.ant-tooltip-inner .ant-card-head-title,.ant-tooltip-inner .ant-card-body span {font-family: \\\"Segoe UI\\\", Roboto, sans-serif !important;color: #ffffff !important;font-weight: 400 !important;-webkit-font-smoothing: antialiased !important;-moz-osx-font-smoothing: grayscale !important;text-shadow: none !important;}.ant-tooltip-placement-top .ant-tooltip-arrow::before {border-top-color: #202630 !important;}.ant-tooltip-placement-bottom .ant-tooltip-arrow::before {border-bottom-color: #202630 !important;}.ant-tooltip-placement-left .ant-tooltip-arrow::before {border-left-color: #202630 !important;}.ant-tooltip-placement-right .ant-tooltip-arrow::before {border-right-color: #202630 !important;}\";`n"
+code .= "    document.head.appendChild(style);`n"
+code .= "    console.log(\"✅ 已生效：常规字重不加粗，字体锐化消除重影\");`n"
+code .= "})();"
 
 Clipboard := code
-MsgBox, 代码已复制到剪贴板！`n直接去浏览器 Console 粘贴即可
+MsgBox, 成功！JS代码已写入剪贴板`n操作：Edge F12 → Console → Ctrl+V → 回车执行
 ExitApp
