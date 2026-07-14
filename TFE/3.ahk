@@ -1,10 +1,7 @@
-; ============================================
-;  双击此 AHK 脚本 → 自动注入 CSS 样式到浏览器控制台
-;  支持 Chrome / Edge（其他浏览器提示手动粘贴）
-; ============================================
+#Requires AutoHotkey >=2.0
 
 ; 准备要粘贴的 JavaScript 代码
-jsCode =
+jsCode := "
 (
 (function(){
     const style = document.createElement('style');
@@ -42,24 +39,23 @@ jsCode =
     document.head.appendChild(style);
     console.log("✅ 已生效：常规字重不加粗，字体锐化消除重影");
 })();
-)
+)"
 
 ; 复制到剪贴板
-clipboard = %jsCode%
+A_Clipboard := jsCode
 
 ; 获取当前活动窗口的进程名
-WinGet, pid, PID, A
-WinGet, exe, ProcessName, ahk_pid %pid%
+processName := WinGetProcessName("A")
 
 ; 判断是否为 Chrome 或 Edge
-if (exe = "chrome.exe" or exe = "msedge.exe") {
-    ; 发送 Ctrl+Shift+J 打开控制台 (Chrome/Edge)
-    Send, ^+j
-    Sleep, 300
-    Send, ^v
-    Sleep, 200
-    Send, {Enter}
-    MsgBox, 代码已粘贴并执行。请查看控制台输出。
+if (processName = "chrome.exe" or processName = "msedge.exe") {
+    ; 发送 Ctrl+Shift+J 打开控制台（Chrome/Edge 快捷键）
+    Send("^+j")
+    Sleep(300)
+    Send("^v")
+    Sleep(200)
+    Send("{Enter}")
+    MsgBox("代码已粘贴并执行。请查看控制台输出。", "成功", "OK Iconi")
 } else {
-    MsgBox, 当前窗口不是 Chrome 或 Edge，代码已复制到剪贴板。`n请手动打开控制台 (Ctrl+Shift+J) 后粘贴执行。
+    MsgBox("当前窗口不是 Chrome 或 Edge，代码已复制到剪贴板。`n请手动打开控制台 (Ctrl+Shift+J) 后粘贴执行。", "提示", "OK Iconi")
 }
