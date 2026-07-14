@@ -1,12 +1,11 @@
 #Requires AutoHotkey >=2.0
 
-; ---------- 准备 JavaScript 代码 ----------
+; ---------- 准备 JavaScript 代码（所有反引号已转义为双反引号） ----------
 jsCode := "
 (
 (function(){
     const style = document.createElement('style');
-    style.textContent = `
-.ant-tooltip-inner {
+    style.textContent = ``.ant-tooltip-inner {
     background-color: #202630 !important;
     opacity: 1 !important;
     font-family: "Segoe UI", Roboto, sans-serif !important;
@@ -35,7 +34,7 @@ jsCode := "
 .ant-tooltip-placement-bottom .ant-tooltip-arrow::before {border-bottom-color: #202630 !important;}
 .ant-tooltip-placement-left .ant-tooltip-arrow::before {border-left-color: #202630 !important;}
 .ant-tooltip-placement-right .ant-tooltip-arrow::before {border-right-color: #202630 !important;}
-`;
+``;
     document.head.appendChild(style);
     console.log("✅ 已生效：常规字重不加粗，字体锐化消除重影");
 })();
@@ -64,21 +63,10 @@ if (currentProcess != "msedge.exe" and currentProcess != "chrome.exe") {
     ExitApp
 }
 
-; ---------- 执行注入（更稳健的方式） ----------
-; 1. 打开控制台
-Send("^+j")
-Sleep(600)  ; 等待控制台完全打开并获取焦点
-
-; 2. 确保焦点在输入区（发送 Esc 可让焦点从其他面板回到输入区）
-Send("{Esc}")
-Sleep(100)
-
-; 3. 粘贴
-Send("^v")
+; ---------- 执行注入 ----------
+Send("^+j")          ; 打开控制台 (Chrome/Edge)
+Sleep(600)
+Send("^v")           ; 粘贴
 Sleep(300)
-
-; 4. 执行
-Send("{Enter}")
-
-; 5. 提示成功
-MsgBox("✅ 样式已注入！请查看控制台输出。`n如果控制台没有反应，请手动按 Ctrl+V 粘贴（代码已复制到剪贴板）并按回车。", "完成", "OK Iconi")
+Send("{Enter}")      ; 执行
+MsgBox("✅ 样式已注入！请查看控制台输出。", "成功", "OK Iconi")
