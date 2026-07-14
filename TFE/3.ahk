@@ -1,6 +1,6 @@
 #Requires AutoHotkey >=2.0
 
-; 准备要粘贴的 JavaScript 代码
+; ---------- 准备 JavaScript 代码 ----------
 jsCode := "
 (
 (function(){
@@ -41,21 +41,34 @@ jsCode := "
 })();
 )"
 
-; 复制到剪贴板
+; ---------- 复制到剪贴板 ----------
 A_Clipboard := jsCode
 
-; 获取当前活动窗口的进程名
-processName := WinGetProcessName("A")
+; ---------- 显示倒计时提示 ----------
+ToolTip("请在 5 秒内切换到目标 Edge/Chrome 窗口...", 0, 0)
+Sleep(1000)
+ToolTip("剩余 4 秒...", 0, 0)
+Sleep(1000)
+ToolTip("剩余 3 秒...", 0, 0)
+Sleep(1000)
+ToolTip("剩余 2 秒...", 0, 0)
+Sleep(1000)
+ToolTip("剩余 1 秒...", 0, 0)
+Sleep(1000)
+ToolTip()  ; 清除提示
 
-; 判断是否为 Chrome 或 Edge
-if (processName = "chrome.exe" or processName = "msedge.exe") {
-    ; 发送 Ctrl+Shift+J 打开控制台（Chrome/Edge 快捷键）
-    Send("^+j")
+; ---------- 获取当前活动窗口的进程名 ----------
+currentProcess := WinGetProcessName("A")
+
+; ---------- 检查是否为 Edge 或 Chrome ----------
+if (currentProcess = "msedge.exe" or currentProcess = "chrome.exe") {
+    ; 当前窗口是浏览器，执行注入
+    Send("^+j")          ; 打开控制台 (Chrome/Edge)
     Sleep(300)
-    Send("^v")
+    Send("^v")           ; 粘贴
     Sleep(200)
-    Send("{Enter}")
-    MsgBox("代码已粘贴并执行。请查看控制台输出。", "成功", "OK Iconi")
+    Send("{Enter}")      ; 执行
+    MsgBox("✅ 样式已注入！请查看控制台输出。", "成功", "OK Iconi")
 } else {
-    MsgBox("当前窗口不是 Chrome 或 Edge，代码已复制到剪贴板。`n请手动打开控制台 (Ctrl+Shift+J) 后粘贴执行。", "提示", "OK Iconi")
+    MsgBox("当前活动窗口不是 Edge 或 Chrome。`n请确保在 5 秒内切换到了目标浏览器窗口。", "提示", "OK Iconi")
 }
