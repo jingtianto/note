@@ -41,10 +41,10 @@ jsCode := "
 })();
 )"
 
-; ---------- 复制到剪贴板 ----------
+; 复制到剪贴板
 A_Clipboard := jsCode
 
-; ---------- 显示倒计时提示 ----------
+; ---------- 等待用户切换窗口（带倒计时） ----------
 ToolTip("请在 5 秒内切换到目标 Edge/Chrome 窗口...", 0, 0)
 Sleep(1000)
 ToolTip("剩余 4 秒...", 0, 0)
@@ -57,18 +57,28 @@ ToolTip("剩余 1 秒...", 0, 0)
 Sleep(1000)
 ToolTip()  ; 清除提示
 
-; ---------- 获取当前活动窗口的进程名 ----------
+; ---------- 检测当前窗口是否为浏览器 ----------
 currentProcess := WinGetProcessName("A")
-
-; ---------- 检查是否为 Edge 或 Chrome ----------
-if (currentProcess = "msedge.exe" or currentProcess = "chrome.exe") {
-    ; 当前窗口是浏览器，执行注入
-    Send("^+j")          ; 打开控制台 (Chrome/Edge)
-    Sleep(300)
-    Send("^v")           ; 粘贴
-    Sleep(200)
-    Send("{Enter}")      ; 执行
-    MsgBox("✅ 样式已注入！请查看控制台输出。", "成功", "OK Iconi")
-} else {
+if (currentProcess != "msedge.exe" and currentProcess != "chrome.exe") {
     MsgBox("当前活动窗口不是 Edge 或 Chrome。`n请确保在 5 秒内切换到了目标浏览器窗口。", "提示", "OK Iconi")
+    ExitApp
 }
+
+; ---------- 执行注入（更稳健的方式） ----------
+; 1. 打开控制台
+Send("^+j")
+Sleep(600)  ; 等待控制台完全打开并获取焦点
+
+; 2. 确保焦点在输入区（发送 Esc 可让焦点从其他面板回到输入区）
+Send("{Esc}")
+Sleep(100)
+
+; 3. 粘贴
+Send("^v")
+Sleep(300)
+
+; 4. 执行
+Send("{Enter}")
+
+; 5. 提示成功
+MsgBox("✅ 样式已注入！请查看控制台输出。`n如果控制台没有反应，请手动按 Ctrl+V 粘贴（代码已复制到剪贴板）并按回车。", "完成", "OK Iconi")
