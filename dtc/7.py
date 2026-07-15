@@ -70,17 +70,13 @@ def parse_dtc_text(text):
                     break
                 
                 # 处理键：ShortName, Description, Status (支持同一行或下一行)
-                # 检查当前行是否包含键，如果包含，尝试提取值
                 def extract_value(line, key):
-                    # 如果行以 key 开头
                     if line.startswith(key):
-                        # 检查是否有冒号或空格分隔
                         # 尝试分割
                         parts = line.split(':', 1) if ':' in line else line.split(' ', 1)
                         if len(parts) > 1:
                             return parts[1].strip()
                         else:
-                            # 否则值在下一行
                             return None
                     return None
                 
@@ -89,7 +85,7 @@ def parse_dtc_text(text):
                     val = extract_value(line_j, 'ShortName')
                     if val is None and j + 1 < len(lines):
                         val = lines[j+1].strip()
-                        j += 1  # 跳过值行
+                        j += 1
                     if val:
                         short_name = val
                     j += 1
@@ -133,7 +129,7 @@ def parse_dtc_text(text):
                 elif module == 'perf' and dtc_id not in order_perf:
                     order_perf.append(dtc_id)
     
-    # 整合三个阶段的对应状态
+    # 整合三个阶段的状态
     file_data = {'main': {}, 'perf': {}}
     for phase in phases:
         for module in ['main', 'perf']:
@@ -147,7 +143,6 @@ def parse_dtc_text(text):
                 elif phase == 'Postprocess':
                     file_data[module][dtc_id]['post'] = status
     
-    # 生成最终列表
     main_list = []
     for dtc in order_main:
         info = file_data['main'][dtc]
@@ -279,6 +274,10 @@ class FrozenTableWidget(QWidget):
             self.right_table.setSpan(row, col - self.freeze_cols, rowSpan, colSpan)
         else:
             self.left_table.setSpan(row, col, rowSpan, colSpan)
+    
+    def setRowHeight(self, row, height):
+        self.left_table.setRowHeight(row, height)
+        self.right_table.setRowHeight(row, height)
             
     def setFont(self, font):
         self.left_table.setFont(font)
