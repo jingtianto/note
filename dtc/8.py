@@ -144,7 +144,6 @@ class FileItem:
 
 
 class FrozenTableWidget(QWidget):
-    """实现冻结列的表格组件"""
     def __init__(self, freeze_cols=3, parent=None):
         super().__init__(parent)
         self.freeze_cols = freeze_cols
@@ -160,15 +159,14 @@ class FrozenTableWidget(QWidget):
         self.left_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.left_table.setSortingEnabled(False)
         self.left_table.setFocusPolicy(Qt.NoFocus)
-        self.left_table.horizontalHeader().setVisible(False)  # 隐藏水平表头
+        self.left_table.horizontalHeader().setVisible(False)
         self.left_table.verticalHeader().setVisible(False)
         
         self.right_table = QTableWidget()
         self.right_table.setSortingEnabled(False)
-        self.right_table.horizontalHeader().setVisible(False)  # 隐藏水平表头
+        self.right_table.horizontalHeader().setVisible(False)
         self.right_table.verticalHeader().setVisible(False)
         
-        # 同步滚动
         self.right_table.verticalScrollBar().valueChanged.connect(
             lambda val: self.left_table.verticalScrollBar().setValue(val)
         )
@@ -176,7 +174,6 @@ class FrozenTableWidget(QWidget):
             lambda val: self.right_table.verticalScrollBar().setValue(val)
         )
         
-        # 同步选择
         self.left_table.itemSelectionChanged.connect(self.sync_selection)
         self.right_table.itemSelectionChanged.connect(self.sync_selection)
         
@@ -709,7 +706,7 @@ class DtcCompareApp(QMainWindow):
         
         col_count = tables[0].columnCount()
         
-        # 前三列自适应，但限制最大宽度
+        # 前三列自适应，限制最大宽度
         for col in range(3):
             max_width = 0
             for table in tables:
@@ -717,12 +714,11 @@ class DtcCompareApp(QMainWindow):
                 width = table.columnWidth(col)
                 if width > max_width:
                     max_width = width
-            # 限制最大宽度200px
             final_width = min(max_width + 10, 200)
             for table in tables:
                 table.setColumnWidth(col, final_width)
         
-        # 阶段列固定宽度80px
+        # 阶段列固定宽度80
         for col in range(3, col_count):
             for table in tables:
                 table.setColumnWidth(col, 80)
@@ -799,7 +795,10 @@ class DtcCompareApp(QMainWindow):
                     max_widths[col] = width
         for table in [table1, table2]:
             for col in range(col_count):
-                table.setColumnWidth(col, min(max_widths[col] + 10, 200) if col < 3 else 80)
+                if col < 3:
+                    table.setColumnWidth(col, min(max_widths[col] + 10, 200))
+                else:
+                    table.setColumnWidth(col, 80)
 
     # ---------- 搜索 ----------
     def on_search(self, text):
@@ -880,4 +879,91 @@ class DtcCompareApp(QMainWindow):
                 ws = wb.create_sheet("IPN_PERF")
                 self.write_table_to_sheet(ws, perf_data)
             wb.save(file_path)
-            QMessageBox.information(self, "导出成功", f"已保存到 {file_path
+            QMessageBox.information(self, "导出成功", f"已保存到 {file_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "导出失败", str(e))
+
+    def get_visible_table_data(self, table_widget):
+        if table_widget.rowCount() == 0:
+            return None
+        col_count = table_widget.columnCount()
+        headers = []
+        for col in range(3):
+            item0 = table_widget.item(0, col)
+            headers.append(item0.text() if item0 else f"Col{col}")
+        col = 3
+        while col < col_count:
+            item0 = table_widget.item(0, col)
+            file_name = item0.text() if item0 else "File"
+            for off in range(3):
+                item1 = table_widget.item(1, col + off)
+                stage = item1.text() if item1 else "Stage"
+                headers.append(f"{file_name}\n{stage}")
+            col += 3
+        data = []
+        for row in range(2, table_widget.rowCount()):
+            if table_widget.isRowHidden(row):
+                continue
+            row_data = []
+            for col in range(col_count):
+                item = table_widget.item(row, col)
+                if item:
+                    text = item.text()
+                    bg = item.background().color()
+                    color_hex = bg.name() if bg.isValid() else None
+                    row_data.append((text, color_hex))
+                else:
+                    row_data.append(('', None))
+            data.append(row_data)
+        return {'headers': headers, 'data': data}
+
+    def get_table_data(self, table):
+        if table.rowCount() == 0:
+            return None
+        headers = [table.horizontalHeaderItem(c).text() if table.horizontalHeaderItem(c) else f"Col{c}" for c in range(table.columnCount())]
+        data = []
+        for row in range(table.rowCount()):
+            row_data = []
+            for col in range(table.columnCount()):
+                item = table.item(row, col)
+                if item:
+                    text = item.text()
+                    bg = item.background().color()
+                    color_hex = bg.name() if bg.isValid() else None
+                    row_data.append((text, color_hex))
+                else:
+                    row_data.append(('', None))
+            data.append(row_data)
+        return {'headers': headers, 'data': data}
+
+    def write_table_to_sheet(self, ws, table_data):
+        headers = table_data['headers']
+        for col, header in enumerate(headers, start=1):
+            ws.cell(row=1, column=col, value=header)
+        for row_idx, row in enumerate(table_data['data'], start=2):
+            for col_idx, (text, color_hex) in enumerate(row, start=1):
+                cell = ws.cell(row=row_idx, column=col_idx, value=text)
+                if color_hex:
+                    fill = PatternFill(start_color=color_hex[1:], end_color=color_hex[1:], fill_type="solid")
+                    cell.fill = fill
+
+    # ---------- 拖拽 ----------
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        for url in event.mimeData().urls():
+            file_path = url.toLocalFile()
+            if file_path:
+                self.load_file(file_path)
+        event.acceptProposedAction()
+
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    window = DtcCompareApp()
+    window.show()
+    sys.exit(app.exec_())
