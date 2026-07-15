@@ -14,10 +14,10 @@ from PyQt5.QtGui import QColor, QBrush, QDragEnterEvent, QDropEvent, QFont
 import openpyxl
 from openpyxl.styles import PatternFill
 
-# ---------- 解析函数 ----------
+# ---------- 增强版解析函数 ----------
 def parse_dtc_text(text):
     """
-    解析与dtc.txt格式相同的文本。
+    解析与dtc.txt格式相同的文本，兼容多种变体。
     返回：{'main': [(id, short, desc, pre, before, post), ...], 'perf': [...]}
     """
     lines = text.splitlines()
@@ -33,57 +33,84 @@ def parse_dtc_text(text):
             i += 1
             continue
         
+        # 检测阶段标题 (如 "(514.81480) Preprocess")
         m = re.match(r'^\(\d+\.\d+\)\s+(.+)$', line)
         if m:
             current_phase = m.group(1).strip()
             i += 1
             continue
         
-        if line.startswith('IPN_MAIN'):
+        # 检测模块 (忽略大小写)
+        if line.upper().startswith('IPN_MAIN'):
             current_module = 'main'
             i += 1
             continue
-        elif line.startswith('IPN_PERF'):
+        elif line.upper().startswith('IPN_PERF'):
             current_module = 'perf'
             i += 1
             continue
         
+        # 检测DTC条目 (0x开头的6位十六进制)
         if re.match(r'^0x[0-9A-Fa-f]{6}$', line):
             dtc_id = line
             short_name = ''
             desc = ''
             status = ''
             j = i + 1
+            # 在DTC块中读取键值对
             while j < len(lines):
                 line_j = lines[j].strip()
                 if not line_j:
                     j += 1
                     continue
+                # 遇到下一个DTC或新模块/阶段则停止
                 if re.match(r'^0x[0-9A-Fa-f]{6}$', line_j):
                     break
-                if line_j.startswith('IPN_MAIN') or line_j.startswith('IPN_PERF') or re.match(r'^\(\d+\.\d+\)', line_j):
+                if line_j.upper().startswith('IPN_MAIN') or line_j.upper().startswith('IPN_PERF') or re.match(r'^\(\d+\.\d+\)', line_j):
                     break
                 
+                # 处理键：ShortName, Description, Status (支持同一行或下一行)
+                # 检查当前行是否包含键，如果包含，尝试提取值
+                def extract_value(line, key):
+                    # 如果行以 key 开头
+                    if line.startswith(key):
+                        # 检查是否有冒号或空格分隔
+                        # 尝试分割
+                        parts = line.split(':', 1) if ':' in line else line.split(' ', 1)
+                        if len(parts) > 1:
+                            return parts[1].strip()
+                        else:
+                            # 否则值在下一行
+                            return None
+                    return None
+                
+                val = None
                 if line_j.startswith('ShortName'):
-                    if j + 1 < len(lines):
+                    val = extract_value(line_j, 'ShortName')
+                    if val is None and j + 1 < len(lines):
                         val = lines[j+1].strip()
-                        if val:
-                            short_name = val
-                    j += 2
+                        j += 1  # 跳过值行
+                    if val:
+                        short_name = val
+                    j += 1
                     continue
                 elif line_j.startswith('Description'):
-                    if j + 1 < len(lines):
+                    val = extract_value(line_j, 'Description')
+                    if val is None and j + 1 < len(lines):
                         val = lines[j+1].strip()
-                        if val:
-                            desc = val
-                    j += 2
+                        j += 1
+                    if val:
+                        desc = val
+                    j += 1
                     continue
                 elif line_j.startswith('Status'):
-                    if j + 1 < len(lines):
+                    val = extract_value(line_j, 'Status')
+                    if val is None and j + 1 < len(lines):
                         val = lines[j+1].strip()
-                        if val:
-                            status = val
-                    j += 2
+                        j += 1
+                    if val:
+                        status = val
+                    j += 1
                     continue
                 else:
                     j += 1
@@ -95,6 +122,7 @@ def parse_dtc_text(text):
             continue
         i += 1
 
+    # 构建DTC顺序（按Preprocess->Before->Postprocess）
     order_main = []
     order_perf = []
     for phase in phases:
@@ -105,6 +133,7 @@ def parse_dtc_text(text):
                 elif module == 'perf' and dtc_id not in order_perf:
                     order_perf.append(dtc_id)
     
+    # 整合三个阶段的对应状态
     file_data = {'main': {}, 'perf': {}}
     for phase in phases:
         for module in ['main', 'perf']:
@@ -118,6 +147,7 @@ def parse_dtc_text(text):
                 elif phase == 'Postprocess':
                     file_data[module][dtc_id]['post'] = status
     
+    # 生成最终列表
     main_list = []
     for dtc in order_main:
         info = file_data['main'][dtc]
@@ -138,7 +168,7 @@ class FileItem:
 
 
 class FrozenTableWidget(QWidget):
-    """实现冻结列的表格组件，左侧固定列数可配置，支持双行表头（第一行合并）"""
+    """实现冻结列的表格组件，左侧固定列数可配置"""
     def __init__(self, freeze_cols=3, parent=None):
         super().__init__(parent)
         self.freeze_cols = freeze_cols
@@ -543,7 +573,8 @@ class DtcCompareApp(QMainWindow):
                 preview = content[:300] + "..." if len(content) > 300 else content
                 QMessageBox.warning(self, "解析警告",
                     f"文件 {file_path} 未解析到任何DTC数据。\n"
-                    f"内容预览（前300字符）：\n{preview}")
+                    f"内容预览（前300字符）：\n{preview}\n"
+                    f"请确认内容包含 'IPN_MAIN'/'IPN_PERF' 和阶段标题（如 Preprocess）。")
                 return
             name = os.path.basename(file_path)
             item = FileItem(name, data)
@@ -622,7 +653,6 @@ class DtcCompareApp(QMainWindow):
         table_widget.setColumnCount(total_cols)
         
         # 使用数据区域模拟双行表头：第0行文件名（合并三列），第1行阶段名，之后是数据
-        # 先设置总行数 = 2（表头行） + 数据行数
         # 先收集所有DTC
         order = []
         for f in self.files:
@@ -633,7 +663,6 @@ class DtcCompareApp(QMainWindow):
         table_widget.setRowCount(2 + data_row_count)
         
         # 设置第0行：文件名合并
-        # 前三列固定列，不合并，单独显示固定表头（DTC编号、短名称、描述）
         fixed_headers = ['DTC编号', '短名称', '描述']
         for col in range(3):
             item = QTableWidgetItem(fixed_headers[col])
@@ -644,7 +673,6 @@ class DtcCompareApp(QMainWindow):
         # 从第3列开始，每个文件占3列，合并单元格显示文件名
         col = 3
         for f_idx, f in enumerate(self.files):
-            # 设置文件名合并
             item = QTableWidgetItem(f.name)
             item.setBackground(QBrush(self.get_file_color(f_idx)))
             item.setTextAlignment(Qt.AlignCenter)
@@ -655,7 +683,6 @@ class DtcCompareApp(QMainWindow):
         
         # 设置第1行：阶段名（不合并）
         stage_names = ['Preprocess', 'Before', 'Postprocess']
-        # 前三列固定列留空或显示子标题？我们留空，或显示“属性”
         for col in range(3):
             item = QTableWidgetItem("")
             item.setBackground(QBrush(QColor(220, 220, 220)))
@@ -700,14 +727,11 @@ class DtcCompareApp(QMainWindow):
                     table_widget.setItem(real_row, col + off, item)
                 col += 3
         
-        # 设置行高（表头行稍高）
+        # 设置行高
         table_widget.setRowHeight(0, 30)
         table_widget.setRowHeight(1, 25)
-        # 隐藏垂直表头（已在初始化时隐藏）
-        # 表格样式：边框、对齐等
 
     def get_file_color(self, index):
-        """为每个文件分配不同的表头背景色"""
         colors = [
             QColor(200, 230, 255),  # 淡蓝
             QColor(200, 255, 200),  # 淡绿
@@ -821,8 +845,7 @@ class DtcCompareApp(QMainWindow):
             return
         text = text.lower()
         for row in range(table_widget.rowCount()):
-            # 前两行是表头，不隐藏
-            if row < 2:
+            if row < 2:  # 跳过表头行
                 continue
             match = False
             dtc_item = table_widget.item(row, 0)
@@ -896,21 +919,16 @@ class DtcCompareApp(QMainWindow):
     def get_visible_table_data(self, table_widget):
         if table_widget.rowCount() == 0:
             return None
-        # 获取列数
         col_count = table_widget.columnCount()
         # 构建表头：从第0行和第1行组合
         headers = []
-        # 前三列固定表头
         for col in range(3):
             item0 = table_widget.item(0, col)
             headers.append(item0.text() if item0 else f"Col{col}")
-        # 后面的列：第1行阶段名，但需要与第0行文件名合并，我们组合为 "文件名\n阶段名"
         col = 3
         while col < col_count:
-            # 找到该文件名所在的列（第0行）
             item0 = table_widget.item(0, col)
             file_name = item0.text() if item0 else "File"
-            # 第1行的三个阶段
             for off in range(3):
                 item1 = table_widget.item(1, col + off)
                 stage = item1.text() if item1 else "Stage"
