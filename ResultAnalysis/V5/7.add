@@ -1,3 +1,331 @@
+
+// ================================================================
+// 合并导出（使用 Excel 分组，保留折叠状态）
+// ================================================================
+async function exportMergedExcel() {
+    try {
+        if (typeof ExcelJS === 'undefined') {
+            alert('ExcelJS 库未加载，请刷新页面重试');
+            return;
+        }
+        if (typeof saveAs !== 'function') {
+            alert('FileSaver 库未加载，将使用备用下载方式');
+        }
+
+        if (!statisticsResults) {
+            alert('请先执行统计');
+            return;
+        }
+        const results = statisticsResults.results;
+        if (results.length < 2) {
+            alert('需要至少两个文件才能导出合并结果');
+            return;
+        }
+
+        const scheme = statisticsResults.scheme;
+        const alignKeyIdx = scheme.alignBaseKey;
+        const hasAlign = alignKeyIdx !== null && alignKeyIdx !== undefined && alignKeyIdx !== '';
+        const priorityOrder = scheme.priorityOrder || ['green', 'blue', 'yellow', 'orange', 'red', 'blank'];
+
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('合并对比');
+
+        // ---------- 1. 单元格采集项（保持平铺，不分组） ----------
+        const hasAnyCell = results.some(r => r.data && r.data.hasCell);
+        if (hasAnyCell) {
+            const headers = ['来源文件', '关键字', '值'];
+            let hasColor = results.some(r => (r.data.cellData || []).some(d => d.color_indexed !== null));
+            if (hasColor) headers.push('结果');
+            const headerRow = sheet.addRow(headers);
+            headerRow.font = { bold: true, size: 12 };
+            headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+            headerRow.eachCell(cell => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
+            });
+
+            const bgColors = ['FFE6F3E6', 'FFFFF9E6', 'FFF0EDE6', 'FFF0E6F0', 'FFE6F0F0', 'FFF0E6E6'];
+            results.forEach((res, fi) => {
+                const cellData = res.data.cellData || [];
+                const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+                cellData.forEach(d => {
+                    let label = d.keyword.keywordText || '';
+                    if (d.keyword.valuePosition === 'left') label += ' ←' + d.keyword.offset;
+                    else if (d.keyword.valuePosition === 'right') label += ' →' + d.keyword.offset;
+                    const rowValues = [displayName, label, (d.value !== null && d.value !== undefined ? d.value : '')];
+                    if (hasColor) rowValues.push(d.color_meaning || '');
+                    const row = sheet.addRow(rowValues);
+                    row.eachCell(cell => {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColors[fi % bgColors.length] } };
+                    });
+                    const valCell = row.getCell(3);
+                    if (d.color_name && d.color_name !== 'blank') {
+                        const hex = getColorCss(d.color_name);
+                        valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hex.replace('#', 'FF') } };
+                    } else {
+                        valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+                    }
+                    const fontSize = d.keyword.fontSize || 14;
+                    const isBold = d.keyword.bold || false;
+                    row.eachCell(cell => { cell.font = { size: fontSize, bold: isBold }; });
+                });
+            });
+            // 单元格部分结束后空一行
+            sheet.addRow([]);
+        }
+
+        // ---------- 2. 列采集项（使用 Excel 分组功能） ----------
+        const hasAnyColumn = results.some(r => r.data && r.data.hasColumn);
+        if (!hasAnyColumn) {
+            // 没有列数据，直接输出
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            if (typeof saveAs === 'function') saveAs(blob, '合并统计.xlsx');
+            else {
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = '合并统计.xlsx';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+            }
+            log('合并统计导出成功（无列数据）', 'success');
+            return;
+        }
+
+        // 取第一个有列数据的文件作为模板（强制对齐）
+        let firstKw = null;
+        for (let res of results) {
+            if (res.data && res.data.columnData && res.data.columnData.keywords && res.data.columnData.keywords.length > 0) {
+                firstKw = res.data.columnData.keywords;
+                break;
+            }
+        }
+        if (!firstKw) {
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            if (typeof saveAs === 'function') saveAs(blob, '合并统计.xlsx');
+            else { /* 备用下载... */ }
+            log('合并统计导出成功（无列数据）', 'success');
+            return;
+        }
+
+        // 构建原始数据（按分组键归类）
+        const allRows = [];
+        results.forEach((res, fi) => {
+            const rows = res.data.columnData.rows || [];
+            const filename = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+            rows.forEach(row => {
+                let alignValue = null;
+                if (hasAlign) {
+                    const idx = parseInt(alignKeyIdx);
+                    if (!isNaN(idx) && row.length > idx) {
+                        alignValue = row[idx].value;
+                    }
+                }
+                allRows.push({ filename, row, alignValue, fileIndex: fi });
+            });
+        });
+
+        // 分组
+        const groups = {};
+        allRows.forEach(item => {
+            let key = hasAlign ? (item.alignValue !== null && item.alignValue !== undefined ? String(item.alignValue) : '') : '';
+            if (!key) key = '__no_align__';
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(item);
+        });
+
+        // 排序分组键
+        const groupKeys = Object.keys(groups).sort((a, b) => {
+            if (a === '__no_align__') return 1;
+            if (b === '__no_align__') return -1;
+            const aNum = parseFloat(a);
+            const bNum = parseFloat(b);
+            if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+            return a.localeCompare(b);
+        });
+
+        // --- 全局表头（第一行） ---
+        const colHeaders = ['分组键', '文件名'];
+        firstKw.forEach((kw) => {
+            let label = kw.keywordText || '';
+            if (kw.valuePosition === 'left') label += ' ←' + kw.offset;
+            else if (kw.valuePosition === 'right') label += ' →' + kw.offset;
+            colHeaders.push(label);
+            if (kw.addColorCol) colHeaders.push('结果');
+        });
+        const headerRow = sheet.addRow(colHeaders);
+        headerRow.font = { bold: true, size: 12 };
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        headerRow.eachCell(cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
+        });
+
+        // 文件背景色映射
+        const bgColors = ['FFE6F3E6', 'FFFFF9E6', 'FFF0EDE6', 'FFF0E6F0', 'FFE6F0F0', 'FFF0E6E6'];
+        const fileBgMap = {};
+        results.forEach((res, fi) => {
+            const filename = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+            fileBgMap[filename] = bgColors[fi % bgColors.length];
+        });
+
+        // --- 遍历分组，写入数据并设置分组层级 ---
+        groupKeys.forEach(key => {
+            const items = groups[key];
+            // 确定当前分组展开还是收起（根据 groupStates）
+            const isExpanded = groupStates[key] !== undefined ? groupStates[key] : true; // 默认展开
+
+            // 计算该组的最佳行（用于摘要行）
+            let bestItem = null;
+            let bestPriority = 999;
+            items.forEach(item => {
+                let rowPriority = 999;
+                firstKw.forEach((kw, idx) => {
+                    if (kw.collectColor && item.row.length > idx) {
+                        const color = item.row[idx].color_name || 'blank';
+                        const p = getPriority(color, priorityOrder);
+                        if (p < rowPriority) rowPriority = p;
+                    }
+                });
+                if (rowPriority < bestPriority) {
+                    bestPriority = rowPriority;
+                    bestItem = item;
+                }
+            });
+            if (!bestItem) return;
+
+            const displayKey = (key === '__no_align__') ? '(未对齐)' : key;
+
+            // 1. 写入摘要行（分组键 + 最佳行的文件名和数据）
+            const summaryValues = [displayKey, bestItem.filename];
+            firstKw.forEach((kw, idx) => {
+                const cell = (bestItem.row.length > idx) ? bestItem.row[idx] : null;
+                const val = cell ? (cell.value !== null && cell.value !== undefined ? cell.value : '') : '';
+                summaryValues.push(val);
+                if (kw.addColorCol) {
+                    const meaning = cell ? (cell.color_meaning || '') : '';
+                    summaryValues.push(meaning);
+                }
+            });
+            const summaryRow = sheet.addRow(summaryValues);
+            // 设置摘要行背景色（使用最佳行对应文件的颜色）
+            const bg = fileBgMap[bestItem.filename] || 'FFFFFFFF';
+            summaryRow.eachCell(cell => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+                cell.font = { bold: true }; // 摘要行加粗
+            });
+            // 摘要行值列的颜色（按最佳行）
+            let colPos = 3;
+            firstKw.forEach((kw, idx) => {
+                const cell = (bestItem.row.length > idx) ? bestItem.row[idx] : null;
+                const valCell = summaryRow.getCell(colPos);
+                if (kw.collectColor && cell && cell.color_name && cell.color_name !== 'blank') {
+                    const hex = getColorCss(cell.color_name);
+                    valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hex.replace('#', 'FF') } };
+                } else {
+                    valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+                }
+                colPos++;
+                if (kw.addColorCol) {
+                    const colorCell = summaryRow.getCell(colPos);
+                    const meaning = cell ? (cell.color_meaning || 'blank') : 'blank';
+                    let bgHex = '#FFFFFF';
+                    if (meaning === 'failed') bgHex = '#FFCCCC';
+                    else if (meaning === 'passed') bgHex = '#CCFFCC';
+                    else if (meaning === 'warning') bgHex = '#FFFFCC';
+                    else if (meaning === 'signal missing') bgHex = '#CCE5FF';
+                    else if (meaning === 'trigger not occurred') bgHex = '#FFD9B3';
+                    colorCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgHex.replace('#', 'FF') } };
+                    colPos++;
+                }
+            });
+
+            // 设置摘要行的 outlineLevel = 1，并控制折叠状态
+            summaryRow.outlineLevel = 1;
+            summaryRow.collapsed = !isExpanded; // 如果折叠，则 collapsed=true
+
+            // 2. 写入该组所有详细行（除了最佳行本身，避免重复）
+            items.forEach(item => {
+                if (item === bestItem) return; // 跳过最佳行，因为已经作为摘要行输出
+                const detailValues = ['', item.filename]; // 分组键列留空（保持缩进效果，也可以重复写入，但留空视觉更清爽）
+                firstKw.forEach((kw, idx) => {
+                    const cell = (item.row.length > idx) ? item.row[idx] : null;
+                    const val = cell ? (cell.value !== null && cell.value !== undefined ? cell.value : '') : '';
+                    detailValues.push(val);
+                    if (kw.addColorCol) {
+                        const meaning = cell ? (cell.color_meaning || '') : '';
+                        detailValues.push(meaning);
+                    }
+                });
+                const detailRow = sheet.addRow(detailValues);
+                // 详细行背景色
+                const bgDetail = fileBgMap[item.filename] || 'FFFFFFFF';
+                detailRow.eachCell(cell => {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgDetail } };
+                });
+                // 详细行值列颜色
+                let colPosDetail = 3;
+                firstKw.forEach((kw, idx) => {
+                    const cell = (item.row.length > idx) ? item.row[idx] : null;
+                    const valCell = detailRow.getCell(colPosDetail);
+                    if (kw.collectColor && cell && cell.color_name && cell.color_name !== 'blank') {
+                        const hex = getColorCss(cell.color_name);
+                        valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hex.replace('#', 'FF') } };
+                    } else {
+                        valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+                    }
+                    colPosDetail++;
+                    if (kw.addColorCol) {
+                        const colorCell = detailRow.getCell(colPosDetail);
+                        const meaning = cell ? (cell.color_meaning || 'blank') : 'blank';
+                        let bgHex = '#FFFFFF';
+                        if (meaning === 'failed') bgHex = '#FFCCCC';
+                        else if (meaning === 'passed') bgHex = '#CCFFCC';
+                        else if (meaning === 'warning') bgHex = '#FFFFCC';
+                        else if (meaning === 'signal missing') bgHex = '#CCE5FF';
+                        else if (meaning === 'trigger not occurred') bgHex = '#FFD9B3';
+                        colorCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgHex.replace('#', 'FF') } };
+                        colPosDetail++;
+                    }
+                });
+                // 设置详细行的 outlineLevel = 2，且不折叠（由父级控制）
+                detailRow.outlineLevel = 2;
+                // 不需要设置 collapsed，因为父级摘要行控制折叠
+            });
+        });
+
+        // 生成文件并下载
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+        if (typeof saveAs === 'function') {
+            saveAs(blob, '合并统计.xlsx');
+        } else {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = '合并统计.xlsx';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+        }
+        log('合并统计导出成功（含分组）', 'success');
+    } catch (e) {
+        log('合并导出失败: ' + e.message, 'error');
+        alert('导出失败，请查看日志（按Ctrl+Shift+I）\n' + e.message);
+        console.error(e);
+    }
+}
+
+
+
+
+
+
+
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
