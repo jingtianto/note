@@ -1,3 +1,74 @@
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Excel 统计分析工具")
+        self.setGeometry(100, 100, 1280, 860)
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QVBoxLayout(central_widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.browser = QWebEngineView()
+        self.browser.setUrl(QUrl("http://127.0.0.1:5000"))
+        layout.addWidget(self.browser)
+
+        # --- 下载处理器（关键：接管前端的导出请求） ---
+        profile = self.browser.page().profile()
+        profile.downloadRequested.connect(self.on_download_requested)
+
+        # --- 启用开发者工具（使用 Ctrl+Shift+I 或右键“检查元素”） ---
+        self.browser.page().setDevToolsPage(self.browser.page())
+
+        self.retry_count = 0
+        QTimer.singleShot(500, self.check_backend)
+
+    def check_backend(self):
+        """检查 Flask 后端是否就绪，若未就绪则重试"""
+        from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest
+        from PyQt5.QtCore import QEventLoop
+        manager = QNetworkAccessManager()
+        request = QNetworkRequest(QUrl("http://127.0.0.1:5000/api/health"))
+        loop = QEventLoop()
+        reply = manager.get(request)
+        reply.finished.connect(loop.quit)
+        loop.exec_()
+        if reply.error() == 0:
+            self.browser.reload()
+            print("✅ 后端服务已就绪，加载界面...")
+        else:
+            self.retry_count += 1
+            if self.retry_count < 10:
+                QTimer.singleShot(500, self.check_backend)
+            else:
+                print("⚠️ 后端启动超时，请检查端口 5000 是否被占用")
+
+    def on_download_requested(self, download_item):
+        """处理前端的导出请求，弹出保存对话框"""
+        from PyQt5.QtCore import QStandardPaths
+        from PyQt5.QtWidgets import QFileDialog
+
+        # 默认下载目录
+        default_dir = QStandardPaths.writableLocation(QStandardPaths.DownloadLocation)
+        suggested_name = download_item.suggestedFileName()
+        if not suggested_name:
+            suggested_name = "export.xlsx"
+        
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "保存 Excel 文件",
+            default_dir + "/" + suggested_name,
+            "Excel 文件 (*.xlsx)"
+        )
+        if file_path:
+            download_item.setPath(file_path)
+            download_item.accept()
+            print(f"✅ 文件已保存至: {file_path}")
+        else:
+            download_item.cancel()
+            print("⚠️ 用户取消下载")
+
+
+
+
 from PyQt5.QtCore import QUrl, QTimer, QStandardPaths
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QFileDialog
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
