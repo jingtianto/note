@@ -14,6 +14,328 @@ async function exportMergedExcel() {
         }
         const results = statisticsResults.results;
         if (results.length < 2) {
+            alert('需要至少两个文件才能导出合并结果');
+            return;
+        }
+
+        const scheme = statisticsResults.scheme;
+        const alignKeyIdx = scheme.alignBaseKey;
+        const hasAlign = alignKeyIdx !== null && alignKeyIdx !== undefined && alignKeyIdx !== '';
+        const priorityOrder = scheme.priorityOrder || ['green', 'blue', 'yellow', 'orange', 'red', 'blank'];
+
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('合并对比');
+
+        // ---------- 1. 标题（不参与分组，始终显示） ----------
+        const titleRow = sheet.addRow(['合并统计报告']);
+        titleRow.font = { bold: true, size: 16 };
+        titleRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        // 不设置 outlineLevel
+
+        // ---------- 2. 单元格采集项（不参与分组，始终显示） ----------
+        const hasAnyCell = results.some(r => r.data && r.data.hasCell);
+        if (hasAnyCell) {
+            const headers = ['来源文件', '关键字', '值'];
+            let hasColor = results.some(r => (r.data.cellData || []).some(d => d.color_indexed !== null));
+            if (hasColor) headers.push('结果');
+            const headerRow = sheet.addRow(headers);
+            headerRow.font = { bold: true, size: 12 };
+            headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+            headerRow.eachCell(cell => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
+            });
+            // 不设置 outlineLevel
+
+            const bgColors = ['FFE6F3E6', 'FFFFF9E6', 'FFF0EDE6', 'FFF0E6F0', 'FFE6F0F0', 'FFF0E6E6'];
+            results.forEach((res, fi) => {
+                const cellData = res.data.cellData || [];
+                const displayName = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+                cellData.forEach(d => {
+                    let label = d.keyword.keywordText || '';
+                    if (d.keyword.valuePosition === 'left') label += ' ←' + d.keyword.offset;
+                    else if (d.keyword.valuePosition === 'right') label += ' →' + d.keyword.offset;
+                    const rowValues = [displayName, label, (d.value !== null && d.value !== undefined ? d.value : '')];
+                    if (hasColor) rowValues.push(d.color_meaning || '');
+                    const row = sheet.addRow(rowValues);
+                    row.eachCell(cell => {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColors[fi % bgColors.length] } };
+                    });
+                    const valCell = row.getCell(3);
+                    if (d.color_name && d.color_name !== 'blank') {
+                        const hex = getColorCss(d.color_name);
+                        valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hex.replace('#', 'FF') } };
+                    } else {
+                        valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+                    }
+                    const fontSize = d.keyword.fontSize || 14;
+                    const isBold = d.keyword.bold || false;
+                    row.eachCell(cell => { cell.font = { size: fontSize, bold: isBold }; });
+                    // 不设置 outlineLevel
+                });
+            });
+        }
+
+        // ---------- 3. 列采集项（只有此处使用层级：1级摘要，2级详细） ----------
+        const hasAnyColumn = results.some(r => r.data && r.data.hasColumn);
+        if (!hasAnyColumn) {
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            if (typeof saveAs === 'function') saveAs(blob, '合并统计.xlsx');
+            else {
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = '合并统计.xlsx';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+            }
+            log('合并统计导出成功（无列数据）', 'success');
+            return;
+        }
+
+        // 取第一个有列数据的文件作为模板（强制对齐）
+        let firstKw = null;
+        for (let res of results) {
+            if (res.data && res.data.columnData && res.data.columnData.keywords && res.data.columnData.keywords.length > 0) {
+                firstKw = res.data.columnData.keywords;
+                break;
+            }
+        }
+        if (!firstKw) {
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            if (typeof saveAs === 'function') saveAs(blob, '合并统计.xlsx');
+            else { /* 备用 */ }
+            log('合并统计导出成功（无列数据）', 'success');
+            return;
+        }
+
+        // 构建原始数据（按分组键归类）
+        const allRows = [];
+        results.forEach((res, fi) => {
+            const rows = res.data.columnData.rows || [];
+            const filename = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+            rows.forEach(row => {
+                let alignValue = null;
+                if (hasAlign) {
+                    const idx = parseInt(alignKeyIdx);
+                    if (!isNaN(idx) && row.length > idx) {
+                        alignValue = row[idx].value;
+                    }
+                }
+                allRows.push({ filename, row, alignValue, fileIndex: fi });
+            });
+        });
+
+        const groups = {};
+        allRows.forEach(item => {
+            let key = hasAlign ? (item.alignValue !== null && item.alignValue !== undefined ? String(item.alignValue) : '') : '';
+            if (!key) key = '__no_align__';
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(item);
+        });
+
+        const groupKeys = Object.keys(groups).sort((a, b) => {
+            if (a === '__no_align__') return 1;
+            if (b === '__no_align__') return -1;
+            const aNum = parseFloat(a);
+            const bNum = parseFloat(b);
+            if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+            return a.localeCompare(b);
+        });
+
+        // 列采集表头（不参与分组，始终显示）
+        const colHeaders = ['分组键', '文件名'];
+        firstKw.forEach((kw) => {
+            let label = kw.keywordText || '';
+            if (kw.valuePosition === 'left') label += ' ←' + kw.offset;
+            else if (kw.valuePosition === 'right') label += ' →' + kw.offset;
+            colHeaders.push(label);
+            if (kw.addColorCol) colHeaders.push('结果');
+        });
+        const headerRow = sheet.addRow(colHeaders);
+        headerRow.font = { bold: true, size: 12 };
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        headerRow.eachCell(cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
+        });
+        // 不设置 outlineLevel
+
+        // 文件背景色映射
+        const bgColors = ['FFE6F3E6', 'FFFFF9E6', 'FFF0EDE6', 'FFF0E6F0', 'FFE6F0F0', 'FFF0E6E6'];
+        const fileBgMap = {};
+        results.forEach((res, fi) => {
+            const filename = res.folder ? `${res.folder}/${res.originalName || res.name}` : (res.name || res.originalName || '文件');
+            fileBgMap[filename] = bgColors[fi % bgColors.length];
+        });
+
+        // ---------- 遍历分组，写入数据并设置层级 ----------
+        groupKeys.forEach(key => {
+            const items = groups[key];
+            // 前端折叠状态（只影响打开Excel时的默认展开/收起）
+            const isExpanded = groupStates[key] !== undefined ? groupStates[key] : true;
+
+            // 计算最佳行（作为摘要行）
+            let bestItem = null;
+            let bestPriority = 999;
+            items.forEach(item => {
+                let rowPriority = 999;
+                firstKw.forEach((kw, idx) => {
+                    if (kw.collectColor && item.row.length > idx) {
+                        const color = item.row[idx].color_name || 'blank';
+                        const p = getPriority(color, priorityOrder);
+                        if (p < rowPriority) rowPriority = p;
+                    }
+                });
+                if (rowPriority < bestPriority) {
+                    bestPriority = rowPriority;
+                    bestItem = item;
+                }
+            });
+            if (!bestItem) return;
+
+            const displayKey = (key === '__no_align__') ? '(未对齐)' : key;
+
+            // 1. 摘要行（1级，作为父级）
+            const summaryValues = [displayKey, bestItem.filename];
+            firstKw.forEach((kw, idx) => {
+                const cell = (bestItem.row.length > idx) ? bestItem.row[idx] : null;
+                const val = cell ? (cell.value !== null && cell.value !== undefined ? cell.value : '') : '';
+                summaryValues.push(val);
+                if (kw.addColorCol) {
+                    const meaning = cell ? (cell.color_meaning || '') : '';
+                    summaryValues.push(meaning);
+                }
+            });
+            const summaryRow = sheet.addRow(summaryValues);
+            const bg = fileBgMap[bestItem.filename] || 'FFFFFFFF';
+            summaryRow.eachCell(cell => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+                cell.font = { bold: true };
+            });
+            // 值列颜色
+            let colPos = 3;
+            firstKw.forEach((kw, idx) => {
+                const cell = (bestItem.row.length > idx) ? bestItem.row[idx] : null;
+                const valCell = summaryRow.getCell(colPos);
+                if (kw.collectColor && cell && cell.color_name && cell.color_name !== 'blank') {
+                    const hex = getColorCss(cell.color_name);
+                    valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hex.replace('#', 'FF') } };
+                } else {
+                    valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+                }
+                colPos++;
+                if (kw.addColorCol) {
+                    const colorCell = summaryRow.getCell(colPos);
+                    const meaning = cell ? (cell.color_meaning || 'blank') : 'blank';
+                    let bgHex = '#FFFFFF';
+                    if (meaning === 'failed') bgHex = '#FFCCCC';
+                    else if (meaning === 'passed') bgHex = '#CCFFCC';
+                    else if (meaning === 'warning') bgHex = '#FFFFCC';
+                    else if (meaning === 'signal missing') bgHex = '#CCE5FF';
+                    else if (meaning === 'trigger not occurred') bgHex = '#FFD9B3';
+                    colorCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgHex.replace('#', 'FF') } };
+                    colPos++;
+                }
+            });
+            // 设置为1级，并控制默认展开/折叠
+            summaryRow.outlineLevel = 1;
+            // 如果前端该分组是展开状态，则 collapsed=false，否则 true
+            summaryRow.collapsed = !isExpanded;
+
+            // 2. 详细行（2级，子级）
+            items.forEach(item => {
+                if (item === bestItem) return;
+                const detailValues = ['', item.filename];
+                firstKw.forEach((kw, idx) => {
+                    const cell = (item.row.length > idx) ? item.row[idx] : null;
+                    const val = cell ? (cell.value !== null && cell.value !== undefined ? cell.value : '') : '';
+                    detailValues.push(val);
+                    if (kw.addColorCol) {
+                        const meaning = cell ? (cell.color_meaning || '') : '';
+                        detailValues.push(meaning);
+                    }
+                });
+                const detailRow = sheet.addRow(detailValues);
+                const bgDetail = fileBgMap[item.filename] || 'FFFFFFFF';
+                detailRow.eachCell(cell => {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgDetail } };
+                });
+                // 值列颜色
+                let colPosDetail = 3;
+                firstKw.forEach((kw, idx) => {
+                    const cell = (item.row.length > idx) ? item.row[idx] : null;
+                    const valCell = detailRow.getCell(colPosDetail);
+                    if (kw.collectColor && cell && cell.color_name && cell.color_name !== 'blank') {
+                        const hex = getColorCss(cell.color_name);
+                        valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hex.replace('#', 'FF') } };
+                    } else {
+                        valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+                    }
+                    colPosDetail++;
+                    if (kw.addColorCol) {
+                        const colorCell = detailRow.getCell(colPosDetail);
+                        const meaning = cell ? (cell.color_meaning || 'blank') : 'blank';
+                        let bgHex = '#FFFFFF';
+                        if (meaning === 'failed') bgHex = '#FFCCCC';
+                        else if (meaning === 'passed') bgHex = '#CCFFCC';
+                        else if (meaning === 'warning') bgHex = '#FFFFCC';
+                        else if (meaning === 'signal missing') bgHex = '#CCE5FF';
+                        else if (meaning === 'trigger not occurred') bgHex = '#FFD9B3';
+                        colorCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgHex.replace('#', 'FF') } };
+                        colPosDetail++;
+                    }
+                });
+                // 设置为2级，不设置 collapsed，由父级（摘要行）的 collapsed 控制
+                detailRow.outlineLevel = 2;
+            });
+        });
+
+        // 生成并下载
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+        if (typeof saveAs === 'function') {
+            saveAs(blob, '合并统计.xlsx');
+        } else {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = '合并统计.xlsx';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+        }
+        log('合并统计导出成功（1级摘要，2级详细）', 'success');
+    } catch (e) {
+        log('合并导出失败: ' + e.message, 'error');
+        alert('导出失败，请查看日志（按Ctrl+Shift+I）\n' + e.message);
+        console.error(e);
+    }
+}
+
+
+
+
+
+
+async function exportMergedExcel() {
+    try {
+        if (typeof ExcelJS === 'undefined') {
+            alert('ExcelJS 库未加载，请刷新页面重试');
+            return;
+        }
+        if (typeof saveAs !== 'function') {
+            alert('FileSaver 库未加载，将使用备用下载方式');
+        }
+
+        if (!statisticsResults) {
+            alert('请先执行统计');
+            return;
+        }
+        const results = statisticsResults.results;
+        if (results.length < 2) {
             alert('需要至少两个有效文件才能导出合并结果');
             return;
         }
