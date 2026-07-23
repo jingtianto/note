@@ -1,1 +1,66 @@
-javascript:(async function(){const e=document.createElement("script");e.src="https://cdn.jsdelivr.net/npm/single-file@1.22.2/dist/single-file.js";e.onload=async()=>{const t=await singlefile.extractPageData({url:location.href,frames:true,fonts:true,images:true,styles:true,scripts:true});const i=await singlefile.processPage(t,{removeHiddenElements:false,includeScripts:true});const n=new Blob([i.content],{type:"text/html"});const o=URL.createObjectURL(n);const r=document.createElement("a");r.href=o,r.download=document.title.replace(/[<>:"/\\|?*]/g,"_")+".html",r.click(),URL.revokeObjectURL(o)};document.head.appendChild(e)})();
+重要前置操作（必须先做，仅外网执行一次）
+ 
+1. 浏览器打开地址，全选复制页面全部源码
+https://cdn.jsdelivr.net/npm/single-file-core@1.5.84/single-file.js
+2. 将复制到的完整代码临时存记事本（内网离线备用）
+ 
+最终控制台完整模板
+ 
+javascript  
+(async function () {
+    // ==============================================
+    // 【把上面下载好的 single-file-core 全部源码粘贴到这整块区域内】
+    // ==============================================
+
+    const pageData = await singlefile.extractPageData({
+        url: location.href,
+        frames: true,
+        fonts: true,
+        images: true,
+        styles: true,
+        scripts: true
+    });
+
+    const htmlContent = await singlefile.processPage(pageData, {
+        removeHiddenElements: false,
+        includeScripts: true,
+        removeUnusedStyles: false,
+        saveRawPage: true
+    });
+
+    const blob = new Blob([htmlContent], { type: "text/html" });
+    const tempUrl = URL.createObjectURL(blob);
+    const downloadDom = document.createElement("a");
+    downloadDom.href = tempUrl;
+    downloadDom.download = document.title.replace(/[<>:"/\\|?*]/g, "_") + "_AGGrid离线存档.html";
+    downloadDom.click();
+    URL.revokeObjectURL(tempUrl);
+})();
+ 
+ 
+使用步骤
+ 
+1. Edge打开你的内网页面，等待表格完全加载
+2. F12 → 切换到 Console
+3. 将上面整段代码粘贴，中间区域填入完整single-file-core源码
+4. 回车执行，自动下载离线HTML
+ 
+关键规则重申
+ 
+✅ 保存后的文件拖拽进Edge打开，鼠标重新悬浮单元格，可以正常弹出Tooltip浮窗
+❌ 不会自动把所有悬浮弹窗永久固定在页面上（网页DOM机制限制，任何工具无解）
+ 
+避坑提示
+ 
+1. 不要双击html文件打开！拖拽进Edge标签，本地文件安全策略容易拦截JS；
+2. 表格保存前滚动到底，加载全部懒加载数据；
+3. 如果粘贴代码报错：检查single-file-core源码是否完整、没有漏复制头尾。
+ 
+ 
+ 
+补充简化临时方案（如果你暂时没下载核心JS，应急使用，依赖外网CDN）
+ 
+内网无法访问外网时该版本会失效，仅临时测试
+ 
+javascript  
+(async function(){const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/single-file-core@1.5.84/single-file.js";s.onload=async()=>{const pageData=await singlefile.extractPageData({url:location.href,frames:true,fonts:true,images:true,styles:true,scripts:true});const htmlContent=await singlefile.processPage(pageData,{removeHiddenElements:false,includeScripts:true,removeUnusedStyles:false,saveRawPage:true});const blob=new Blob([htmlContent],{type:"text/html"});const tempUrl=URL.createObjectURL(blob);const a=document.createElement("a");a.href=tempUrl;a.download=document.title.replace(/[<>:"/\\|?*]/g,"_")+"_临时存档.html";a.click();URL.revokeObjectURL(tempUrl)};document.head.appendChild(s)})();
