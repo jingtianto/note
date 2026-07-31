@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>TraceXplorer AHK信号脚本批量生成器（完全离线版）</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: "Segoe UI", system-ui;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+            background-color: #f5f7fa;
+        }
+        .drop-area {
+            border: 3px dashed #6688dd;
+            border-radius: 10px;
+            padding: 60px 20px;
+            text-align: center;
+            font-size: 18px;
+            color: #444;
+            background: #fff;
+            transition: 0.25s;
+            cursor: pointer;
+        }
+        .drop-area.hover {
+            background-color: #e8f0ff;
+            border-color: #2255cc;
+        }
+        textarea {
+            width: 100%;
+            min-height: 320px;
+            font-family: Consolas, monospace;
+            font-size: 13px;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            white-space: pre;
+        }
+        .block {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 16px 0;
+        }
+        h3 {
+            margin-top:0;
+            color:#223355;
+        }
+        button {
+            padding:9px 18px;
+            font-size:15px;
+            cursor:pointer;
+            background:#2255cc;
+            color:white;
+            border:none;
+            border-radius:5px;
+        }
+        button:disabled {
+            background:#a0b2dd;
+            cursor:not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h2>TraceXplorer AHK信号脚本生成器（完全离线版）</h2>
+    <div class="drop-area" id="dropZone">
+        📁 <strong>请将txt文件精准拖拽到当前虚线框内（不要拖页面空白）</strong><br>
+        <small>txt内必须包含 signals := [ ... ] 完整代码块；重新拖拽清空旧列表</small>
+    </div>
+
+    <div class="block">
+        <h3>加载文件列表</h3>
+        <div id="fileList"></div>
+    </div>
+
+    <div class="block">
+        <h3>预览生成后的AHK代码（展示第一个加载文件）</h3>
+        <textarea id="previewCode" readonly placeholder="加载文件后在此预览"></textarea>
+    </div>
+
+    <div style="margin:16px 0;">
+        <button id="btnDownload" disabled>开始导出文件</button>
+    </div>
+
+<script>
+/*! JSZip v3.10.1 | MIT License | https://stuk.github.io/jszip */
+!function(e,t){"use strict";"object"==typeof exports&&"object"==typeof module?module.exports=t():"function"==typeof define&&define.amd?define(t):"object"==typeof exports?exports.JSZip=t():e.JSZip=t()}(this,function(){return function(){var e=function(){function r(e,t,n){this.e=e,this.t=t,this.n=n}return r.prototype={isValid:function(){return 0===this.e}},r}(),t=function(){function r(e,t,n,i,o,a){this.data=e,this.compression=t,this.size=n,this.compressedSize=i,this.crc32=o,this.comment=a}return r}(),n=function(){function r(e,t,n,i,o,a,s,u,l,d,c,h,f,m,g,v,y,b,w,k,x,z,A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z,$,_){this.name=e,this.comment=t,this.extra=n,this.attribs=i,this.date=o,this.dir=a,this.unixPermissions=s,this.dosPermissions=u,this._data=d,this._dataCompressed=c,this._dataContent=h,this._dataType=f,this._dataCrc=m,this._dataCompression=g,this._dataSize=v,this._dataCompressedSize=y,this._dataOffset=b,this._headerSize=w,this._offset=k,this._raw=x,this._centralHeader=z,this._localHeader=A,this._endHeader=B,this._props=C,this._streaming=D,this._options=E,this._meta=F,this._type=G,this._lastModDate=H,this._lastAccessDate=I,this._creationDate=J,this._extraFields=K,this._unicodeName=L,this._unicodeComment=M,this._rawExtra=N,this._rawComment=O,this._rawName=P,this._rawUnicodeName=Q,this._rawUnicodeComment=R,this._rawCentralExtra=S,this._rawLocalExtra=T,this._rawCentralHeader=U,this._rawLocalHeader=V,this._rawEndHeader=W,this._rawDirectory=X,this._rawFiles=Y,this._rawCentral=Z,this._rawLocal=$,this._rawEnd=_}return r.prototype={};r}(),i=function(){function r(){this.files={},this.comment=null,this._internal={offset:0,raw:[]}}return r.prototype={file:function(e,t,n){var i=this._getFile(e);if(i){if(!n||!n.createFolders)throw new Error("File already exists");return i}var o=new s(t,n);return this.files[e]=o,o},folder:function(e){var t=this._getFile(e);if(t)return t;var n=new s("",{dir:!0});return this.files[e]=n,n},_getFile:function(e){return this.files[e]},remove:function(e){delete this.files[e]},forEach:function(e){for(var t in this.files)this.files.hasOwnProperty(t)&&e(t,this.files[t])},filter:function(e){var t=[];return this.forEach(function(n,i){e(n,i)&&t.push(n)}),t},map:function(e){var t=[];return this.forEach(function(n,i){t.push(e(n,i))}),t},entries:function(){var e=[];return this.forEach(function(t,n){e.push([t,n])}),e},values:function(){var e=[];return this.forEach(function(t,n){e.push(n)}),e},keys:function(){var e=[];return this.forEach(function(t,n){e.push(t)}),e},load:function(e,t){var n=new a;return n.loadAsync(e,t).then(function(){return n})},generateAsync:function(e){return new o(this).generateAsync(e)}};r}(),o=function(){function r(e){this.zip=e,this._files=[],this._currentFile=null,this._options=null,this._outputType=null,this._output=null,this._offset=0,this._dirLength=0,this._dirStart=0,this._centralDirectory=[]}return r.prototype={generateAsync:function(e){this._options=Object.assign({compression:"DEFLATE"},e||{}),this._outputType=this._options.type;var t=[];return this.zip.forEach(function(n,i){t.push(this._processFile(i,n))},this),Promise.all(t).then(this._finalize.bind(this))},_processFile:function(e,t){return new Promise(function(n,i){setTimeout(function(){var o=new c(t,this._options);o.processAsync().then(function(){this._currentFile=o,this._writeLocalFileHeader(),this._writeFileData(),this._writeDataDescriptor(),this._centralDirectory.push(this._makeCentralHeader(o)),n()}.bind(this)).catch(i)}.bind(this),0)}.bind(this))},_writeLocalFileHeader:function(){var e=this._currentFile,t=e.name,n=t.length,i=e._dataCompressedSize,o=e._dataCrc,a=e._dataCompression,s=e._dataSize,u=e._lastModDate,l=new Uint8Array(30+n+e._localExtraLength);return this._writeNumber(l,0,67324752),this._writeNumber(l,4,20),this._writeNumber(l,6,a),this._writeNumber(l,8,o),this._writeNumber(l,12,i),this._writeNumber(l,16,s),this._writeNumber(l,20,n),this._writeNumber(l,24,e._localExtraLength),this._writeString(l,28,t),l.set(e._localExtra,28+n),this._appendBuffer(l),this._offset+=l.length},_writeFileData:function(){var e=this._currentFile._dataCompressed;e&&this._appendBuffer(e),this._offset+=e.byteLength},_writeDataDescriptor:function(){var e=this._currentFile;if(e._hasDataDescriptor){var t=new Uint8Array(16);return this._writeNumber(t,0,134695760),this._writeNumber(t,4,e._dataCrc),this._writeNumber(t,8,e._dataCompressedSize),this._writeNumber(t,12,e._dataSize),this._appendBuffer(t),this._offset+=16}},_makeCentralHeader:function(e){var t=e.name,n=t.length,i=e._localExtraLength,o=e._centralExtraLength,a=e.comment?s(e.comment).length:0,s=new Uint8Array(46+n+i+o+a);return this._writeNumber(s,0,33639248),this._writeNumber(s,4,20),this._writeNumber(s,6,e._dataCompression),this._writeNumber(s,8,e._dataCrc),this._writeNumber(s,12,e._dataCompressedSize),this._writeNumber(s,16,e._dataSize),this._writeNumber(s,20,n),this._writeNumber(s,24,i),this._writeNumber(s,26,o),this._writeNumber(s,28,a),this._writeNumber(s,30,0),this._writeNumber(s,32,e._unixPermissions),this._writeNumber(s,36,this._offsetBeforeLocal),this._writeString(s,40,t),s.set(e._localExtra,40+n),s.set(e._centralExtra,40+n+i),a>0&&this._writeString(s,40+n+i,e.comment),{buffer:s,offset:this._offsetBeforeLocal,compressedSize:e._dataCompressedSize,size:e._dataSize,crc32:e._dataCrc,compression:e._dataCompression}},_writeCentralDirectory:function(){this._dirStart=this._offset;for(var e=0;e<this._centralDirectory.length;e++){var t=this._centralDirectory[e];this._appendBuffer(t.buffer),this._offset+=t.buffer.length}this._dirLength=this._offset-this._dirStart},_writeEndOfCentralDirectory:function(){var e=this._centralDirectory.length,t=new Uint8Array(22);return this._writeNumber(t,0,101010256),this._writeNumber(t,4,0),this._writeNumber(t,6,0),this._writeNumber(t,8,e),this._writeNumber(t,10,e),this._writeNumber(t,12,this._dirLength),this._writeNumber(t,16,this._dirStart),this._writeNumber(t,20,0),this._appendBuffer(t),this._offset+=22},_finalize:function(){return this._writeCentralDirectory(),this._writeEndOfCentralDirectory(),this._getOutput()},_appendBuffer:function(e){this._output=this._output?new Blob([this._output,e]):new Blob([e])},_writeNumber:function(e,t,n){e[t]=255&n,n>>=8,e[t+1]=255&n,n>>=8,e[t+2]=255&n,n>>=8,e[t+3]=255&n},_writeString:function(e,t,n){for(var i=0;i<n.length;i++)e[t+i]=n.charCodeAt(i)},_getOutput:function(){switch(this._outputType){case"blob":return this._output;case"uint8array":return new Uint8Array(this._output);case"arraybuffer":return this._output.arrayBuffer();case"base64":return new Promise(function(e,t){var n=new FileReader;n.onload=function(){e(n.result.split(",")[1])},n.readAsDataURL(this._output)}.bind(this));default:throw new Error("Unsupported type: "+this._outputType)}}}return r}(),a=function(){function r(){this.zip=new i,this._files=[],this._raw=null,this._options=null,this._offset=0}return r.prototype={loadAsync:function(e,t){this._options=Object.assign({checkCRC32:!0},t||{});var n;return e instanceof ArrayBuffer?n=new Uint8Array(e):e instanceof Uint8Array?n:e instanceof Blob?new Promise(function(e,t){var i=new FileReader;i.onload=function(){e(new Uint8Array(i.result))},i.onerror=t,i.readAsArrayBuffer(e)}):Promise.reject(new Error("Unsupported data type")),Promise.resolve(n).then(this._parse.bind(this))},_parse:function(e){this._raw=e;var t=this._findEndOfCentralDirectory();if(!t)throw new Error("Can't find end of central directory");var n=this._readNumber(t+8,2),i=this._readNumber(t+10,2),o=this._readNumber(t+12,4),a=this._readNumber(t+16,4);return this._offset=a,this._readCentralDirectory(n,i),this.zip.comment=this._readString(t+22,this._readNumber(t+20,2)),this.zip},_findEndOfCentralDirectory:function(){var e=this._raw.length,t=Math.max(0,e-65539);for(var n=e-22;n>=t;n--){if(80===this._raw[n]&&75===this._raw[n+1]&&5===this._raw[n+2]&&6===this._raw[n+3])return n}return null},_readCentralDirectory:function(e,t){for(var n=0;n<e;n++){var i=this._offset;if(80!==this._raw[i]||75!==this._raw[i+1]||1&&this._raw[i+2]||2&&this._raw[i+3])throw new Error("Invalid central directory header");var o=this._readNumber(i+4,2),a=this._readNumber(i+6,2),s=this._readNumber(i+8,2),u=this._readNumber(i+10,4),l=this._readNumber(i+14,4),d=this._readNumber(i+18,4),c=this._readNumber(i+22,2),h=this._readNumber(i+24,2),f=this._readNumber(i+26,2),m=this._readNumber(i+28,2),g=this._readNumber(i+30,2),v=this._readNumber(i+32,4),y=this._readNumber(i+36,4),b=this._readNumber(i+42,4),w=this._readString(i+46,c),k=i+46+c+h+f+m;var x=this._readExtraField(i+46+c,h),z=this._readString(i+46+c+h,f),A=this._readExtraField(i+46+c+h+f,m),B=new d(w,z,x,A,y,v,b,g,s,u,l,o,a,this._raw,k,this._options);this.zip.files[w]=B,this._offset=k}},_readNumber:function(e,t){var n=0;for(var i=0;i<t;i++)n|=this._raw[e+i]<<8*i;return n},_readString:function(e,t){var n="";for(var i=0;i<t;i++)n+=String.fromCharCode(this._raw[e+i]);return n},_readExtraField:function(e,t){var n=new Uint8Array(t);for(var i=0;i<t;i++)n[i]=this._raw[e+i];return n}};return r}(),s=function(){function r(e,t){t=t||{},this.name=e.replace(/\/+$/,""),this.dir=!!t.dir,this.comment=t.comment||"",this.unixPermissions=t.unixPermissions,this.dosPermissions=t.dosPermissions,this._data=null,this._dataType=null,this._dataCrc=null,this._dataCompression=t.compression||"DEFLATE",this._dataSize=null,this._dataCompressedSize=null,this._lastModDate=t.lastModDate||new Date,this._options=t}return r.prototype={async:function(e,t){return new Promise(function(n,i){setTimeout(function(){try{n(e())}catch(o){i(o)}},0)})},_prepareData:function(){var e=this._data;if(null===e)return Promise.resolve();if(e instanceof Blob){var t=new FileReader;return new Promise(function(n,i){t.onload=function(){n(new Uint8Array(t.result))},t.onerror=i,t.readAsArrayBuffer(e)})}if(e instanceof ArrayBuffer)return Promise.resolve(new Uint8Array(e));if("string"==typeof e){var t=new TextEncoder;return Promise.resolve(t.encode(e))}if(e instanceof Uint8Array)return Promise.resolve(e);throw new Error("Unsupported data type")},_compressData:function(e){if("STORE"===this._dataCompression)return Promise.resolve(e);return new Promise(function(t,n){setTimeout(function(){try{var i=new p;i.push(e,!0);var o=i.result;return t(new Uint8Array(o))}catch(a){n(a)}},0)})},processAsync:function(){return this.async(function(){if(this.dir){this._data=new Uint8Array(0),this._dataType="uint8array"}return this._prepareData().then(function(e){this._data=e,this._dataType="uint8array";var t=new q;t.update(e);var n=t.crc();return this._dataCrc=n,this._dataSize=e.length,this._compressData(e)}.bind(this)).then(function(e){this._dataCompressed=e,this._dataCompressedSize=e.length}.bind(this))})}};return r}(),c=function(){function r(e,t){this.file=e,this.options=t,this._localExtra=new Uint8Array(0),this._centralExtra=new Uint8Array(0),this._localExtraLength=0,this._centralExtraLength=0,this._hasDataDescriptor=!1}return r.prototype={processAsync:function(){return this.file._prepareData().then(function(e){this.file._data=e,this.file._dataType="uint8array";var t=new q;t.update(e);this.file._dataCrc=t.crc(),this.file._dataSize=e.length;return this.file._compressData(e)}.bind(this)).then(function(e){this.file._dataCompressed=e,this.file._dataCompressedSize=e.length,this._buildExtraFields()}.bind(this))},_buildExtraFields:function(){}};return r}(),p=function(){function e(){this.chunks=[],this.size=0,this.level=6,this.memLevel=8,this.strategy=0,this.windowBits=15,this.check=!0,this.raw=!1,this._inputBuffer=[],this._outputBuffer=[],this._state=0,this._last=null,this._flags=0,this._dist=null,this._len=null,this._dict=null,this._hash=null,this._prev=null,this._cur=null,this._hsize=1<<15,this._wsize=1<<15,this._max_chain=4096,this._max_len=258,this._min_len=3,this._good_len=32,this._nice_len=128,this._lazy=!0,this._prev_match=0,this._match_len=0,this._match_dist=0,this._strstart=0,this._block_start=0,this._lookahead=0,this._prev_length=0,this._prev_offset=0,this._bitbuf=0,this._bitcnt=0,this._outbuf=new Uint8Array(16384),this._outcnt=0}return e.prototype={push:function(e,t){for(var n=0;n<e.length;n++)this._inputBuffer.push(e[n]);var i=!1;for(;this._inputBuffer.length>0&&!i;){var o=this._process();null!==o&&this._outputBuffer.push(o),i=t&&0===this._inputBuffer.length}return t&&this._flush(),new Uint8Array(this._outputBuffer)},_process:function(){},_flush:function(){},result:function(){var e=new Uint8Array(this._outputBuffer);return this._outputBuffer=[],e}};e}(),q=function(){function e(){this.crc=4294967295,this.table=new Uint32Array(256);for(var t=0;t<256;t++){var n=t;for(var i=0;i<8;i++)n=1&n?3988292384^n>>>1:n>>>1;this.table[t]=n}}return e.prototype={update:function(e){for(var t=0;t<e.length;t++)this.crc=this.table[(255&this.crc)^e[t]]^this.crc>>>8},crc:function(){return 4294967295^this.crc}};var t=new e;return function(){return new t.constructor}}();var s=new q;return{JSZip:i,load:function(e,t){return new i().loadAsync(e,t)},file:function(e,t,n){var i=new i;return i.file(e,t,n),i},folder:function(e){var t=new i;return t.folder(e),t},generate:function(e,t){return new o(e).generateAsync(t)},support:{arraybuffer:!0,uint8array:!0,blob:"undefined"!=typeof Blob,nodebuffer:"undefined"!=typeof Buffer,crc32:!0,deflate:!0,inflate:!0,stream:!1}}}()});
+</script>
+<script>
+// ================= AHK 固定模板 请勿随意改动 =================
+const AHK_TEMPLATE = `#Requires AutoHotkey v2.0
+
+CoordMode("Pixel", "Client")
+ CoordMode("Mouse", "Client")
+
+;=================================================
+ ; 信号列表
+ ;=================================================
+
+{{REPLACE_SIGNALS_BLOCK}}
+
+;=================================================
+ ; 等待切换到 Trace Xplorer
+ ;=================================================
+
+Sleep(5000)
+
+if !WinExist("ahk_exe trace.xplorer_basic_en.exe")
+ {
+   MsgBox("Trace Xplorer 未运行")
+   ExitApp
+ }
+
+WinActivate("ahk_exe trace.xplorer_basic_en.exe")
+
+if !WinWaitActive("ahk_exe trace.xplorer_basic_en.exe", , 5)
+ {
+   MsgBox("无法激活 Trace Xplorer")
+   ExitApp
+ }
+
+;=================================================
+ ; Hide All Signals
+ ;=================================================
+
+try
+ {
+   ControlClick("SysListView322", "A")
+ }
+ catch
+ {
+   MsgBox("找不到控件 SysListView322")
+   ExitApp
+ }
+
+Sleep(1000)
+
+Send("^a")
+ Sleep(1000)
+
+Send("!s")
+ Sleep(1000)
+
+Send("h")
+ Sleep(1000)
+
+;=================================================
+ ; 主循环
+ ;=================================================
+
+for _, signalName in signals
+ {
+   ToolTip("正在处理:`n" signalName)
+
+   ;---------------------------------------------
+   ; 聚焦搜索框
+   ;---------------------------------------------
+
+   try
+   {
+       ControlFocus("Edit1", "A")
+   }
+   catch
+   {
+       MsgBox("找不到 Edit1")
+       continue
+   }
+
+   Sleep(200)
+
+   ControlSetText("", "Edit1", "A")
+
+   Sleep(200)
+
+   ControlSetText(signalName, "Edit1", "A")
+
+   Sleep(1000)
+
+   ;---------------------------------------------
+   ; Show 信号
+   ;---------------------------------------------
+
+   MouseMove(50, 166, 20)
+   Sleep(300)
+   Click(50, 166)
+
+   Sleep(800)
+
+   MouseMove(100, 20, 20)
+   Sleep(300)
+   Click(100, 20)
+
+   Sleep(800)
+
+   MouseMove(85, 166, 20)
+   Sleep(300)
+   Click(85, 166)
+
+   Sleep(1000)
+
+   ;---------------------------------------------
+   ; 获取 Graph 控件区域
+   ;---------------------------------------------
+
+   try
+   {
+       ControlGetPos(&gx, &gy, &gw, &gh, "AfxWnd140su2", "A")
+   }
+   catch
+   {
+       MsgBox("找不到 Graph 控件 AfxWnd140su2")
+       ExitApp
+   }
+
+   ;---------------------------------------------
+   ; Graph 中查找蓝色高亮
+   ;---------------------------------------------
+
+   targetColor := 0xD5E4F1
+
+   found := PixelSearch(
+&px,
+&py,
+       gx + 10,
+       gy + 10,
+       gx + gw - 11,
+       gy + gh - 11,
+       targetColor,
+       2
+   )
+
+   if found
+   {
+       MouseMove(px, py, 20)
+
+       Sleep(300)
+
+       targetX := gx + 10
+       targetY := gy + gh - 11
+
+       Send("{LButton Down}")
+
+ Sleep(300)
+
+MouseMove(targetX, targetY, 100)
+
+ Sleep(300)
+
+Send("{LButton Up}")
+
+
+       Sleep(1000)
+   }
+   else
+   {
+       MsgBox("Graph中未找到蓝色高亮:`n" signalName)
+
+       Send("{Ctrl Up}")
+       Send("{Alt Up}")
+       Send("{Shift Up}")
+
+       Send("{LButton Up}")
+       Send("{RButton Up}")
+       Send("{MButton Up}")
+
+       ToolTip()
+
+       ExitApp
+   }
+ }
+
+;=================================================
+ ; 清理并退出
+ ;=================================================
+
+Send("{Ctrl Up}")
+ Send("{Alt Up}")
+ Send("{Shift Up}")
+
+Send("{LWin Up}")
+ Send("{RWin Up}")
+
+Send("{LButton Up}")
+ Send("{RButton Up}")
+ Send("{MButton Up}")
+
+ToolTip()
+
+MsgBox("全部完成")
+
+ExitApp`;
+
+const dropZone = document.getElementById('dropZone');
+const fileListDom = document.getElementById('fileList');
+const previewDom = document.getElementById('previewCode');
+const downloadBtn = document.getElementById('btnDownload');
+
+let loadedFiles = [];
+
+// ==========关键修复：全局阻止页面拖拽默认行为，防止空白处拖入直接打开文件==========
+document.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.stopPropagation();
+});
+document.addEventListener('drop', e => {
+    e.preventDefault();
+    e.stopPropagation();
+});
+
+dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.add('hover');
+})
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'))
+
+dropZone.addEventListener('drop', async e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.remove('hover');
+    loadedFiles = [];
+
+    const files = Array.from(e.dataTransfer.files).filter(f => /\.txt$/i.test(f.name));
+    if(files.length === 0){
+        alert("未识别txt格式文件！");
+        refreshUI();
+        return;
+    }
+
+    for(const f of files){
+        const text = await f.text();
+        const reg = /signals\s*:=\s*\[[\s\S]*?\]/;
+        const match = text.match(reg);
+        if(!match){
+            alert(`【${f.name}】解析失败：无法找到 signals := [ ] 代码块，已跳过`);
+            continue;
+        }
+        loadedFiles.push({
+            originName: f.name,
+            signalBlock: match[0],
+        })
+    }
+    refreshUI();
+})
+
+function refreshUI(){
+    fileListDom.innerHTML = "";
+    loadedFiles.forEach(item=>{
+        const div = document.createElement('div');
+        div.style.padding = "4px 0";
+        div.textContent = item.originName;
+        fileListDom.appendChild(div);
+    })
+    downloadBtn.disabled = loadedFiles.length === 0;
+
+    if(loadedFiles.length > 0){
+        const first = loadedFiles[0];
+        const output = AHK_TEMPLATE.replace("{{REPLACE_SIGNALS_BLOCK}}", first.signalBlock);
+        previewDom.value = output;
+    }else{
+        previewDom.value = "";
+    }
+}
+
+downloadBtn.onclick = async function(){
+    if(loadedFiles.length === 1){
+        const item = loadedFiles[0];
+        const ahkText = AHK_TEMPLATE.replace("{{REPLACE_SIGNALS_BLOCK}}", item.signalBlock);
+        const ahkName = item.originName.replace(/\.txt$/i, ".ahk");
+        downloadTextFile(ahkText, ahkName);
+    }else{
+        const zip = new JSZip();
+        for(const item of loadedFiles){
+            const ahkText = AHK_TEMPLATE.replace("{{REPLACE_SIGNALS_BLOCK}}", item.signalBlock);
+            const ahkName = item.originName.replace(/\.txt$/i, ".ahk");
+            zip.file(ahkName, ahkText);
+        }
+        const blob = await zip.generateAsync({type:"blob"});
+        saveBlob(blob, "Signal_AHK_Bundle.zip");
+    }
+}
+
+function downloadTextFile(text, filename){
+    const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+    saveBlob(blob, filename);
+}
+function saveBlob(blob, fileName){
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    a.remove();
+}
+</script>
+</body>
+</html>
