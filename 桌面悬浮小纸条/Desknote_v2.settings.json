@@ -1,0 +1,17 @@
+{
+  "panel_title": "复制和打开",
+  "show_clipboard": true,
+  "font_size": 14,
+  "letter_spacing": 0,
+  "line_spacing": 100,
+  "note_max_lines": 6,
+  "note_max_chars": 180,
+  "note_max_text_height": 120,
+  "bar_width": 10,
+  "bar_color": "#555555",
+  "bar_opacity": 100,
+  "note_opacity": 100,
+  "panel_offset_y": 0,
+  "bar_x": -17,
+  "bar_y": 115
+}

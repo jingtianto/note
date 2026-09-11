@@ -1,0 +1,62 @@
+[
+  {
+    "text": "I used to be a humble girl, the thing is that I am too humble, I always think that my ability is not good enough, but in fact, I am just not confident. One day, when I went back home after school, my mother asked me to help her, she had some problems with the computer. I helped her to solve her problems, she said I was so great, I knew so much things. Until then did I realize that I should be confident, I have ability to do some things. When people give me compliment, I will accept and say thank you, I am confident now. I believe in myself, I won’t be defeated by the difficulty.",
+    "color": "#c9e86a",
+    "action": "copy",
+    "target": ""
+  },
+  {
+    "text": "打开这个文件夹",
+    "color": "#FFB6C1",
+    "action": "run",
+    "target": "C:/Users/Helei/Downloads/V260907"
+  },
+  {
+    "text": "文本3：你的第三段常用内容",
+    "color": "#FDFFB6",
+    "action": "copy",
+    "target": ""
+  },
+  {
+    "text": "文本4：你的第四段常用内容",
+    "color": "#CAFFBF",
+    "action": "copy",
+    "target": ""
+  },
+  {
+    "text": "文本5：你的第五段常用内容",
+    "color": "#9BF6FF",
+    "action": "copy",
+    "target": ""
+  },
+  {
+    "text": "文本6：你的第六段常用内容",
+    "color": "#A0C4FF",
+    "action": "copy",
+    "target": ""
+  },
+  {
+    "text": "文本7：你的第七段常用内容",
+    "color": "#BDB2FF",
+    "action": "copy",
+    "target": ""
+  },
+  {
+    "text": "文本8：你的第八段常用内容",
+    "color": "#FFC6FF",
+    "action": "copy",
+    "target": ""
+  },
+  {
+    "text": "文本9：你的第九段常用内容",
+    "color": "#FFADAD",
+    "action": "copy",
+    "target": ""
+  },
+  {
+    "text": "新纸条",
+    "color": "#FF6B6B",
+    "action": "copy",
+    "target": ""
+  }
+]
